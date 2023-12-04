@@ -15,8 +15,7 @@
 #
 # Documentation
 # -------------
-# A simple script to generate data !
-#
+# A simple script to analyze data (Focus towards evolution plots and animation)
 #
 import os
 import sys
@@ -30,6 +29,7 @@ from matplotlib.animation import FuncAnimation
 
 from dataset import BlackSea_Dataset
 from tools   import BlackSea_Tools
+
 
 if __name__ == "__main__":
 
@@ -75,12 +75,6 @@ if __name__ == "__main__":
     start_month = args.start_month
     end_month   = args.end_month
     
-    # Security
-    assert start_year <= end_year, f"ERROR (script.py) - The starting year must be <= to the end year ({start_year} <= {end_year})"
-    if start_year == end_year:
-        assert start_month < end_month, f"ERROR (script.py) - The starting month must be <= to the end onth ({start_month} <= {end_month})"
-
-    
     # ------- Loading the data -------
     #
     # Information over terminal (1)
@@ -119,31 +113,31 @@ if __name__ == "__main__":
     # Information over terminal (3)
     print("Evolution plots")
 
-    tool_temperature.plot_line("Temperature [C°]" ,     save = True, file_name = f"temperature_{date}")
-    tool_salinity.plot_line(      "Salinity [ppt]",     save = True, file_name = f"salinity_{date}")
-    tool_oxygen.plot_line(          "Oxygen [mmol/m3]", save = True, file_name = f"oxygen_{date}")
-    tool_chlorophyll.plot_line("Chlorophyll [mmol/m3]", save = True, file_name = f"chlorophyll_{date}")
-    tool_klong.plot_line(           "K-Long [-]",       save = True, file_name = f"klong_{date}")
-    tool_kshort.plot_line(         "K-Short [-]",       save = True, file_name = f"kshort_{date}")
+    tool_temperature.plot_line("Temperature [C°]" ,     save = True, file_name = f"../analysis/temperature/evolution/temperature_{date}.png")
+    tool_salinity.plot_line(      "Salinity [ppt]",     save = True, file_name = f"../analysis/salinity/evolution/salinity_{date}.png")
+    tool_oxygen.plot_line(          "Oxygen [mmol/m3]", save = True, file_name = f"../analysis/oxygen/evolution/oxygen_{date}.png")
+    tool_chlorophyll.plot_line("Chlorophyll [mmol/m3]", save = True, file_name = f"../analysis/chlorophyll/evolution/chlorophyll_{date}.png")
+    tool_klong.plot_line(           "K-Long [-]",       save = True, file_name = f"../analysis/klong/evolution/klong_{date}.png")
+    tool_kshort.plot_line(         "K-Short [-]",       save = True, file_name = f"../analysis/kshort/evolution/kshort_{date}.png")
 
     # ------- Mask plots -------
     #
     # Information over terminal (4)
     print("Mask plot")
     
-    tool_oxygen.plot_treshold(save = True, file_name = f"oxygen_ratios_{date}")
+    tool_oxygen.plot_treshold(save = True, file_name = f"../analysis/oxygen/treshold/oxygen_{date}.png")
 
     # ------- Animation plots -------
     #
     # Information over terminal 5()
-    print("Aninmation")
+    print("Animation")
     
-    tool_temperature.plot_animation(f"../images/temperature_animation_{date}.gif", ylabel = "Temperature [C°]")
-    tool_salinity.plot_animation(      f"../images/salinity_animation_{date}.gif", ylabel = "Salinity [ppt]")
-    tool_oxygen.plot_animation(          f"../images/oxygen_animation_{date}.gif", ylabel = "Oxygen [mmol/m3]")
-    tool_chlorophyll.plot_animation(f"../images/chlorophyll_animation_{date}.gif", ylabel = "Chlorophyll [mmol/m3]")
-    tool_klong.plot_animation(            f"../images/klong_animation_{date}.gif", ylabel = "K-Long [-]")
-    tool_kshort.plot_animation(          f"../images/kshort_animation_{date}.gif", ylabel = "K-Short [-]")
+    tool_temperature.plot_animation(f"../analysis/temperature/animation/temperature_{date}.gif", ylabel = "Temperature [C°]")
+    tool_salinity.plot_animation(      f"../analysis/salinity/animation/salinity_{date}.gif",    ylabel = "Salinity [ppt]")
+    tool_oxygen.plot_animation(          f"../analysis/oxygen/animation/oxygen_{date}.gif",      ylabel = "Oxygen [mmol/m3]")
+    tool_chlorophyll.plot_animation(f"../analysis/chlorophyll/animation/chlorophyll_{date}.gif", ylabel = "Chlorophyll [mmol/m3]")
+    tool_klong.plot_animation(            f"../analysis/klong/animation/klong_{date}.gif",       ylabel = "K-Long [-]")
+    tool_kshort.plot_animation(          f"../analysis/klong/animation/kshort_{date}.gif",       ylabel = "K-Short [-]")
     
 
 

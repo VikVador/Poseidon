@@ -60,7 +60,7 @@ class BlackSea_Tools():
         r"Computing variance value over each snapshot for all time steps"
         return self.dataset_masked.var(axis = (1, 2))
 
-    def plot_line(self, variable: str = "Unknown [-]", save: bool = False, file_name: str = "result"):
+    def plot_line(self, variable: str = "Unknown [-]", save: bool = False, file_name: str = "evolution.png"):
         r"Used to make a line plot (evolution plot) of the mean value and standard deviation of a given field"
 
         # Computing mean and standard deviation value of the field over the black sea
@@ -96,11 +96,11 @@ class BlackSea_Tools():
 
         # Saving the plot (if asked)
         if save:
-            plt.savefig(f"../images/{file_name}.png")
+            plt.savefig(f"{file_name}")
         else:
             plt.show()
    
-    def plot_treshold(self, treshold_above: str = "Oxygenated", treshold_under: str = "Deoxygenated", treshold: int = 63, hide: bool = False, save: bool = False, file_name: str = "result"):
+    def plot_treshold(self, treshold_above: str = "Oxygenated", treshold_under: str = "Deoxygenated", treshold: int = 63, hide: bool = False, save: bool = False, file_name: str = "treshold.png"):
         r"Used to make a ratio / binary plot of a given field"
         
         # Filtering the values, i.e., checking if a region is above the given treshold or not
@@ -150,7 +150,7 @@ class BlackSea_Tools():
 
         # Saving the plot (if asked)
         if save:
-            plt.savefig(f"../images/{file_name}.png")
+            plt.savefig(f"{file_name}")
         else:
             plt.show()
 
