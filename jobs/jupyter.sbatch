@@ -31,4 +31,4 @@ module purge
 # micromamba activate esa
 
 # Creating an instance of the jupyter notebook
-jupyter lab --ip='*' --notebook-dir=~/esa/ --no-browser --port 8888
+jupyter lab --ip='*' --notebook-dir=~/ESA---Black-Sea-Deoxygenation/ --no-browser --port 8888

@@ -30,13 +30,16 @@ class BlackSea_Dataset():
     def __init__(self, year_start: int, year_end: int, month_start: int, month_end: int, variable: str, folder:str = "output_HR004"):
         super().__init__()
 
-        # Security
+        # Security (Level 1)
         assert year_start  in [i for i in range(10)], f"ERROR (Dataset, init) - Incorrect starting year ({year_start})"
         assert year_end    in [i for i in range(10)], f"ERROR (Dataset, init) - Incorrect ending year ({year_end})"
         assert month_start in [i for i in range(13)], f"ERROR (Dataset, init) - Incorrect starting month ({month_start})"
         assert month_start in [i for i in range(13)], f"ERROR (Dataset, init) - Incorrect ending month ({month_end})"
+        assert year_start <= year_end,                f"ERROR (Dataset, init) - Incorrect years ({year_start} <= {year_end})"
         assert variable in ["grid_U", "grid_V", "grid_W", "grid_T", "ptrc_T", "btrc_T"], f"ERROR (Dataset, init) - Incorrect variable ({variable})"
-
+        if year_start == year_end:
+            assert month_start <= month_end, f" ERROR (Dataset, init) - Incorrect months ({month_start} <= {month_end})"
+        
         # Stores all the dataset names and location
         self.dataset_list = list()
 
@@ -63,8 +66,6 @@ class BlackSea_Dataset():
                              f"BS_1d_19{80 + year - 1}1231_19{80 + year    }1231_",
                              f"BS_1d_19{80 + year    }0101_19{80 + year    }1230_",
                              f"BS_1d_19{80 + year    }0101_19{80 + year + 1}0101_"]
-
-                #BS_1d_19890101_19900101_ptrc_T_198902-198902.nc4
 
                 months_sim = [f"198{year}{month}-198{year}{month    }",
                               f"198{year}{month}-198{year}{month_after}",
@@ -131,11 +132,10 @@ class BlackSea_Dataset():
         # Loading the dataset containing information about the Black Sea mesh
         mesh_data = xarray.open_dataset(path_mesh, engine = "h5netcdf")
         
-        # Retreives the temperature for each day of the month at the surface
         return mesh_data.mbathy.data if to_np_array else mesh_data.mbathy
 
-    def get_blacksea_mask(self, to_np_array: bool = True):
-        r"""Used to retreive the bathymetry mask, i.e. the depth index at which we reach the bottom of the ocean (2D)"""
+    def get_blacksea_mask(self, to_np_array: bool = True, depth: int = None):
+        r"""Used to retreive the black sea mask, i.e. a mask where 0 = the depth is below treshold and 1 = above treshold"""
         
         # Path to the file location
         path_mesh = "../../../../../../scratch/acad/bsmfc/nemo4.2.0/BSFS/mesh_mask.nc_new59_CMCC_noAzov"
@@ -143,8 +143,22 @@ class BlackSea_Dataset():
         # Loading the dataset containing information about the Black Sea mesh
         mesh_data = xarray.open_dataset(path_mesh, engine = "h5netcdf")
 
-        # Retreives the temperature for each day of the month at the surface
-        return mesh_data.tmask[0, 0].data if to_np_array else mesh_data.tmask[0, 0]
+        # Loading the full Black sea mask (0 if land, 1 if the Black Sea)
+        bs_mask = mesh_data.tmask[0, 0].data
+        
+        # Checks if we want to retreive a specific part of the Black Sea, i.e. continental shelf found for all depth > 120m
+        if not depth == None:
+            
+            # Retreives the bottom depth in [m] for each pixel
+            depth_values = mesh_data.bathy_metry.data[0]
+
+            # Remove all information for regions located below the given depth
+            bs_mask[depth <= depth_values] = 0
+
+            # Returning the new mask (processed)
+            return bs_mask
+
+        return bs_mask if to_np_array else mesh_data.tmask[0, 0]
     
     def get_temperature(self, to_np_array: bool = True):
         r"""Used to retreive the surface temperature (2D)"""
@@ -195,7 +209,7 @@ class BlackSea_Dataset():
         return data_salinity
     
     def get_oxygen(self, to_np_array: bool = True):
-        r"""Used to retreive the oxygen profile (3D)"""
+        r"""Used to retreive the full oxygen profile (3D)"""
         
         # Security        
         assert self.variable == "ptrc_T", f"ERROR (get_oxygen), Dataset is not ptrc_T ({self.variable})"
@@ -218,8 +232,8 @@ class BlackSea_Dataset():
 
         return data_oxygen
         
-    def get_oxygen_bottom(self):
-        r"""Used to retreive the oxygen profile (2D)"""
+    def get_oxygen_bottom(self, depth = None):
+        r"""Used to retreive the oxygen profile (2D), i.e. the concentration everywhere (None) or for all regions above a given depth"""
         
         # Security        
         assert self.variable == "ptrc_T", f"ERROR (get_oxygen), Dataset is not ptrc_T ({self.variable})"
@@ -228,15 +242,21 @@ class BlackSea_Dataset():
         bathy_mask = self.get_bathymetry()
 
         # Retreiving oxygen levels in the whole sea
-        oxygen = self.get_oxygen()
+        data_oxygen = self.get_oxygen()
 
         # Creation of x and y indexes to make manipulation, i.e. ox_bottom = ox(t, b(x, y), y, x)
         x, y = np.arange(bathy_mask.shape[2]), np.arange(bathy_mask.shape[1])
         xidx = x.reshape(-1,1).repeat(len(y),axis=1).T
         yidx = y.reshape(-1,1).repeat(len(x),axis=1)
 
-        # Retreiving oxygen concentration at the bottom of the sea for all time steps (bathy_mask - 1 to have values just above the ground)
-        return oxygen[:, bathy_mask[0] - 1, yidx, xidx]
+        # Retreiving the oxygen concentrations everywhere
+        data_oxygen = data_oxygen[:, bathy_mask[0] - 1, yidx, xidx]
+
+        # Retreiving oxygen concentration everywhere or for regions above depth treshold (product with 0, 1 mask applies the mask instantly)
+        data_oxygen = data_oxygen if depth == None else data_oxygen[:] * self.get_blacksea_mask(depth = depth)
+
+        # A bit of post processing, i.e. setting NANs and < 0 concentrations (not physical) to 0.
+        return np.clip(np.nan_to_num(data_oxygen, nan = 0.), 0, None)
 
     def get_chlorophyll(self, to_np_array: bool = True):
         r"""Used to retreive the surface chlorophyll (2D)"""

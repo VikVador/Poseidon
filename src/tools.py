@@ -15,7 +15,7 @@
 #
 # Documentation
 # -------------
-# A class to handle easily datasets coming from the NEMO simulator
+# A class to play easily with datasets coming from the NEMO simulator
 #
 #
 import os
@@ -61,7 +61,7 @@ class BlackSea_Tools():
         return self.dataset_masked.var(axis = (1, 2))
 
     def plot_line(self, variable: str = "Unknown [-]", save: bool = False, file_name: str = "result"):
-        r"Used to make a line plot of the mean value of a given field"
+        r"Used to make a line plot (evolution plot) of the mean value and standard deviation of a given field"
 
         # Computing mean and standard deviation value of the field over the black sea
         mean = self.compute_mean()
