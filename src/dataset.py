@@ -7,7 +7,7 @@
 #     |'._.'|          BLACK SEA DEOXYGENATION EMULATOR
 #     |     |
 #   ,'|  |  |`.             BY VICTOR MANGELEER
-#  /  |  |  |  \   
+#  /  |  |  |  \
 #  |,-'--|--'-.|                2023-2024
 #
 #
@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 
 class BlackSea_Dataset():
     r"""A simple dataloader for Black Sea dataset"""
-    
+
     def __init__(self, year_start: int, year_end: int, month_start: int, month_end: int, variable: str, folder:str = "output_HR004"):
         super().__init__()
 
@@ -39,17 +39,18 @@ class BlackSea_Dataset():
         assert variable in ["grid_U", "grid_V", "grid_W", "grid_T", "ptrc_T", "btrc_T"], f"ERROR (Dataset, init) - Incorrect variable ({variable})"
         if year_start == year_end:
             assert month_start <= month_end, f" ERROR (Dataset, init) - Incorrect months ({month_start} <= {month_end})"
-        
+
         # Stores all the dataset names and location
         self.dataset_list = list()
 
         # General path to each file
-        self.path_general = f"../../../../../../scratch/acad/bsmfc/nemo4.2.0/BSFS_BIO/{folder}/"
-        
+        # self.path_general = f"../../../../../../scratch/acad/bsmfc/nemo4.2.0/BSFS_BIO/{folder}/"
+        self.path_general = f"../data/{folder}/"
+
         # Creation of the paths
         for year in range(year_start, year_end + 1):
             for month in range(1, 13):
-    
+
                 # Cheking month's validity
                 if year == year_start and month < month_start or year == year_end and month_end < month:
                     continue
@@ -60,7 +61,7 @@ class BlackSea_Dataset():
                 month_before        = str(month - 1) if 10 <= month - 1 else "0" + str(month - 1)
                 month_before_before = str(month - 2) if 10 <= month - 2 else "0" + str(month - 2)
                 month               = str(month) if 10 <= month else "0" + str(month)
-                
+
                 # Creating all list of possibilities for simulation name (check folder)
                 years_sim = [f"BS_1d_19{80 + year    }0101_19{80 + year    }1231_",
                              f"BS_1d_19{80 + year - 1}1231_19{80 + year    }1231_",
@@ -72,25 +73,25 @@ class BlackSea_Dataset():
                               f"198{year}{month}-198{year}{month_after_after}",
                               f"198{year}{month_before}-198{year}{month}",
                               f"198{year}{month_before_before}-198{year}{month}"]
-                
+
                 extensions = [".nc4", ".nc"]
 
                 # Used to determine if a path has been found or not
                 path_found = False
-                
+
                 # Testing the possible paths
                 for e in extensions:
 
                     # Getting out (1)
                     if path_found:
                         break
-                    
+
                     for m in months_sim:
 
                         # Getting out (2)
                         if path_found:
                             break
-                        
+
                         for y in years_sim:
 
                             # Creation of the tested path
@@ -125,30 +126,32 @@ class BlackSea_Dataset():
 
     def get_bathymetry(self, to_np_array: bool = True):
         r"""Used to retreive the bathymetry mask, i.e. the depth index at which we reach the bottom of the ocean (2D)"""
-        
+
         # Path to the file location
-        path_mesh = "../../../../../../scratch/acad/bsmfc/nemo4.2.0/BSFS/mesh_mask.nc_new59_CMCC_noAzov"
+        #path_mesh = "../../../../../../scratch/acad/bsmfc/nemo4.2.0/BSFS/mesh_mask.nc_new59_CMCC_noAzov"
+        path_mesh = f"../data/mesh_mask.nc_new59_CMCC_noAzov"
 
         # Loading the dataset containing information about the Black Sea mesh
         mesh_data = xarray.open_dataset(path_mesh, engine = "h5netcdf")
-        
+
         return mesh_data.mbathy.data if to_np_array else mesh_data.mbathy
 
     def get_blacksea_mask(self, to_np_array: bool = True, depth: int = None):
         r"""Used to retreive the black sea mask, i.e. a mask where 0 = the depth is below treshold and 1 = above treshold"""
-        
+
         # Path to the file location
-        path_mesh = "../../../../../../scratch/acad/bsmfc/nemo4.2.0/BSFS/mesh_mask.nc_new59_CMCC_noAzov"
+        #path_mesh = "../../../../../../scratch/acad/bsmfc/nemo4.2.0/BSFS/mesh_mask.nc_new59_CMCC_noAzov"
+        path_mesh = f"../data/mesh_mask.nc_new59_CMCC_noAzov"
 
         # Loading the dataset containing information about the Black Sea mesh
         mesh_data = xarray.open_dataset(path_mesh, engine = "h5netcdf")
 
         # Loading the full Black sea mask (0 if land, 1 if the Black Sea)
         bs_mask = mesh_data.tmask[0, 0].data
-        
+
         # Checks if we want to retreive a specific part of the Black Sea, i.e. continental shelf found for all depth > 120m
         if not depth == None:
-            
+
             # Retreives the bottom depth in [m] for each pixel
             depth_values = mesh_data.bathy_metry.data[0]
 
@@ -159,19 +162,19 @@ class BlackSea_Dataset():
             return bs_mask
 
         return bs_mask if to_np_array else mesh_data.tmask[0, 0]
-    
+
     def get_temperature(self, to_np_array: bool = True):
         r"""Used to retreive the surface temperature (2D)"""
-        
-        # Security        
+
+        # Security
         assert self.variable == "grid_T", f"ERROR (get_temperature), Dataset is not grid_T ({self.variable})"
-        
+
         # Retreives the temperature for each day of the month at the surface
         data_temperature = self.data.votemper[:,0,:,:].data if to_np_array else self.data.votemper[:,0,:,:]
 
         # Retreives the temperature in the other datasets and concatenates
         for d in range(1, len(self.dataset_list)):
-            
+
             # Loading the new dataset
             dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf")
 
@@ -181,21 +184,21 @@ class BlackSea_Dataset():
             # Concatenation of datasets along the time dimension
             data_temperature = np.concatenate((data_temperature, dataset), axis = 0) if to_np_array else \
                                 xarray.concat([data_temperature, dataset], dim  = "time_counter")
-            
+
         return data_temperature
 
     def get_salinity(self, to_np_array: bool = True):
         r"""Used to retreive the surface salinity (2D)"""
 
-        # Security        
+        # Security
         assert self.variable == "grid_T", f"ERROR (get_salinity), Dataset is not grid_T ({self.variable})"
-        
+
         # Retreives the salinity for each day of the month at the surface
         data_salinity = self.data.vosaline[:,0,:,:].data if to_np_array else self.data.vosaline[:,0,:,:]
 
         # Retreives the salinity in the other datasets and concatenates
         for d in range(1, len(self.dataset_list)):
-            
+
             # Loading the new dataset
             dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf")
 
@@ -205,13 +208,13 @@ class BlackSea_Dataset():
             # Concatenation of datasets along the time dimension
             data_salinity = np.concatenate((data_salinity, dataset), axis = 0) if to_np_array else \
                              xarray.concat([data_salinity, dataset], dim  = "time_counter")
-            
+
         return data_salinity
-    
+
     def get_oxygen(self, to_np_array: bool = True):
         r"""Used to retreive the full oxygen profile (3D)"""
-        
-        # Security        
+
+        # Security
         assert self.variable == "ptrc_T", f"ERROR (get_oxygen), Dataset is not ptrc_T ({self.variable})"
 
         # Retreives the oxygen for each day of the month in the whole sea
@@ -219,7 +222,7 @@ class BlackSea_Dataset():
 
         # Retreives the oxygen in the other datasets and concatenates
         for d in range(1, len(self.dataset_list)):
-            
+
             # Loading the new dataset
             dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf")
 
@@ -231,11 +234,11 @@ class BlackSea_Dataset():
                            xarray.concat([data_oxygen, dataset], dim  = "time_counter")
 
         return data_oxygen
-        
+
     def get_oxygen_bottom(self, depth = None):
         r"""Used to retreive the oxygen profile (2D), i.e. the concentration everywhere (None) or for all regions above a given depth"""
-        
-        # Security        
+
+        # Security
         assert self.variable == "ptrc_T", f"ERROR (get_oxygen), Dataset is not ptrc_T ({self.variable})"
 
         # Retreiving the bathymetry mask b(t, x, y) = z_bottom, i.e. index at which we found bottom of the sea
@@ -260,8 +263,8 @@ class BlackSea_Dataset():
 
     def get_chlorophyll(self, to_np_array: bool = True):
         r"""Used to retreive the surface chlorophyll (2D)"""
-        
-        # Security        
+
+        # Security
         assert self.variable == "ptrc_T", f"ERROR (get_chlorophyll), Dataset is not ptrc_T ({self.variable})"
 
         # Retreives the chlorophyll for each day of the month at the surface
@@ -269,7 +272,7 @@ class BlackSea_Dataset():
 
         # Retreives the chlorophyll in the other datasets and concatenates
         for d in range(1, len(self.dataset_list)):
-            
+
             # Loading the new dataset
             dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf")
 
@@ -279,13 +282,13 @@ class BlackSea_Dataset():
             # Concatenation of datasets along the time dimension
             data_chlorophyll = np.concatenate((data_chlorophyll, dataset), axis = 0) if to_np_array else \
                                 xarray.concat([data_chlorophyll, dataset], dim  = "time_counter")
-            
+
         return data_chlorophyll
-    
+
     def get_light_attenuation_coefficient_short_waves(self, to_np_array: bool = True):
         r"""Used to retreive the surface light attenuation coefficient (k) for short waves number (2D)"""
-        
-        # Security        
+
+        # Security
         assert self.variable == "ptrc_T", f"ERROR (get_light_attenuation_coefficient_short_waves), Dataset is not ptrc_T ({self.variable})"
 
         # Retreives the k_short coefficient for each day of the month at the surface
@@ -293,7 +296,7 @@ class BlackSea_Dataset():
 
         # Retreives the k_short in the other datasets and concatenates
         for d in range(1, len(self.dataset_list)):
-            
+
             # Loading the new dataset
             dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf")
 
@@ -303,13 +306,13 @@ class BlackSea_Dataset():
             # Concatenation of datasets along the time dimension
             data_k_short = np.concatenate((data_k_short, dataset), axis = 0) if to_np_array else \
                             xarray.concat([data_k_short, dataset], dim  = "time_counter")
-            
+
         return data_k_short
-        
+
     def get_light_attenuation_coefficient_long_waves(self, to_np_array: bool = True):
         r"""Used to retreive the surface light attenuation coefficient (k) for long waves number (2D)"""
-        
-        # Security        
+
+        # Security
         assert self.variable == "ptrc_T", f"ERROR (get_light_attenuation_coefficient_long_waves), Dataset is not ptrc_T ({self.variable})"
 
         #Retreives the k_long coefficient for each day of the month at the surface
@@ -317,7 +320,7 @@ class BlackSea_Dataset():
 
         # Retreives the k_long in the other datasets and concatenates
         for d in range(1, len(self.dataset_list)):
-            
+
             # Loading the new dataset
             dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf")
 
@@ -327,6 +330,5 @@ class BlackSea_Dataset():
             # Concatenation of datasets along the time dimension
             data_k_long = np.concatenate((data_k_long, dataset), axis = 0) if to_np_array else \
                            xarray.concat([data_k_long, dataset], dim  = "time_counter")
-            
+
         return data_k_long
-        

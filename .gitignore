@@ -9,7 +9,15 @@ __pycache__/
 # Images
 *.png
 *.gif
+
+# Garbage
+*.DS_Store
+
+# Keeping DAGWZ on cluster
 src/.dawgz/*
+
+# Data folder is available only to work locally
+data/
 
 # Distribution / packaging
 .Python

@@ -40,5 +40,6 @@ mkdir animation
 cd ..
 
 mkdir __distributions__
+cd __distributions__
 mkdir corner
 mkdir marginal
