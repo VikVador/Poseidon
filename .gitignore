@@ -9,6 +9,7 @@ __pycache__/
 # Images
 *.png
 *.gif
+src/.dawgz/*
 
 # Distribution / packaging
 .Python

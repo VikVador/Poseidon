@@ -33,7 +33,7 @@ from dataset import BlackSea_Dataset
 
 
 class BlackSea_Tools():
-    r"""A simple toolbox for black sea dataset"""
+    r"""A simple toolbox for Black Sea dataset"""
     
     def __init__(self, dataloader: BlackSea_Dataset, dataset: np.array):
         super().__init__()
@@ -49,19 +49,19 @@ class BlackSea_Tools():
         self.dataset_masked = np.ma.array(dataset, mask = (self.blacksea_mask_3D == 0))
         
     def compute_mean(self):
-        r"Computing mean value over each snapshot for all time steps"
+        r"""Computing mean value over each snapshot for all time steps"""
         return self.dataset_masked.mean(axis = (1, 2))
 
     def compute_std(self):
-        r"Computing standard deviation value over each snapshot for all time steps"
+        r"""Computing standard deviation value over each snapshot for all time steps"""
         return self.dataset_masked.std(axis = (1, 2))
         
     def compute_var(self):
-        r"Computing variance value over each snapshot for all time steps"
+        r"""Computing variance value over each snapshot for all time steps"""
         return self.dataset_masked.var(axis = (1, 2))
 
     def plot_line(self, variable: str = "Unknown [-]", save: bool = False, file_name: str = "evolution.png"):
-        r"Used to make a line plot (evolution plot) of the mean value and standard deviation of a given field"
+        r"""Used to make a line plot (evolution plot) of the mean value and standard deviation of a given field"""
 
         # Computing mean and standard deviation value of the field over the black sea
         mean = self.compute_mean()
@@ -101,7 +101,7 @@ class BlackSea_Tools():
             plt.show()
    
     def plot_treshold(self, treshold_above: str = "Oxygenated", treshold_under: str = "Deoxygenated", treshold: int = 63, hide: bool = False, save: bool = False, file_name: str = "treshold.png"):
-        r"Used to make a ratio / binary plot of a given field"
+        r"""Used to make a ratio / binary plot of a given field"""
         
         # Filtering the values, i.e., checking if a region is above the given treshold or not
         data_filtered = self.dataset_masked[:] > treshold

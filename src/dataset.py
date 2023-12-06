@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 
 
 class BlackSea_Dataset():
-    r"""A simple dataloader for black sea dataset"""
+    r"""A simple dataloader for Black Sea dataset"""
     
     def __init__(self, year_start: int, year_end: int, month_start: int, month_end: int, variable: str, folder:str = "output_HR004"):
         super().__init__()
