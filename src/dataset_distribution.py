@@ -7,7 +7,7 @@
 #     |'._.'|          BLACK SEA DEOXYGENATION EMULATOR
 #     |     |
 #   ,'|  |  |`.             BY VICTOR MANGELEER
-#  /  |  |  |  \   
+#  /  |  |  |  \
 #  |,-'--|--'-.|                2023-2024
 #
 #
@@ -15,8 +15,7 @@
 #
 # Documentation
 # -------------
-# A class to play easily with datasets distributions (joint, marginal) coming from the NEMO simulator
-# 
+# A tool to check datasets distributions (joint, marginal)
 #
 import os
 import sys
@@ -26,18 +25,20 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+
+# Plots animation
 from matplotlib.animation import FuncAnimation
 
 # Custom library
 from dataset import BlackSea_Dataset
 
 
-class BlackSea_Distributions():
+class BlackSea_Dataset_Distribution():
     r"""A simple distribution analyzer for Black Sea dataset"""
-    
+
     def __init__(self, dataloader: BlackSea_Dataset, datasets:list, year_start: int, year_end: int, month_start: int, month_end: int, subpopulation_percentage = 10):
         super().__init__()
-    
+
         # Names of all the datasets
         self.datasets_name = ['Oxygen [mmol/m3]', 'Temperature [C°]', 'Salinity [ppt]', 'Chlorophyll [mmol/m3]', 'K-long [-]', 'K-short [-]']
 
@@ -57,7 +58,7 @@ class BlackSea_Distributions():
 
         # Calculate indices for data trimming
         index_start, index_end = self.calculate_indices(year_start, month_start, year_end, month_end)
-        
+
         # Trim and flatten the datasets
         dataset_trimmed = [d[index_start:index_end].flatten() for d in self.datasets]
 
@@ -83,7 +84,7 @@ class BlackSea_Distributions():
         assert 0 <= start <= 9 and 0 <= end <= 9,                                 f"ERROR (Distribution, _validate_time_range) - Incorrect starting or ending year ({start}, {end})"
         assert 0 <= month_start <= 12 and 0 <= month_end <= 12,                   f"ERROR (Distribution, _validate_time_range) - Incorrect starting or ending month ({month_start}, {month_end})"
         assert start <= end and self.year_start <= start <= self.year_end <= end, f"ERROR (Distribution, _validate_time_range) - Incorrect years ({start} <= {end})"
-        
+
     def calculate_indices(self, start_year, start_month, end_year, end_month):
         r"""Used to compute the indices for slicing the original dataset given the time period as input"""
 
@@ -101,28 +102,28 @@ class BlackSea_Distributions():
         index_end   = min(index_e_year + index_e_month, self.datasets[0].shape[0] - 1)
 
         return index_start, index_end
-        
+
     def plot_marginal(self, save: bool = False, file_name: str = "marginal.png"):
         r"""Used to plot the marginal distribution of all physical variables, i.e. average over a given period"""
-        
+
         # Set up the seaborn theme
         sns.set_theme()
-        
+
         # Define a color palette with a different color for each variable
         colors = sns.color_palette("deep", n_colors = len(self.df.columns))
-        
+
         # Create a 2 by 3 grid of subplots
         fig, axes = plt.subplots(nrows = 2, ncols = 3, figsize = (20, 10))
-        
+
         # Flatten the axes array for easy iteration
         axes = axes.flatten()
-        
+
         # Plot histograms for each variable in the grid
         for i, (col, ax, color) in enumerate(zip(self.df.columns, axes, colors)):
             sns.histplot(self.df[col], kde = True, ax = ax, color = color, bins = 100, element = "bars", linewidth = 2)
             ax.set_ylabel('')
             ax.set_yticks([])
-        
+
         # Adjust layout
         plt.tight_layout()
 
@@ -134,24 +135,24 @@ class BlackSea_Distributions():
 
     def plot_joint(self, save: bool = False, file_name: str = "joint.png"):
         r"""Used to plot the marginal distribution of all physical variables, i.e. average over a given period"""
-            
+
         # Set up the seaborn theme
         sns.set_style("darkgrid", {'axes.grid': False})
 
         # Creation of the grid to plot joints and marginals
         g = sns.PairGrid(self.df, diag_sharey = False, corner=True)
-    
+
         # Map lower plots with adjusted y-axis limits
         g.map_lower(sns.kdeplot, cmap = 'viridis')
-    
+
         # Map diagonal plots with adjusted y-axis limits
         for i, col in enumerate(self.df.columns):
             g.map_diag(sns.kdeplot, color = "black", fill = True)
-    
+
             # Set y-axis limit for diagonal plots
             y_axis_limit = g.diag_axes[i].get_ylim()
             g.diag_axes[i].set_ylim(y_axis_limit)
-    
+
         # Save or show the plot
         if save:
             g.savefig(file_name)

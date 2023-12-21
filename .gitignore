@@ -1,3 +1,12 @@
+# Garbage
+*.DS_Store
+
+# Keeping DAGWZ on cluster
+src/.dawgz/*
+
+# Data folder is available only to work locally
+data/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -7,17 +16,8 @@ __pycache__/
 *.so
 
 # Images
-*.png
+#*.png
 *.gif
-
-# Garbage
-*.DS_Store
-
-# Keeping DAGWZ on cluster
-src/.dawgz/*
-
-# Data folder is available only to work locally
-data/
 
 # Distribution / packaging
 .Python

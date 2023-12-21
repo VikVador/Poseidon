@@ -15,8 +15,7 @@
 #
 # Documentation
 # -------------
-# A class to handle easily datasets coming from the NEMO simulator
-#
+# A dataloader for the Black Sea dataset designed to load raw datasets coming from the NEMO simulator.
 #
 import os
 import xarray
@@ -25,12 +24,12 @@ import matplotlib.pyplot as plt
 
 
 class BlackSea_Dataset():
-    r"""A simple dataloader for Black Sea dataset"""
+    r"""A simple data loader for the Black Sea dataset (raw)."""
 
     def __init__(self, year_start: int, year_end: int, month_start: int, month_end: int, variable: str, folder:str = "output_HR004"):
         super().__init__()
 
-        # Security (Level 1)
+        # Security
         assert year_start  in [i for i in range(10)], f"ERROR (Dataset, init) - Incorrect starting year ({year_start})"
         assert year_end    in [i for i in range(10)], f"ERROR (Dataset, init) - Incorrect ending year ({year_end})"
         assert month_start in [i for i in range(13)], f"ERROR (Dataset, init) - Incorrect starting month ({month_start})"
@@ -39,6 +38,21 @@ class BlackSea_Dataset():
         assert variable in ["grid_U", "grid_V", "grid_W", "grid_T", "ptrc_T", "btrc_T"], f"ERROR (Dataset, init) - Incorrect variable ({variable})"
         if year_start == year_end:
             assert month_start <= month_end, f" ERROR (Dataset, init) - Incorrect months ({month_start} <= {month_end})"
+
+        # Stores a list of useless variables, i.e. not usefull for our specific problem (for the sake of efficiency)
+        self.useless_variables = ['time_centered',
+                                  'deptht_bounds',
+                                  'time_centered_bounds',
+                                  'time_counter_bounds',
+                                  'time_instant_bounds',
+                                  'ssh', 'mldkz5', 'mldr10_1', 'mld_bs', 'rho', 'CCC', 'wfo',
+                                  'qsr', 'qns', 'qt', 'sfx', 'taum', 'windsp', 'precip', 'bosp_Qout',
+                                  'bosp_Qin', 'mmean_S_total', 'bosp_S_in', 'CFL', 'NFL', 'CEM', 'NEM',
+                                  'CDI', 'NDI', 'MIC', 'MES', 'BAC', 'DCL', 'DNL', 'DCS', 'DNS', 'NOS',
+                                  'NHS', 'SIO', 'DIC', 'ODU', 'POC', 'PON', 'SID', 'AGG', 'GEL', 'NOC',
+                                  'PHO', 'SMI', 'CHA', 'CHD', 'CHE', 'CHF', 'PAR', 'NPP', 'NPPint', 'Carbon_UptakeDiatoms2D',
+                                  'Nitrogen_UptakeDiatoms2D', 'Carbon_UptakeEmiliana2D','Nitrogen_UptakeEmiliana2D', 'Carbon_UptakeFlagellates2D',
+                                  'Nitrogen_UptakeFlagellates2D', 'shearrate', 'sinkingDIA', 'sinkingPOM', 'pH', 'pCO2', 'AirSeaDICFlux', 'TA']
 
         # Stores all the dataset names and location
         self.dataset_list = list()
@@ -51,7 +65,7 @@ class BlackSea_Dataset():
         for year in range(year_start, year_end + 1):
             for month in range(1, 13):
 
-                # Cheking month's validity
+                # Checking month's validity
                 if year == year_start and month < month_start or year == year_end and month_end < month:
                     continue
 
@@ -106,7 +120,7 @@ class BlackSea_Dataset():
                             if path_found:
                                 break
 
-                # Something wrong, i.e. the title of the file was not found ! Need to update possibilities
+                # Something wrong, i.e. the title of the file was not found ! Need to update possibilities or maybe the simulation is not done yet
                 if path_found == False:
                     print(f"ISSUE (Init) - Path not found for: Year ({year}), Month ({month}), Variable ({variable})")
 
@@ -114,15 +128,15 @@ class BlackSea_Dataset():
         self.dataset_list = list(dict.fromkeys(self.dataset_list))
 
         # Stores only the first dataset (for the sake of efficiency)
-        self.data = xarray.open_dataset(self.dataset_list[0], engine = "h5netcdf")
+        self.data = xarray.open_dataset(self.dataset_list[0], engine = "h5netcdf", drop_variables = self.useless_variables)
 
-        # Saving information
-        self.year_start = year_start
-        self.year_end = year_end
+        # Saving other relevant information
+        self.year_start  = year_start
+        self.year_end    = year_end
         self.month_start = month_start
-        self.month_end = month_end
-        self.variable = variable
-        self.folder = folder
+        self.month_end   = month_end
+        self.variable    = variable
+        self.folder      = folder
 
     def get_bathymetry(self, to_np_array: bool = True):
         r"""Used to retreive the bathymetry mask, i.e. the depth index at which we reach the bottom of the ocean (2D)"""
@@ -137,7 +151,7 @@ class BlackSea_Dataset():
         return mesh_data.mbathy.data if to_np_array else mesh_data.mbathy
 
     def get_blacksea_mask(self, to_np_array: bool = True, depth: int = None):
-        r"""Used to retreive the black sea mask, i.e. a mask where 0 = the depth is below treshold and 1 = above treshold"""
+        r"""Used to retreive the black sea mask, i.e. a mask where 0 = the depth is below treshold defined by `depth` and 1 = above that treshold"""
 
         # Path to the file location
         #path_mesh = "../../../../../../scratch/acad/bsmfc/nemo4.2.0/BSFS/mesh_mask.nc_new59_CMCC_noAzov"
@@ -176,7 +190,7 @@ class BlackSea_Dataset():
         for d in range(1, len(self.dataset_list)):
 
             # Loading the new dataset
-            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf")
+            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf", drop_variables = self.useless_variables)
 
             # Loading the temperature field
             dataset = dataset.votemper[:,0,:,:].data if to_np_array else dataset.votemper[:,0,:,:]
@@ -200,7 +214,7 @@ class BlackSea_Dataset():
         for d in range(1, len(self.dataset_list)):
 
             # Loading the new dataset
-            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf")
+            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf", drop_variables = self.useless_variables)
 
             # Loading the salinity field
             dataset = dataset.vosaline[:,0,:,:].data if to_np_array else dataset.vosaline[:,0,:,:]
@@ -224,7 +238,7 @@ class BlackSea_Dataset():
         for d in range(1, len(self.dataset_list)):
 
             # Loading the new dataset
-            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf")
+            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf", drop_variables = self.useless_variables)
 
             # Loading the oxygen field
             dataset = dataset.DOX.data if to_np_array else dataset.DOX
@@ -274,7 +288,7 @@ class BlackSea_Dataset():
         for d in range(1, len(self.dataset_list)):
 
             # Loading the new dataset
-            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf")
+            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf")# drop_variables = self.useless_variables)
 
             # Loading the chlorophyll field
             dataset = dataset.CHL[:,0,:,:].data if to_np_array else dataset.CHL[:,0,:,:]
@@ -298,7 +312,7 @@ class BlackSea_Dataset():
         for d in range(1, len(self.dataset_list)):
 
             # Loading the new dataset
-            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf")
+            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf", drop_variables = self.useless_variables)
 
             # Loading the k_short
             dataset = dataset.KBIOS[:,0,:,:].data if to_np_array else dataset.KBIOS[:,0,:,:]
@@ -322,7 +336,7 @@ class BlackSea_Dataset():
         for d in range(1, len(self.dataset_list)):
 
             # Loading the new dataset
-            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf")
+            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf", drop_variables = self.useless_variables)
 
             # Loading the k_long
             dataset = dataset.KBIOL[:,0,:,:].data if to_np_array else dataset.KBIOL[:,0,:,:]

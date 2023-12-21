@@ -1,5 +1,0 @@
-name: esa
-channels:
-- conda-forge
-dependencies:
-  -
