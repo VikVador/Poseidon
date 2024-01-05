@@ -1,4 +1,4 @@
-name: esa_emulator
+name: esa_project
 channels:
   - pytorch
   - conda-forge
