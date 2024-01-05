@@ -15,12 +15,11 @@
 #
 # Documentation
 # -------------
-# A dataloader for the Black Sea dataset designed to load raw datasets coming from the NEMO simulator.
+# A tool to load raw Black Sea datasets coming from the NEMO simulator.
 #
 import os
 import xarray
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 class BlackSea_Dataset():

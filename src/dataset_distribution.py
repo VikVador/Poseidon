@@ -17,17 +17,10 @@
 # -------------
 # A tool to check datasets distributions (joint, marginal)
 #
-import os
-import sys
-import xarray
 import random
-import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-
-# Plots animation
-from matplotlib.animation import FuncAnimation
 
 # Custom library
 from dataset import BlackSea_Dataset

@@ -17,11 +17,7 @@
 # -------------
 # A tool to check datasets time evolution (line plots)
 #
-import os
-import sys
-import xarray
 import numpy as np
-import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors

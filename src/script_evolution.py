@@ -21,23 +21,14 @@
 #
 #   Dawgz = True  : compute the evolution over all the possible time periods
 #
-import os
-import sys
-import xarray
-import random
 import argparse
-import numpy as np
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 # Custom libraries
 from dataset              import BlackSea_Dataset
 from dataset_evolution    import BlackSea_Dataset_Evolution
-from dataset_distribution import BlackSea_Dataset_Distribution
 
 # Dawgz library (used to parallelized the jobs)
-from dawgz import job, after, ensure, schedule
+from dawgz import job, schedule
 
 # ---------------------------------------------------------------------
 #
