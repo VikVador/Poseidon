@@ -63,7 +63,7 @@ class BlackSea_Dataloader():
               resolution: int  = 64,
                   window: int  = 1,
               window_oxy: int  = 7,
-           datasets_size: list = [0.5, 0.3],
+           datasets_size: list = [0.5, 0.25],
                     seed: int  = 69):
 
         # ------------------------------------------------
@@ -71,7 +71,7 @@ class BlackSea_Dataloader():
         # ------------------------------------------------
         #
         # Concatenate inputs and output
-        x = np.stack([y] + x, axis=1)
+        x = np.stack([y] + x, axis = 1)
 
         # Removing dimensions to be a power of 2
         x    = x[:, :, :-2, :-2]
@@ -83,7 +83,7 @@ class BlackSea_Dataloader():
         # Security
         assert mode in ["spatial", "temporal"], f"ERROR (BlackSea_Dataloader) Mode must be either 'spatial', 'temporal' ({mode})"
         assert resolution % 2 == 0,             f"ERROR (BlackSea_Dataloader) Resolution must be a multiple of 2 ({resolution})"
-        assert resolution < x_res/2,            f"ERROR (BlackSea_Dataloader) Resolution must be smaller than half the input resolution ({resolution} < {x_res/2})"
+        assert resolution <= x_res/2,           f"ERROR (BlackSea_Dataloader) Resolution must be smaller than half the input resolution ({resolution} < {x_res/2})"
         assert window <= int(t/3 - 1),          f"ERROR (BlackSea_Dataloader) Window must be smaller than a third of the input time scale ({window} < {int(t/3 - 1)})"
 
         # Preprocessing the data
@@ -137,6 +137,9 @@ class BlackSea_Dataloader():
         # taking non-overlapping patches, i.e. therefore we train on the whole temporal domain
         #
         if mode == "spatial":
+
+            # Fixing the seed for reproducibility
+            np.random.seed(seed = seed)
 
             # Computing size of the training, validation and test sets
             training_size, validation_size = int(total_patches * datasets_size[0]), int(total_patches * datasets_size[1])
