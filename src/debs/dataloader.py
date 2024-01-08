@@ -24,11 +24,20 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
 
+def compute_normalized_deoxygenation_treshold(data: np.array, deoxygenation_treshold: float):
+    r"""Used to compute the normalized deoxygenation treshold, i.e. if we need the regions with oxygen concentrations above 63 [mmol/m3] we need to normalize 63 [mmol/m3]"""
+
+    # Rescale the data to ensure non-negative values (to be consistent with the preprocessing function)
+    rescaled_data = data + np.abs(np.nanmin(data)) if np.nanmin(data) < 0 else data
+
+    # Computes the normalized treshold value (data needs to be rescaled)
+    return (deoxygenation_treshold - np.nanmin(rescaled_data)) / (np.nanmax(rescaled_data) - np.nanmin(rescaled_data))
+
 def preprocess(data: np.array, mask: np.array):
     r"""Used to mask the NaNs, mask the land and normalize the data"""
 
     # Rescale the data to ensure non-negative values
-    data += np.abs(np.nanmin(data)) if np.nanmin(data) < 0 else 0
+    data = data + np.abs(np.nanmin(data)) if np.nanmin(data) < 0 else data
 
     # Set the land values to 0
     data[:, mask == 0] = 0
@@ -59,17 +68,21 @@ class BlackSea_Dataloader():
     def __init__(self, x: list,
                        y: np.array,
                     mask: np.array,
-                    mode: str  = "spatial",
-              resolution: int  = 64,
-                  window: int  = 1,
-              window_oxy: int  = 7,
-           datasets_size: list = [0.5, 0.25],
-                    seed: int  = 69):
+                    mode: str   = "spatial",
+              resolution: int   = 64,
+                  window: int   = 1,
+              window_oxy: int   = 7,
+          deoxy_treshold: float = 63,
+           datasets_size: list  = [0.5, 0.25],
+                    seed: int   = 69):
 
         # ------------------------------------------------
         #                  PREPROCESSING (1)
         # ------------------------------------------------
         #
+        # Stores the normalized concentration treshold (needed to create deoxygenation mask later on, e.g. during evaluation of the model)
+        self.normalized_deoxygenation_treshold = compute_normalized_deoxygenation_treshold(y, deoxy_treshold)
+
         # Concatenate inputs and output
         x = np.stack([y] + x, axis = 1)
 
@@ -166,6 +179,12 @@ class BlackSea_Dataloader():
         self.y_train      = merge_timeseries_and_patches(y_train)
         self.y_validation = merge_timeseries_and_patches(y_validation)
         self.y_test       = merge_timeseries_and_patches(y_test)
+
+    def get_normalized_deoxygenation_treshold(self):
+        r"""Used to retreive the normalized deoxygenation treshold, i.e. if we need the regions with oxygen concentrations above 63 [mmol/m3] we need to normalize 63 [mmol/m3]"""
+
+        # Computes the normalized treshold value (data needs to be rescaled)
+        return self.normalized_deoxygenation_treshold
 
     def get_dataloader(self, type: str, batch_size: int = 32):
         r"""Returns the dataloader for the given type, i.e. training, validation or test"""
