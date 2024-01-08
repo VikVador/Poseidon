@@ -37,6 +37,10 @@ from neural_networks      import FCNN
 # Dawgz library (used to parallelized the jobs)
 from dawgz import job, schedule
 
+# Combinatorics
+from itertools import combinations, product
+
+
 # ---------------------------------------------------------------------
 #
 #                              MAIN FUNCTION
@@ -111,9 +115,12 @@ def main(**kwargs):
     optimizer  = optim.Adam(neural_net.parameters(), lr = learning_rate)
 
     # Going through epochs
-    for epoch in range(25):
+    for epoch in range(3):
 
-        # Going through the training set
+        # Information over terminal (1)
+        print("-- Epoch: ", epoch, " --")
+
+        # ----- TRAINING -----
         for x, y in dataset_train:
 
             # Forward pass, i.e. prediction of the neural network
@@ -125,6 +132,9 @@ def main(**kwargs):
             # Sending the loss to wandDB the loss
             wandb.log({"Loss (Training)": loss.detach().item()})
 
+            # Information over terminal (2)
+            print("Loss (Training): ", loss.detach().item())
+
             # Reseting the gradients
             optimizer.zero_grad()
 
@@ -133,6 +143,23 @@ def main(**kwargs):
 
             # Optimizing the parameters
             optimizer.step()
+
+        # ----- VALIDATION -----
+        with torch.no_grad():
+
+            for x, y in dataset_validation:
+
+                # Forward pass, i.e. prediction of the neural network
+                pred = neural_net.forward(x)
+
+                # Computing the loss, i.e. the value -1 in the ground truth corresponds to the land !
+                loss = criterion(pred[y != -1], y[y != -1])
+
+                # Sending the loss to wandDB the loss
+                wandb.log({"Loss (Validation)": loss.detach().item()})
+
+                # Information over terminal (3)
+                print("Loss (Validation): ", loss.detach().item())
 
     # Finishing the run
     wandb.finish()
@@ -143,7 +170,59 @@ def main(**kwargs):
 #                                  DAWGZ
 #
 # ---------------------------------------------------------------------
+#
+# -------------
+# Possibilities
+# -------------
+# Creation of all the inputs combinations
+input_list = ["temperature", "salinity", "chlorophyll", "kshort", "klong"]
 
+# Generate all combinations
+all_combinations = []
+for r in range(1, len(input_list) + 1):
+    all_combinations.extend(combinations(input_list, r))
+
+# Convert combinations to lists
+all_combinations = [list(combination) for combination in all_combinations]
+
+# Storing all the information
+arguments = {
+
+    # Temporal Information
+    'month_start'     : 0,
+    'month_end'       : 12,
+    'year_start'      : 1,
+    'year_end'        : 3,
+
+    # Datasets
+    "Inputs"          : all_combinations,
+    "Splitting"       : ["temporal", "spatial"],
+    "Resolution"      : [64],
+    "Window (Inputs)" : [1, 3, 7, 14, 31],
+    "Window (Output)" : 7,
+
+    # Training
+    "Architecture"    : "FCNN",
+    "Learning Rate"   : [0.01, 0.001, 0.0001],
+    "Kernel Size"     : [3, 5, 7, 9, 11],
+    "Batch Size"      : 64
+
+}
+
+# Generate all combinations
+param_combinations = list(product(*arguments.values()))
+
+# Create a list of dictionaries
+param_dicts = [dict(zip(arguments.keys(), combo)) for combo in param_combinations]
+
+# ----
+# Jobs
+# ----
+@job(array = len(param_dicts), cpus = 1, ram = '64GB', time = '12:00:00', project = 'bsmfc', user = 'vmangeleer@uliege.be', type = 'FAIL')
+def train_model(i: int):
+
+    # Launching the main
+    main(**arguments)
 
 # ---------------------------------------------------------------------
 #
@@ -264,7 +343,7 @@ if __name__ == "__main__":
         print("Running with dawgz")
 
         # Running the jobs
-        # schedule(compute_distribution, name = 'nn_training', backend = 'slurm', export = 'ALL')
+        schedule(train_model, name = 'neural_network_training', backend = 'slurm', export = 'ALL')
 
     # ------- Running without dawgz -------
     else:
