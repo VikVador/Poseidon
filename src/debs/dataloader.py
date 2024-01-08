@@ -73,7 +73,7 @@ class BlackSea_Dataloader():
                   window: int   = 1,
               window_oxy: int   = 7,
           deoxy_treshold: float = 63,
-           datasets_size: list  = [0.5, 0.25],
+           datasets_size: list  = [0.6, 0.3],
                     seed: int   = 69):
 
         # ------------------------------------------------
@@ -102,6 +102,9 @@ class BlackSea_Dataloader():
         # Preprocessing the data
         for i in range(v):
             x[:, i, :, :] = preprocess(x[:, i, :, :], mask)
+
+        # Adding back the Black Sea mask to the output with an arbitrary value (used later on for the MSE loss)
+        x[:, 0, mask == 0] = -1
 
         # Number of patches along the x-, y- dimensions and total number of possible patches
         nb_patches_x, nb_patches_y, total_patches = int(x_res/resolution), int(y_res/resolution), int(x_res/resolution) * int(y_res/resolution)

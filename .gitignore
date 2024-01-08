@@ -16,8 +16,12 @@ __pycache__/
 *.so
 
 # Images
-#*.png
+*.png
 *.gif
+
+# Weight and biases
+src/debs/wandb/
+notebooks/wandb/
 
 # Distribution / packaging
 .Python
