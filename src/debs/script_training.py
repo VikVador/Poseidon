@@ -102,26 +102,42 @@ def main(**kwargs):
     dataset_validation = BSD_loader.get_dataloader("validation", batch_size = batch_size)
     dataset_test       = BSD_loader.get_dataloader("test",       batch_size = batch_size)
 
+    # Function to move tensors to GPU if available
+    def to_device(data, device):
+        if isinstance(data, (list, tuple)):
+            return [to_device(x, device) for x in data]
+        return data.to(device, non_blocking=True)
+
+    # Check if GPU is available
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # -------------------------------------------
     #                   TRAINING
     # -------------------------------------------
     #
     # Initialization of weights and biases
-    wandb.init(project = "esa-blacksea-deoxygenation-emulator-V1", config = kwargs)
+    wandb.init(project="esa-blacksea-deoxygenation-emulator-V1", config=kwargs)
 
     # Setting up training environment
     neural_net = FCNN(inputs = len(input_datasets), kernel_size = kernel_size)
-    criterion  = nn.MSELoss()
-    optimizer  = optim.Adam(neural_net.parameters(), lr = learning_rate)
+
+    # Move model to GPU if available
+    neural_net.to(device)
+
+    # Other stuff
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(neural_net.parameters(), lr=learning_rate)
 
     # Going through epochs
     for epoch in range(3):
-
         # Information over terminal (1)
         print("-- Epoch: ", epoch, " --")
 
         # ----- TRAINING -----
         for x, y in dataset_train:
+
+            # Moving data to the correct device
+            x, y = to_device(x, device), to_device(y, device)
 
             # Forward pass, i.e. prediction of the neural network
             pred = neural_net.forward(x)
@@ -148,6 +164,9 @@ def main(**kwargs):
         with torch.no_grad():
 
             for x, y in dataset_validation:
+
+                # Moving data to the correct device
+                x, y = to_device(x, device), to_device(y, device)
 
                 # Forward pass, i.e. prediction of the neural network
                 pred = neural_net.forward(x)
@@ -187,26 +206,19 @@ all_combinations = [list(combination) for combination in all_combinations]
 
 # Storing all the information
 arguments = {
-
-    # Temporal Information
-    'month_start'     : 0,
-    'month_end'       : 12,
-    'year_start'      : 1,
-    'year_end'        : 3,
-
-    # Datasets
-    "Inputs"          : all_combinations,
-    "Splitting"       : ["temporal", "spatial"],
-    "Resolution"      : [64],
-    "Window (Inputs)" : [1, 3, 7, 14, 31],
-    "Window (Output)" : 7,
-
-    # Training
-    "Architecture"    : "FCNN",
-    "Learning Rate"   : [0.01, 0.001, 0.0001],
-    "Kernel Size"     : [3, 5, 7, 9, 11],
-    "Batch Size"      : 64
-
+    'month_start'     : [0],
+    'month_end'       : [12],
+    'year_start'      : [0],
+    'year_end'        : [5],
+    'Inputs'          : all_combinations,
+    'Splitting'       : ["temporal", "spatial"],
+    'Resolution'      : [64],
+    'Window (Inputs)' : [1, 3, 7],
+    'Window (Output)' : [7],
+    'Architecture'    : ["FCNN"],
+    'Learning Rate'   : [0.01, 0.001],
+    'Kernel Size'     : [3, 5, 7],
+    'Batch Size'      : [64]
 }
 
 # Generate all combinations
@@ -218,11 +230,11 @@ param_dicts = [dict(zip(arguments.keys(), combo)) for combo in param_combination
 # ----
 # Jobs
 # ----
-@job(array = len(param_dicts), cpus = 1, ram = '64GB', time = '12:00:00', project = 'bsmfc', user = 'vmangeleer@uliege.be', type = 'FAIL')
+@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '64GB', time = '24:00:00', project = 'bsmfc', user = 'vmangeleer@uliege.be', type = 'FAIL')
 def train_model(i: int):
 
     # Launching the main
-    main(**arguments)
+    main(**param_dicts[i])
 
 # ---------------------------------------------------------------------
 #
