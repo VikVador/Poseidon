@@ -21,6 +21,8 @@ import os
 import xarray
 import numpy as np
 
+# Custom library
+from tools import get_data_path, get_mesh_path
 
 class BlackSea_Dataset():
     r"""A simple data loader for the Black Sea dataset (raw)."""
@@ -56,9 +58,8 @@ class BlackSea_Dataset():
         # Stores all the dataset names and location
         self.dataset_list = list()
 
-        # General path to each file
-        # self.path_general = f"../../../../../../../scratch/acad/bsmfc/nemo4.2.0/BSFS_BIO/{folder}/"
-        self.path_general = f"../../data/{folder}/"
+        # Retreives the path to the folder containing the data (local or cluster)
+        self.path_general = get_data_path(folder = folder)
 
         # Creation of the paths
         for year in range(year_start, year_end + 1):
@@ -140,9 +141,8 @@ class BlackSea_Dataset():
     def get_bathymetry(self, to_np_array: bool = True):
         r"""Used to retreive the bathymetry mask, i.e. the depth index at which we reach the bottom of the ocean (2D)"""
 
-        # Path to the file location
-        #path_mesh = "../../../../../../../scratch/acad/bsmfc/nemo4.2.0/BSFS/mesh_mask.nc_new59_CMCC_noAzov"
-        path_mesh = f"../../data/mesh_mask.nc_new59_CMCC_noAzov"
+        # Path to the mesh file location
+        path_mesh = get_mesh_path()
 
         # Loading the dataset containing information about the Black Sea mesh
         mesh_data = xarray.open_dataset(path_mesh, engine = "h5netcdf")
@@ -152,9 +152,8 @@ class BlackSea_Dataset():
     def get_blacksea_mask(self, to_np_array: bool = True, depth: int = None):
         r"""Used to retreive the black sea mask, i.e. a mask where 0 = the depth is below treshold defined by `depth` and 1 = above that treshold"""
 
-        # Path to the file location
-        #path_mesh = "../../../../../../../scratch/acad/bsmfc/nemo4.2.0/BSFS/mesh_mask.nc_new59_CMCC_noAzov"
-        path_mesh = f"../../data/mesh_mask.nc_new59_CMCC_noAzov"
+        # Path to the mesh file location
+        path_mesh = get_mesh_path()
 
         # Loading the dataset containing information about the Black Sea mesh
         mesh_data = xarray.open_dataset(path_mesh, engine = "h5netcdf")

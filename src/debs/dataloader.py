@@ -25,7 +25,8 @@ from torch.utils.data import DataLoader
 
 
 def compute_normalized_deoxygenation_treshold(data: np.array, deoxygenation_treshold: float):
-    r"""Used to compute the normalized deoxygenation treshold, i.e. if we need the regions with oxygen concentrations above 63 [mmol/m3] we need to normalize 63 [mmol/m3]"""
+    r"""Used to retreive the normalized deoxygenation treshold, i.e. if we need the regions with
+        oxygen concentrations above 63 [mmol/m3] we need to normalize 63 [mmol/m3]"""
 
     # Rescale the data to ensure non-negative values (to be consistent with the preprocessing function)
     rescaled_data = data + np.abs(np.nanmin(data)) if np.nanmin(data) < 0 else data
@@ -74,7 +75,7 @@ class BlackSea_Dataloader():
               window_oxy: int   = 7,
           deoxy_treshold: float = 63,
            datasets_size: list  = [0.6, 0.3],
-                    seed: int   = 69):
+                    seed: int   = 2701):
 
         # ------------------------------------------------
         #                  PREPROCESSING (1)
@@ -103,8 +104,8 @@ class BlackSea_Dataloader():
         for i in range(v):
             x[:, i, :, :] = preprocess(x[:, i, :, :], mask)
 
-        # Adding back the Black Sea mask to the output with an arbitrary value (used later on for the MSE loss)
-        x[:, 0, mask == 0] = -1
+        # Adding the Black Sea mask to the inputs/output with an arbitrary value (used later on for the MSE loss)
+        x[:, :, mask == 0] = -1
 
         # Number of patches along the x-, y- dimensions and total number of possible patches
         nb_patches_x, nb_patches_y, total_patches = int(x_res/resolution), int(y_res/resolution), int(x_res/resolution) * int(y_res/resolution)
@@ -123,7 +124,7 @@ class BlackSea_Dataloader():
         x = np.stack([x[i : i + window, :, :, :, :] for i in range(t - window - window_oxy)], axis = 0).reshape(t - window - window_oxy, (v - 1) * window, total_patches, resolution, resolution)
 
         # Output - Creation of the output time series, i.e. (index, variable(s)_{t, t + window}, number of patches, resolution, resolution)
-        y = np.stack([y[i + window : i + window + window_oxy,  :, :, :] for i in range(t - window - window_oxy)], axis = 0) #.reshape(t - window, (v) * window_oxy, total_patches, resolution, resolution)
+        y = np.stack([y[i + window : i + window + window_oxy,  :, :, :] for i in range(t - window - window_oxy)], axis = 0)
 
         # ------------------------------------------------
         #                   TEMPORAL MODE
@@ -184,7 +185,8 @@ class BlackSea_Dataloader():
         self.y_test       = merge_timeseries_and_patches(y_test)
 
     def get_normalized_deoxygenation_treshold(self):
-        r"""Used to retreive the normalized deoxygenation treshold, i.e. if we need the regions with oxygen concentrations above 63 [mmol/m3] we need to normalize 63 [mmol/m3]"""
+        r"""Used to retreive the normalized deoxygenation treshold, i.e. if we need the regions with
+            oxygen concentrations above 63 [mmol/m3] we need to normalize 63 [mmol/m3]"""
 
         # Computes the normalized treshold value (data needs to be rescaled)
         return self.normalized_deoxygenation_treshold
