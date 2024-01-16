@@ -21,6 +21,7 @@ import os
 import cv2
 import numpy as np
 
+
 def get_data_path(folder:str):
     r"""Checks which path to use to get the data, i.e. if the folder is in the local version or the scratch version"""
 
@@ -29,6 +30,7 @@ def get_data_path(folder:str):
         return f"../../../../../../../scratch/acad/bsmfc/nemo4.2.0/BSFS_BIO/{folder}/"
     if os.path.exists("../../data/"):
         return f"../../data/{folder}/"
+
     print("ERROR (get_data_path) - No path found")
     exit()
 
@@ -40,11 +42,12 @@ def get_mesh_path():
         return f"../../../../../../../scratch/acad/bsmfc/nemo4.2.0/BSFS/mesh_mask.nc_new59_CMCC_noAzov"
     if os.path.exists("../../data/"):
         return f"../../data/mesh_mask.nc_new59_CMCC_noAzov"
+
     print("ERROR (get_mesh_path) - No path found")
     exit()
 
 def generateFakeDataset(number_of_variables: int = 5, number_of_samples: int = 14, oxygen : bool = False, resolution : int = 64, resolution_snapshot : tuple = (258, 258)):
-    """Used to generate a list of fake datasets (numpy arrays) for testing purposes, i.e. each zone will be named to become easily recognizable"""
+    r"""Used to generate a list of fake datasets (numpy arrays) for testing purposes, i.e. each zone will be named to become easily recognizable"""
 
     # Stores all the fake samples
     list_fake_samples = [[] for i in range(number_of_variables)]

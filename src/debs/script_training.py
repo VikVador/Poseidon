@@ -15,7 +15,7 @@
 #
 # Documentation
 # -------------
-# A script to train a neural network
+# A script to train a neural network to become a oxygen concentration forecaster in the Black Sea.
 #
 #   Dawgz = False : compute the distributions over a given time period given by the user as arguments
 #
@@ -32,6 +32,7 @@ import torch.optim as optim
 # Custom libraries
 from dataset              import BlackSea_Dataset
 from dataloader           import BlackSea_Dataloader
+from metrics              import BlackSea_Metrics
 from neural_networks      import FCNN
 
 # Dawgz library (used to parallelized the jobs)
@@ -48,6 +49,10 @@ from itertools import combinations, product
 # ---------------------------------------------------------------------
 def main(**kwargs):
 
+    # ------------------------------------------
+    #               Initialization
+    # ------------------------------------------
+    #
     # ------- Arguments -------
     start_month     = kwargs['month_start']
     end_month       = kwargs['month_end']
@@ -58,17 +63,21 @@ def main(**kwargs):
     resolution      = kwargs['Resolution']
     windows_inputs  = kwargs['Window (Inputs)']
     windows_outputs = kwargs['Window (Output)']
+    depth           = kwargs['Depth']
     architecture    = kwargs['Architecture']
     learning_rate   = kwargs['Learning Rate']
     kernel_size     = kwargs['Kernel Size']
     batch_size      = kwargs['Batch Size']
+    nb_epochs       = kwargs['Epochs']
+
+    # Security
+    assert 0 < len(inputs), f"ERROR (main) - At least one input must be given"
+    for i in inputs:
+        assert i in ["temperature", "salinity", "chlorophyll", "kshort", "klong"], f"ERROR (main) - Unknown input {i}"
 
     # ------- Loading the data -------
     Dataset_physical = BlackSea_Dataset(year_start = start_year, year_end = end_year, month_start = start_month,  month_end = end_month, variable = "grid_T")
     Dataset_bio      = BlackSea_Dataset(year_start = start_year, year_end = end_year, month_start = start_month,  month_end = end_month, variable = "ptrc_T")
-
-    # Retreives oxyen bottom values, i.e. here its everywhere (we are not limited to values on the continental shelf of ~120m)
-    data_oxygen = Dataset_bio.get_oxygen_bottom()
 
     # Stores all the inputs
     input_datasets = list()
@@ -85,8 +94,11 @@ def main(**kwargs):
     if "klong" in inputs:
         input_datasets.append(Dataset_bio.get_light_attenuation_coefficient_long_waves())
 
+    # Stores the output, i.e. oxyen bottom values (here its everywhere, we are not limited to values on the continental shelf of ~120m)
+    data_oxygen = Dataset_bio.get_oxygen_bottom(depth = depth)
+
     # Loading the black sea mask
-    BS_mask = Dataset_physical.get_blacksea_mask()
+    BS_mask = Dataset_physical.get_blacksea_mask(depth = depth)
 
     # ------- Preparing the data -------
     BSD_loader = BlackSea_Dataloader(x = input_datasets,
@@ -95,43 +107,49 @@ def main(**kwargs):
                                   mode = splitting,
                             resolution = resolution,
                                 window = windows_inputs,
-                            window_oxy = windows_outputs)
+                            window_oxy = windows_outputs,
+                        deoxy_treshold = 63,
+                         datasets_size = [0.6, 0.3],
+                                  seed = 2701)
 
     # Retreiving the individual dataloader
     dataset_train      = BSD_loader.get_dataloader("train",      batch_size = batch_size)
     dataset_validation = BSD_loader.get_dataloader("validation", batch_size = batch_size)
     dataset_test       = BSD_loader.get_dataloader("test",       batch_size = batch_size)
 
-    # Function to move tensors to GPU if available
+    # ------------------------------------------
+    #                   Training
+    # ------------------------------------------
+    #
+    # ------- WandB -------
+    wandb.init(project = "esa-blacksea-deoxygenation-emulator-V1", config = kwargs)
+
+    # ------ Environment ------
     def to_device(data, device):
+        r"""Function to move tensors to GPU if available"""
         if isinstance(data, (list, tuple)):
             return [to_device(x, device) for x in data]
-        return data.to(device, non_blocking=True)
+        return data.to(device, non_blocking = True)
 
     # Check if GPU is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # -------------------------------------------
-    #                   TRAINING
-    # -------------------------------------------
-    #
-    # Initialization of weights and biases
-    wandb.init(project="esa-blacksea-deoxygenation-emulator-V1", config=kwargs)
-
     # Setting up training environment
     neural_net = FCNN(inputs = len(input_datasets), kernel_size = kernel_size)
+    criterion  = nn.MSELoss()
+    optimizer  = optim.Adam(neural_net.parameters(), lr=learning_rate)
 
-    # Move model to GPU if available
+    # Pushing the model to the correct device
     neural_net.to(device)
 
-    # Other stuff
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(neural_net.parameters(), lr=learning_rate)
+    # ------ Training ------
+    for epoch in range(nb_epochs):
 
-    # Going through epochs
-    for epoch in range(3):
         # Information over terminal (1)
         print("-- Epoch: ", epoch, " --")
+
+        # Used to compute the average training loss
+        training_loss = 0.0
 
         # ----- TRAINING -----
         for x, y in dataset_train:
@@ -145,11 +163,11 @@ def main(**kwargs):
             # Computing the loss, i.e. the value -1 in the ground truth corresponds to the land !
             loss = criterion(pred[y != -1], y[y != -1])
 
-            # Sending the loss to wandDB the loss
+            # Sending the loss to wandDB
             wandb.log({"Loss (Training)": loss.detach().item()})
 
-            # Information over terminal (2)
-            print("Loss (Training): ", loss.detach().item())
+            # Accumulating the loss
+            training_loss += loss.detach().item()
 
             # Reseting the gradients
             optimizer.zero_grad()
@@ -160,8 +178,25 @@ def main(**kwargs):
             # Optimizing the parameters
             optimizer.step()
 
+            break
+
+        # Information over terminal (2)
+        print("Loss (Training, Averaged over batch): ", training_loss / len(dataset_train))
+
+        # Sending the loss to wandDB
+        wandb.log({"Loss (Training, Averaged over batch): ": training_loss / len(dataset_train)})
+
         # ----- VALIDATION -----
         with torch.no_grad():
+
+            # Used to compute the average validation loss
+            validation_loss = 0.0
+
+            # Stores the number of valid samples
+            valid_samples = 0
+
+            # Stores the metrics (regression and classification)
+            metrics_results = list()
 
             for x, y in dataset_validation:
 
@@ -177,8 +212,34 @@ def main(**kwargs):
                 # Sending the loss to wandDB the loss
                 wandb.log({"Loss (Validation)": loss.detach().item()})
 
-                # Information over terminal (3)
-                print("Loss (Validation): ", loss.detach().item())
+                # Accumulating the loss
+                validation_loss += loss.detach().item()
+
+                # Used to compute the metrics
+                metrics_tool = BlackSea_Metrics(y, pred, BSD_loader.get_normalized_deoxygenation_treshold())
+
+                # Computing and storing results
+                metrics_results.append(metrics_tool.compute_metrics())
+
+                # Updating the number of valid samples
+                valid_samples += metrics_tool.get_number_of_valid_samples()
+
+            # Information over terminal (3)
+            print("Loss (Validation, Averaged over batch): ", validation_loss / len(dataset_validation))
+
+            # Sending the loss to wandDB
+            wandb.log({"Loss (Validation, Averaged over batch): ": training_loss / len(dataset_train)})
+
+            # Computing the average metrics, i.e. average per sample
+            metrics_results = metrics_tool.compute_metrics_average(torch.tensor(metrics_results), valid_samples)
+
+            # Names of the metrics
+            metrics_results_names = metrics_tool.get_metrics_names()
+
+            # Sending the metrics to wandDB
+            for i, result in enumerate(metrics_results):
+                for j, r in enumerate(result):
+                    wandb.log({f"Metrics (Validation, Day - {i}, {metrics_results_names[j]})": r})
 
     # Finishing the run
     wandb.finish()
@@ -216,7 +277,7 @@ arguments = {
     'Window (Inputs)' : [1, 3, 7],
     'Window (Output)' : [7],
     'Architecture'    : ["FCNN"],
-    'Learning Rate'   : [0.01, 0.001],
+    'Learning Rate'   : [0.001],
     'Kernel Size'     : [3, 5, 7],
     'Batch Size'      : [64]
 }
@@ -273,19 +334,20 @@ if __name__ == "__main__":
         '--start_month',
         help    = 'Starting month to collect data',
         type    = int,
-        default = 1)
+        default = 0)
 
     parser.add_argument(
         '--end_month',
         help    = 'Ending month to collect data',
         type    = int,
-        default = 2)
+        default = 1)
 
     parser.add_argument(
         '--inputs',
         help    = 'Inputs to be used for the training, e.g. temperature, salinity, ...',
         nargs   = '+',
-        type    = str)
+        type    = str,
+        default = ["temperature"])
 
     parser.add_argument(
         '--splitting',
@@ -313,6 +375,11 @@ if __name__ == "__main__":
         default = 1)
 
     parser.add_argument(
+        '--depth',
+        help    = 'The maximum depth at which we will recover oxygen concentration, i.e. the depth of the continental shelf is at 120m',
+        default = None)
+
+    parser.add_argument(
         '--architecture',
         help    = 'The neural network architecture to be used',
         type    = str,
@@ -323,13 +390,19 @@ if __name__ == "__main__":
         '--learning_rate',
         help    = 'The learning rate used for the training',
         type    = float,
-        default = 0.01)
+        default = 0.001)
 
     parser.add_argument(
         '--batch_size',
         help    = 'The batch size used for the training',
         type    = int,
         default = 64)
+
+    parser.add_argument(
+        '--epochs',
+        help    = 'The number of epochs used for the training',
+        type    = int,
+        default = 1)
 
     parser.add_argument(
         '--dawgz',
@@ -378,12 +451,14 @@ if __name__ == "__main__":
             "Resolution"      : args.resolution,
             "Window (Inputs)" : args.windows_inputs,
             "Window (Output)" : args.windows_outputs,
+            "Depth"           : args.depth,
 
             # Training
             "Architecture"    : args.architecture,
             "Learning Rate"   : args.learning_rate,
             "Kernel Size"     : args.kernel_size,
-            "Batch Size"      : args.batch_size
+            "Batch Size"      : args.batch_size,
+            "Epochs"          : args.epochs
         }
 
         # Launching the main

@@ -47,9 +47,7 @@ def preprocess(data: np.array, mask: np.array):
     data[np.isnan(data)] = 0
 
     # Normalize the data
-    normalized_data = (data - np.nanmin(data)) / (np.nanmax(data) - np.nanmin(data))
-
-    return normalized_data
+    return (data - np.nanmin(data)) / (np.nanmax(data) - np.nanmin(data))
 
 def merge_timeseries_and_patches(data: np.array):
     r"""Used to merge the timeseries and patches dimensions"""

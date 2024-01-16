@@ -15,7 +15,7 @@
 #
 # Documentation
 # -------------
-# A library of neural networks to be tested as a model for the Black Sea deoxygenation emulator
+# A library of neural networks to be tested as Black Sea deoxygenation emulator
 #
 # Pytorch
 import torch.nn as nn
@@ -24,7 +24,7 @@ import torch.nn as nn
 class FCNN(nn.Sequential):
     r"""A fully convolutional neural network"""
 
-    def __init__(self, inputs:int, outputs:int = 1, kernel_size:int = 3):
+    def __init__(self, inputs: int, outputs: int, kernel_size: int = 3):
 
         # Initialization
         self.n_in    = inputs
@@ -45,7 +45,7 @@ class FCNN(nn.Sequential):
         super().__init__(*block1, *block2, *block3, *block4, *block5, *block6, *block7, conv8)
 
     def _make_subblock(self, conv):
-        return [conv, nn.ReLU(), nn.BatchNorm2d(conv.out_channels)]
+        return [conv, nn.GELU(), nn.BatchNorm2d(conv.out_channels)]
 
     def forward(self, x):
         return super().forward(x)
