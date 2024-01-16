@@ -122,7 +122,7 @@ class BlackSea_Dataloader():
         x = np.stack([x[i : i + window, :, :, :, :] for i in range(t - window - window_oxy)], axis = 0).reshape(t - window - window_oxy, (v - 1) * window, total_patches, resolution, resolution)
 
         # Output - Creation of the output time series, i.e. (index, variable(s)_{t, t + window}, number of patches, resolution, resolution)
-        y = np.stack([y[i + window : i + window + window_oxy,  :, :, :] for i in range(t - window - window_oxy)], axis = 0)
+        y = np.stack([y[i + window - 1 : i + window + window_oxy - 1,  :, :, :] for i in range(t - window - window_oxy)], axis = 0)
 
         # ------------------------------------------------
         #                   TEMPORAL MODE
