@@ -164,7 +164,7 @@ def main(**kwargs):
             loss = criterion(pred[y != -1], y[y != -1])
 
             # Sending the loss to wandDB
-            wandb.log({"Loss (Training)": loss.detach().item()})
+            wandb.log({"Loss (T)": loss.detach().item()})
 
             # Accumulating the loss
             training_loss += loss.detach().item()
@@ -184,7 +184,7 @@ def main(**kwargs):
         print("Loss (Training, Averaged over batch): ", training_loss / len(dataset_train))
 
         # Sending the loss to wandDB
-        wandb.log({"Loss (Training, Averaged over batch): ": training_loss / len(dataset_train)})
+        wandb.log({"Loss (T, AOB): ": training_loss / len(dataset_train)})
 
         # ----- VALIDATION -----
         with torch.no_grad():
@@ -210,7 +210,7 @@ def main(**kwargs):
                 loss = criterion(pred[y != -1], y[y != -1])
 
                 # Sending the loss to wandDB the loss
-                wandb.log({"Loss (Validation)": loss.detach().item()})
+                wandb.log({"Loss (V)": loss.detach().item()})
 
                 # Accumulating the loss
                 validation_loss += loss.detach().item()
@@ -224,11 +224,13 @@ def main(**kwargs):
                 # Updating the number of valid samples
                 valid_samples += metrics_tool.get_number_of_valid_samples()
 
+                break
+
             # Information over terminal (3)
             print("Loss (Validation, Averaged over batch): ", validation_loss / len(dataset_validation))
 
             # Sending the loss to wandDB
-            wandb.log({"Loss (Validation, Averaged over batch): ": training_loss / len(dataset_train)})
+            wandb.log({"Loss (V, AOB): ": validation_loss / len(dataset_validation)})
 
             # Computing the average metrics, i.e. average per sample
             metrics_results = metrics_tool.compute_metrics_average(torch.tensor(metrics_results), valid_samples)
@@ -236,10 +238,10 @@ def main(**kwargs):
             # Names of the metrics
             metrics_results_names = metrics_tool.get_metrics_names()
 
-            # Sending the metrics to wandDB
+            # Sending the metrics results to wandDB
             for i, result in enumerate(metrics_results):
                 for j, r in enumerate(result):
-                    wandb.log({f"Metrics (Validation, Day - {i}, {metrics_results_names[j]})": r})
+                    wandb.log({f"{metrics_results_names[j]} (Day {i})": r})
 
     # Finishing the run
     wandb.finish()
@@ -402,7 +404,7 @@ if __name__ == "__main__":
         '--epochs',
         help    = 'The number of epochs used for the training',
         type    = int,
-        default = 1)
+        default = 3)
 
     parser.add_argument(
         '--dawgz',

@@ -155,7 +155,6 @@ def compute_distribution(i: int):
     # Launching the main
     main(dates)
 
-
 # ---------------------------------------------------------------------
 #
 #                                  MAIN
@@ -224,7 +223,7 @@ if __name__ == "__main__":
     else:
 
         # Information over terminal
-        print("Running without dawgz")‡
+        print("Running without dawgz")
 
         # Retreiving corresponding time period
         arguments = {

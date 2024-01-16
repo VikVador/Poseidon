@@ -56,10 +56,10 @@ class BlackSea_Metrics():
                                    R2Score(),
                                    PearsonCorrCoef()]
 
-        self.metrics_regression_names = ["Mean Squared Error (Average Per Sample)",
-                                         "Root Mean Squared Error (Average Per Sample)",
-                                         "R2 Score (Average Per Sample)",
-                                         "Pearson Correlation Coefficient (Average Per Sample)"]
+        self.metrics_regression_names = ["Mean Squared Error",
+                                         "Root Mean Squared Error",
+                                         "R2 Score",
+                                         "Pearson Correlation Coefficient"]
 
         # Metrics used to assess the quality of the model at doing classification
         self.metrics_classification = [BinaryAccuracy(),
@@ -67,10 +67,10 @@ class BlackSea_Metrics():
                                        BinaryRecall(),
                                        BinaryMatthewsCorrCoef()]
 
-        self.metrics_classification_names = ["Accuracy (Average Per Sample)",
-                                             "Precision (Average Per Sample)",
-                                             "Recall (Average Per Sample)",
-                                             "Matthews Correlation Coefficient (Average Per Sample)"]
+        self.metrics_classification_names = ["Accuracy",
+                                             "Precision",
+                                             "Recall",
+                                             "Matthews Correlation Coefficient"]
 
     def get_metrics_names(self):
         r"""Retreives the name of the metrics used for regression and classification"""
@@ -123,7 +123,7 @@ class BlackSea_Metrics():
                     continue
 
                 # Computing the metric
-                if m_name == "Root Mean Squared Error (Average Per Sample)":
+                if m_name == "Root Mean Squared Error":
                     results_metric.append(torch.sqrt(torch.nan_to_num(m(s_true[mask], s_pred[mask]), nan = 0.0)))
                 else:
                     results_metric.append(torch.nan_to_num(m(s_true[mask], s_pred[mask]), nan = 0.0))
