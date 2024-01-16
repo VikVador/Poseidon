@@ -135,7 +135,7 @@ def main(**kwargs):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Setting up training environment
-    neural_net = FCNN(inputs = len(input_datasets), kernel_size = kernel_size)
+    neural_net = FCNN(inputs = len(input_datasets), outputs =  windows_outputs, kernel_size = kernel_size)
     criterion  = nn.MSELoss()
     optimizer  = optim.Adam(neural_net.parameters(), lr=learning_rate)
 
@@ -372,7 +372,7 @@ if __name__ == "__main__":
         '--windows_outputs',
         help    = 'The number of days to predict, i.e. the oxygen forecast for the next days',
         type    = int,
-        default = 1)
+        default = 3)
 
     parser.add_argument(
         '--depth',
