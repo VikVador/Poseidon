@@ -142,7 +142,9 @@ def main(**kwargs):
     # Pushing the model to the correct device
     neural_net.to(device)
 
-    # ------ Training ------
+    # Normalized oxygen treshold
+    norm_oxy = BSD_loader.get_normalized_deoxygenation_treshold()
+
     for epoch in range(nb_epochs):
 
         # Information over terminal (1)
@@ -177,8 +179,6 @@ def main(**kwargs):
 
             # Optimizing the parameters
             optimizer.step()
-
-            break
 
         # Information over terminal (2)
         print("Loss (Training, Averaged over batch): ", training_loss / len(dataset_train))
@@ -216,15 +216,18 @@ def main(**kwargs):
                 validation_loss += loss.detach().item()
 
                 # Used to compute the metrics
-                metrics_tool = BlackSea_Metrics(y, pred, BSD_loader.get_normalized_deoxygenation_treshold())
+                metrics_tool = BlackSea_Metrics(y, pred, norm_oxy)
+
+                # Visual inspection (only on the first batch, i.e. to observe the same samples)
+                if valid_samples == 0:
+                    for i in range(5):
+                        wandb.log({f"Sample {i}" : metrics_tool.plot_comparison(y, pred, norm_oxy, index_sample = i)})
 
                 # Computing and storing results
                 metrics_results.append(metrics_tool.compute_metrics())
 
                 # Updating the number of valid samples
                 valid_samples += metrics_tool.get_number_of_valid_samples()
-
-                break
 
             # Information over terminal (3)
             print("Loss (Validation, Averaged over batch): ", validation_loss / len(dataset_validation))
@@ -241,7 +244,7 @@ def main(**kwargs):
             # Sending the metrics results to wandDB
             for i, result in enumerate(metrics_results):
                 for j, r in enumerate(result):
-                    wandb.log({f"{metrics_results_names[j]} (Day {i})": r})
+                    wandb.log({f"{metrics_results_names[j]} ({i})": r})
 
     # Finishing the run
     wandb.finish()
@@ -374,7 +377,7 @@ if __name__ == "__main__":
         '--windows_outputs',
         help    = 'The number of days to predict, i.e. the oxygen forecast for the next days',
         type    = int,
-        default = 3)
+        default = 1)
 
     parser.add_argument(
         '--depth',
@@ -404,7 +407,7 @@ if __name__ == "__main__":
         '--epochs',
         help    = 'The number of epochs used for the training',
         type    = int,
-        default = 3)
+        default = 5)
 
     parser.add_argument(
         '--dawgz',

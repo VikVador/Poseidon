@@ -162,7 +162,7 @@ class BlackSea_Metrics():
         return results
 
     def plot_comparison(self, y_true: torch.Tensor, y_pred: torch.Tensor, normalized_deoxygenation_treshold: float, index_sample: int = 0):
-        r"Used to visually compare the prediction and the ground truth"
+        r"Used to visually compare the prediction and the ground truth in wandb"
 
         # Retrieving the dimensions (ease of comprehension)
         samples, days, x, y = y_pred.shape
