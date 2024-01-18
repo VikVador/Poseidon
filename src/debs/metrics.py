@@ -18,6 +18,8 @@
 # A tool to compute a large variety of metrics on the outputs of a model.
 #
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator, FuncFormatter
 
 # Pytorch
 import torch
@@ -158,3 +160,80 @@ class BlackSea_Metrics():
             results.append(torch.sum(torch.stack(results_metric)))
 
         return results
+
+    def plot_comparison(self, y_true: torch.Tensor, y_pred: torch.Tensor, normalized_deoxygenation_treshold: float, index_sample: int = 0):
+        r"Used to visually compare the prediction and the ground truth"
+
+        # Retrieving the dimensions (ease of comprehension)
+        samples, days, x, y = y_pred.shape
+
+        # Creating the figure
+        fig, ax = plt.subplots(4, days, figsize = (3 * days, 10))
+
+        # Changing the colormaps
+        color_regression     = plt.colormaps["magma"].reversed()
+        color_classification = plt.colormaps["viridis"].reversed()
+
+        # Results for classification, i.e. fixed region over time (2)
+        for i in range(days):
+
+            # Used to deal with 1D or 2D arrays
+            ax_temp = ax[:, i] if days > 1 else ax
+
+            # Retreiving samples and mask (needs to be clone otherwise we have problem with masks)
+            y_true_day = torch.clone(y_true[index_sample, i, :, :])
+            y_pred_day = torch.clone(y_pred[index_sample, i, :, :])
+            mask       = torch.clone(y_true[index_sample, i, :, :] == -1)
+
+            # Hiding the land (for ease of visualization and also, the neural network cannot predict anything on the land using -1 values)
+            y_pred_day[mask == True] = 10
+            y_true_day[mask == True] = 10
+
+            # Plotting regression problem
+            im1 = ax_temp[0].imshow(y_pred_day, cmap = color_regression, vmin = 0, vmax = 1)
+            im2 = ax_temp[1].imshow(y_true_day, cmap = color_regression, vmin = 0, vmax = 1)
+
+            # Highligthing the regions where there is hypoxia
+            y_pred_class = (y_pred_day < normalized_deoxygenation_treshold).long()
+            y_true_class = (y_true_day < normalized_deoxygenation_treshold).long()
+
+            # Hiding the land ()
+            y_pred_class[mask == True] = -1
+            y_true_class[mask == True] = -1
+
+            # Plotting classification problem
+            im3 = ax_temp[2].imshow(y_pred_class, cmap = color_classification, vmin = -1, vmax = 1)
+            im4 = ax_temp[3].imshow(y_true_class, cmap = color_classification, vmin = -1, vmax = 1)
+
+            # Adding more information to the plot
+            ax_temp[0].set_title(f"Day = {i}", fontsize = 11)
+
+            for j in range(4):
+                if i != 0:
+                    ax_temp[j].set_yticks([])
+                if j != 3:
+                    ax_temp[j].set_xticks([])
+
+        def format_classification_ticks(value, _):
+            r"Used to format the ticks of the colorbar"
+            if value == 1:
+                return 'Hypoxia'
+            elif value == 0:
+                return 'Oxygenated'
+            elif value == -1:
+                return 'Land'
+            else:
+                return ''
+
+        # Adding colorbar (regression)
+        cbar = fig.colorbar(im1, ax = ax[:2], orientation = 'vertical', fraction = 0.1, pad = 0.05)
+        cbar.set_label('Normalized Oxygen Concentration [-]', rotation = 270, labelpad = 30, fontsize = 11)
+
+        # Adding colorbar (classification)
+        cbar = fig.colorbar(im3, ax = ax[2:], orientation = 'vertical', fraction = 0.1, pad = 0.05)
+        cbar_ticks = MaxNLocator(integer = True)
+        cbar.set_ticks(cbar_ticks)
+        cbar.ax.yaxis.set_major_formatter(FuncFormatter(format_classification_ticks))
+
+        # Giving back the fig, i.e. to be send to wandb
+        return fig
