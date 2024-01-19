@@ -108,3 +108,47 @@ def generateFakeDataset(number_of_variables: int = 5, number_of_samples: int = 1
 
     # Creates a list of numpy arrays
     return [np.array(s) for s in list_fake_samples]
+
+# Used to display a simple progress bar while training for 1 epoch
+def progressBar(loss_training, loss_validation, learning_rate, estimated_time_epoch, nb_epoch_left, percent, width = 15):
+
+    # Setting up the useful information
+    left            = width * percent // 100
+    right           = width - left
+    tags            = "-" * int(left)
+    spaces          = " " * int(right)
+    percents        = f"{percent:.2f} %"
+    loss_training   = f"{loss_training * 1:.3f}"
+    loss_validation = f"{loss_validation * 1:.3f}"
+    learning_rate   = f"{learning_rate[-1] * 1:.6f}"
+
+    # Total timing left in seconds
+    total_time_left = nb_epoch_left * estimated_time_epoch
+
+    # Contains the unit of the timer and message to be printed
+    timer_unit, estimated_time_total = str(), str()
+
+    # Conversion to hours
+    if total_time_left > 3600:
+        total_time_left      = total_time_left/3600
+        timer_unit           = "h"
+        estimated_time_total = f"{total_time_left:.0f} {timer_unit}"
+
+    # Conversion to minutes
+    elif total_time_left > 60:
+        total_time_left      = total_time_left/60
+        timer_unit           = "min"
+        estimated_time_total = f"{total_time_left:.0f} {timer_unit}"
+
+    # A few seconds left
+    else:
+        timer_unit           = "s"
+        estimated_time_total = f"{total_time_left:.0f} {timer_unit}"
+
+    # Nothing to print for now
+    if total_time_left == 0:
+        estimated_time_total = " - "
+
+    # Displaying a really cool progress bar !
+    print("\r[", tags, spaces, "] - ", percents, " | Loss (Training) = ", loss_training, " | Loss (Validation) = ", loss_validation,
+          " | LR : ", learning_rate, " | Time : ", estimated_time_total, " | ", sep = "", end = "", flush = True)
