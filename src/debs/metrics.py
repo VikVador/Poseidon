@@ -161,11 +161,11 @@ class BlackSea_Metrics():
 
         return results
 
-    def plot_comparison(self, y_true: torch.Tensor, y_pred: torch.Tensor, normalized_deoxygenation_treshold: float, index_sample: int = 0):
+    def plot_comparison(self, normalized_deoxygenation_treshold: float, index_sample: int = 0):
         r"Used to visually compare the prediction and the ground truth in wandb"
 
         # Retrieving the dimensions (ease of comprehension)
-        samples, days, x, y = y_pred.shape
+        samples, days, x, y = self.y_pred.shape
 
         # Creating the figure
         fig, ax = plt.subplots(4, days, figsize = (3 * days, 10))
@@ -181,9 +181,9 @@ class BlackSea_Metrics():
             ax_temp = ax[:, i] if days > 1 else ax
 
             # Retreiving samples and mask (needs to be clone otherwise we have problem with masks)
-            y_true_day = torch.clone(y_true[index_sample, i, :, :])
-            y_pred_day = torch.clone(y_pred[index_sample, i, :, :])
-            mask       = torch.clone(y_true[index_sample, i, :, :] == -1)
+            y_true_day = torch.clone(self.y_true[index_sample, i, :, :])
+            y_pred_day = torch.clone(self.y_pred[index_sample, i, :, :])
+            mask       = torch.clone(self.y_true[index_sample, i, :, :] == -1)
 
             # Hiding the land (for ease of visualization and also, the neural network cannot predict anything on the land using -1 values)
             y_pred_day[mask == True] = 10
