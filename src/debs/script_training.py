@@ -21,8 +21,10 @@
 #
 #   Dawgz = True  : compute the distributions over all the possible time periods
 #
+import time
 import wandb
 import argparse
+import matplotlib.pyplot as plt
 
 # Pytorch
 import torch
@@ -34,6 +36,7 @@ from dataset              import BlackSea_Dataset
 from dataloader           import BlackSea_Dataloader
 from metrics              import BlackSea_Metrics
 from neural_networks      import FCNN
+from tools                import progressBar
 
 # Dawgz library (used to parallelized the jobs)
 from dawgz import job, schedule
@@ -137,7 +140,7 @@ def main(**kwargs):
     # Setting up training environment
     neural_net = FCNN(inputs = len(input_datasets), outputs =  windows_outputs, kernel_size = kernel_size)
     criterion  = nn.MSELoss()
-    optimizer  = optim.Adam(neural_net.parameters(), lr=learning_rate)
+    optimizer  = optim.Adam(neural_net.parameters(), lr = learning_rate)
 
     # Pushing the model to the correct device
     neural_net.to(device)
@@ -145,13 +148,23 @@ def main(**kwargs):
     # Normalized oxygen treshold
     norm_oxy = BSD_loader.get_normalized_deoxygenation_treshold()
 
+    # Used to compute training progression bar (1)
+    size_training   = len(dataset_train)
+    size_validation = len(dataset_validation)
+    epoch_time      = 0
+
     for epoch in range(nb_epochs):
 
         # Information over terminal (1)
-        print("-- Epoch: ", epoch, " --")
+        print("\n") if epoch == 0 else print("")
+        print("Epoch : ", epoch + 1, "/", nb_epochs, "\n")
+
+        # Used to approximate time left for current epoch and in total
+        start      = time.time()
 
         # Used to compute the average training loss
         training_loss = 0.0
+        epoch_steps   = 0
 
         # ----- TRAINING -----
         for x, y in dataset_train:
@@ -165,7 +178,7 @@ def main(**kwargs):
             # Computing the loss, i.e. the value -1 in the ground truth corresponds to the land !
             loss = criterion(pred[y != -1], y[y != -1])
 
-            # Sending the loss to wandDB
+            # Sending to wandDB
             wandb.log({"Loss (T)": loss.detach().item()})
 
             # Accumulating the loss
@@ -179,6 +192,13 @@ def main(**kwargs):
 
             # Optimizing the parameters
             optimizer.step()
+
+            # Updating epoch info ! Would be nice to upgrade it !
+            epoch_steps  += 1
+            percentage    = (batch_size/size_training) * 100 if (batch_size/size_training) <= 1 else 100
+
+            # Displaying information over terminal
+            progressBar(training_loss/epoch_steps, 0, [learning_rate], epoch_time, nb_epochs - epoch, percentage)
 
         # Information over terminal (2)
         print("Loss (Training, Averaged over batch): ", training_loss / len(dataset_train))
@@ -216,12 +236,13 @@ def main(**kwargs):
                 validation_loss += loss.detach().item()
 
                 # Used to compute the metrics
-                metrics_tool = BlackSea_Metrics(y, pred, norm_oxy)
+                metrics_tool = BlackSea_Metrics(y.cpu(), pred.cpu(), norm_oxy)
 
-                # Visual inspection (only on the first batch, i.e. to observe the same samples)
+                # Visual inspection (only on the first batch, i.e. to observe the same samples if seed is fixed between runs)
                 if valid_samples == 0:
-                    for i in range(5):
-                        wandb.log({f"Sample {i}" : metrics_tool.plot_comparison(y, pred, norm_oxy, index_sample = i)})
+                    for i in range(int(batch_size/4)):
+                        wandb.log({f"Sample {i}" : metrics_tool.plot_comparison(norm_oxy, index_sample = i)})
+                        plt.close()
 
                 # Computing and storing results
                 metrics_results.append(metrics_tool.compute_metrics())
@@ -232,8 +253,9 @@ def main(**kwargs):
             # Information over terminal (3)
             print("Loss (Validation, Averaged over batch): ", validation_loss / len(dataset_validation))
 
-            # Sending the loss to wandDB
+            # Sending more information to wandDB
             wandb.log({"Loss (V, AOB): ": validation_loss / len(dataset_validation)})
+            wandb.log({"Epochs : ": nb_epochs - epoch})
 
             # Computing the average metrics, i.e. average per sample
             metrics_results = metrics_tool.compute_metrics_average(torch.tensor(metrics_results), valid_samples)
@@ -245,6 +267,9 @@ def main(**kwargs):
             for i, result in enumerate(metrics_results):
                 for j, r in enumerate(result):
                     wandb.log({f"{metrics_results_names[j]} ({i})": r})
+
+        # Updating timing
+        epoch_time    = time.time() - start
 
     # Finishing the run
     wandb.finish()
@@ -377,7 +402,7 @@ if __name__ == "__main__":
         '--windows_outputs',
         help    = 'The number of days to predict, i.e. the oxygen forecast for the next days',
         type    = int,
-        default = 1)
+        default = 4)
 
     parser.add_argument(
         '--depth',
@@ -407,7 +432,7 @@ if __name__ == "__main__":
         '--epochs',
         help    = 'The number of epochs used for the training',
         type    = int,
-        default = 5)
+        default = 10)
 
     parser.add_argument(
         '--dawgz',
