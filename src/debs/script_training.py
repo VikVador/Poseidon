@@ -200,9 +200,6 @@ def main(**kwargs):
             # Displaying information over terminal
             progressBar(training_loss/epoch_steps, 0, [learning_rate], epoch_time, nb_epochs - epoch, percentage)
 
-        # Information over terminal (2)
-        print("Loss (Training, Averaged over batch): ", training_loss / len(dataset_train))
-
         # Sending the loss to wandDB
         wandb.log({"Loss (T, AOB): ": training_loss / len(dataset_train)})
 
@@ -269,7 +266,7 @@ def main(**kwargs):
                     wandb.log({f"{metrics_results_names[j]} ({i})": r})
 
         # Updating timing
-        epoch_time    = time.time() - start
+        epoch_time = time.time() - start
 
     # Finishing the run
     wandb.finish()
@@ -285,7 +282,8 @@ def main(**kwargs):
 # Possibilities
 # -------------
 # Creation of all the inputs combinations
-input_list = ["temperature", "salinity", "chlorophyll", "kshort", "klong"]
+#input_list = ["temperature", "salinity", "chlorophyll", "kshort", "klong"]
+input_list = ["temperature"]
 
 # Generate all combinations
 all_combinations = []
@@ -296,6 +294,7 @@ for r in range(1, len(input_list) + 1):
 all_combinations = [list(combination) for combination in all_combinations]
 
 # Storing all the information
+"""
 arguments = {
     'month_start'     : [0],
     'month_end'       : [12],
@@ -311,6 +310,25 @@ arguments = {
     'Kernel Size'     : [3, 5, 7],
     'Batch Size'      : [64]
 }
+"""
+
+arguments = {
+    'month_start'     : [0],
+    'month_end'       : [1],
+    'year_start'      : [0],
+    'year_end'        : [0],
+    'Inputs'          : all_combinations,
+    'Splitting'       : ["temporal"],
+    'Resolution'      : [64],
+    'Window (Inputs)' : [7],
+    'Window (Output)' : [1],
+    'Depth'           : [None],
+    'Architecture'    : ["FCNN"],
+    'Learning Rate'   : [0.001],
+    'Kernel Size'     : [3],
+    'Batch Size'      : [64],
+    'Epochs'          : [10]
+}
 
 # Generate all combinations
 param_combinations = list(product(*arguments.values()))
@@ -321,7 +339,7 @@ param_dicts = [dict(zip(arguments.keys(), combo)) for combo in param_combination
 # ----
 # Jobs
 # ----
-@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '64GB', time = '24:00:00', project = 'bsmfc', user = 'vmangeleer@uliege.be', type = 'FAIL')
+@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '64GB', time = '0:20:00', project = 'bsmfc', partition = "debug-gpu", user = 'vmangeleer@uliege.be', type = 'FAIL')
 def train_model(i: int):
 
     # Launching the main
