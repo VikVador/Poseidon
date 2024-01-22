@@ -24,10 +24,11 @@
 #SBATCH --account=bsmfc
 #SBATCH --job-name=JUPYTER
 #SBATCH --time=24:00:00
+#SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem-per-cpu=32000
-#SBATCH --gres="gpu:1"
-#SBATCH --partition=medium
+#SBATCH --gpus=1
+#SBATCH --mem-per-cpu=32G
+#SBATCH --partition=ia
 #SBATCH --output=../logs/jupiter_notebook.log
 #SBATCH --mail-user=vmangeleer@uliege.be
 #SBATCH --mail-type=FAIL
@@ -40,8 +41,5 @@ module purge
 # ----
 # Main
 # ----
-# Activating the project environement
-conda activate esa
-
 # Creating an instance of the jupyter notebook
 jupyter lab --ip='*' --notebook-dir=~/ESA---Black-Sea-Deoxygenation/ --no-browser --port 8888
