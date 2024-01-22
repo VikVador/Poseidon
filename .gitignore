@@ -2,7 +2,7 @@
 *.DS_Store
 
 # Keeping DAGWZ on cluster
-src/.dawgz/*
+src/debs/.dawgz/
 
 # Data folder is available only to work locally
 data/
