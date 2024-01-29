@@ -125,7 +125,7 @@ def main(**kwargs):
     # ------------------------------------------
     #
     # ------- WandB -------
-    wandb.init(project = "esa-blacksea-deoxygenation-emulator-V1", config = kwargs)
+    wandb.init(project = "esa-blacksea-deoxygenation-emulator-V2", config = kwargs)
 
     # ------ Environment ------
     def to_device(data, device):
@@ -294,24 +294,6 @@ for r in range(1, len(input_list) + 1):
 all_combinations = [list(combination) for combination in all_combinations]
 
 # Storing all the information
-"""
-arguments = {
-    'month_start'     : [0],
-    'month_end'       : [12],
-    'year_start'      : [0],
-    'year_end'        : [5],
-    'Inputs'          : all_combinations,
-    'Splitting'       : ["temporal", "spatial"],
-    'Resolution'      : [64],
-    'Window (Inputs)' : [1, 3, 7],
-    'Window (Output)' : [7],
-    'Architecture'    : ["FCNN"],
-    'Learning Rate'   : [0.001],
-    'Kernel Size'     : [3, 5, 7],
-    'Batch Size'      : [64]
-}
-"""
-
 arguments = {
     'month_start'     : [0],
     'month_end'       : [1],
@@ -508,6 +490,10 @@ if __name__ == "__main__":
             "Batch Size"      : args.batch_size,
             "Epochs"          : args.epochs
         }
+
+        # Adding boolean information about variable used (wandb cannot handle a list for parameters plotting)
+        for v in ["temperature", "salinity", "chlorophyll", "kshort", "klong"]:
+            arguments[v] = True if v in arguments['Inputs'] else False
 
         # Launching the main
         main(**arguments)
