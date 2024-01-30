@@ -24,172 +24,142 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
 
-def compute_normalized_deoxygenation_treshold(data: np.array, deoxygenation_treshold: float):
-    r"""Used to retreive the normalized deoxygenation treshold, i.e. if we need the regions with
-        oxygen concentrations above 63 [mmol/m3] we need to normalize 63 [mmol/m3]"""
-
-    # Rescale the data to ensure non-negative values (to be consistent with the preprocessing function)
-    rescaled_data = data + np.abs(np.nanmin(data)) if np.nanmin(data) < 0 else data
-
-    # Computes the normalized treshold value (data needs to be rescaled)
-    return (deoxygenation_treshold - np.nanmin(rescaled_data)) / (np.nanmax(rescaled_data) - np.nanmin(rescaled_data))
-
-def preprocess(data: np.array, mask: np.array):
-    r"""Used to mask the NaNs, mask the land and normalize the data"""
-
-    # Rescale the data to ensure non-negative values
-    data = data + np.abs(np.nanmin(data)) if np.nanmin(data) < 0 else data
-
-    # Set the land values to 0
-    data[:, mask == 0] = 0
-
-    # Replace NaNs with 0
-    data[np.isnan(data)] = 0
-
-    # Normalize the data
-    return (data - np.nanmin(data)) / (np.nanmax(data) - np.nanmin(data))
-
-def merge_timeseries_and_patches(data: np.array):
-    r"""Used to merge the timeseries and patches dimensions"""
-
-    # Swaping axes (needed to concatenate along patch dimensino during reshaping), i.e. (t, v, p, r, r) to (t, p, v, r, r)
-    data = np.swapaxes(data, 1, 2)
-
-    # Retrieving all the dimensions for reshaping (easier to understand what is happening)
-    t, p, v, res_x, res_y = data.shape
-
-    # Merging timeseries and patches dimensions
-    return data.reshape(t * p, v, res_x, res_y)
-
 class BlackSea_Dataloader():
-    r"""A dataloader for Black Sea dataset, i.e. used for training, validating and testing the model."""
+    r"""A dataloader for Black Sea dataset, i.e. used to generate training, validating and testing sets."""
 
     def __init__(self, x: list,
                        y: np.array,
-                    mask: np.array,
-                    mode: str   = "spatial",
-              resolution: int   = 64,
-                  window: int   = 1,
-              window_oxy: int   = 7,
-          deoxy_treshold: float = 63,
-           datasets_size: list  = [0.6, 0.3],
+                 bs_mask: np.array,
+      bs_mask_with_depth: np.array,
+              window_inp: int   = 1,
+              window_out: int   = 1,
+                   mode : str   = "regression",
+        hypoxia_treshold: float = 63,
+           datasets_size: list  = [0.7, 0.2],
                     seed: int   = 2701):
 
         # ------------------------------------------------
         #                  PREPROCESSING (1)
         # ------------------------------------------------
         #
-        # Stores the normalized concentration treshold (needed to create deoxygenation mask later on, e.g. during evaluation of the model)
-        self.normalized_deoxygenation_treshold = compute_normalized_deoxygenation_treshold(y, deoxy_treshold)
+        def compute_normalized_deoxygenation_treshold(data: np.array, hypoxia_treshold: float):
+            r"""Used to retreive the normalized deoxygenation treshold, i.e. if we need the regions with
+                oxygen concentrations above 63 [mmol/m3] we need the normalized value of 63 [mmol/m3]"""
 
-        # Concatenate inputs and output
+            # Determine the minimum and maximum values of the data
+            min_value = np.nanmin(data)
+            max_value = np.nanmax(data)
+
+            # Computes the normalized hypoxia treshold value
+            return (hypoxia_treshold - min_value) / (max_value - min_value)
+
+        def preprocess(data: np.array, bs_mask: np.array):
+            r"""Used to mask the NaNs as well as the land and perform a min/max normalization on the data"""
+
+            # Determine the minimum and maximum values of the data
+            min_value = np.nanmin(data)
+            max_value = np.nanmax(data)
+
+            # Rescale the data to ensure non-negative values
+            data = data + np.abs(min_value) if min_value < 0 else data
+
+            # Normalizing the data
+            return (data - min_value) / (max_value - min_value)
+
+        # Stores the normalized concentration treshold
+        self.normalized_deoxygenation_treshold = compute_normalized_deoxygenation_treshold(y, hypoxia_treshold)
+
+        # Concatenation of inputs and output
         x = np.stack([y] + x, axis = 1)
 
-        # Removing dimensions to be a power of 2
-        x    = x[:, :, :-2, :-2]
-        mask = mask[:-2, :-2]
+        # Reshaping dimensions to be a power of 2
+        x                  = x[:, :, :-2, :-2]
+        bs_mask            = bs_mask[:-2, :-2]
+        bs_mask_with_depth = bs_mask_with_depth[:-2, :-2]
 
-        # Current shape of the input (1)
+        # Current shape of the input (ease of comprehension)
         t, v, x_res, y_res = x.shape
 
         # Security
-        assert mode in ["spatial", "temporal"], f"ERROR (BlackSea_Dataloader) Mode must be either 'spatial', 'temporal' ({mode})"
-        assert resolution % 2 == 0,             f"ERROR (BlackSea_Dataloader) Resolution must be a multiple of 2 ({resolution})"
-        assert resolution <= x_res/2,           f"ERROR (BlackSea_Dataloader) Resolution must be smaller than half the input resolution ({resolution} < {x_res/2})"
-        assert window <= int(t/3 - 1),          f"ERROR (BlackSea_Dataloader) Window must be smaller than a third of the input time scale ({window} < {int(t/3 - 1)})"
+        assert window_inp <= int(t/3 - 1),               f"ERROR (BlackSea_Dataloader) Window must be smaller than a third of the input time scale ({window_inp} < {int(t/3 - 1)})"
+        assert mode in ["regression", "classification"], f"ERROR (BlackSea_Dataloader) Mode must be either 'regression' or 'classification' ({mode})"
 
-        # Preprocessing the data
+        # Preprocessing of all the data
         for i in range(v):
-            x[:, i, :, :] = preprocess(x[:, i, :, :], mask)
+            x[:, i, :, :] = preprocess(x[:, i, :, :], bs_mask)
 
-        # Adding the Black Sea mask to the inputs/output with an arbitrary value (used later on for the MSE loss)
-        x[:, :, mask == 0] = -1
+        # Separation of the x and y data (to avoid a mess)
+        y = x[:, 0,  :, :]
+        x = x[:, 1:, :, :]
 
-        # Number of patches along the x-, y- dimensions and total number of possible patches
-        nb_patches_x, nb_patches_y, total_patches = int(x_res/resolution), int(y_res/resolution), int(x_res/resolution) * int(y_res/resolution)
+        # Input - Creation of the input time series, i.e. (sample, variable(s)_{t, t + window}, resolution, resolution)
+        x = np.stack([x[i : i + window_inp, :, :, :] for i in range(t - window_inp - window_out)], axis = 0).reshape(t - window_inp - window_out, (v - 1) * window_inp, x_res, y_res)
 
-        # Extracting patches from the input of of a given resolution
-        x = [x[:, :, i * resolution : (i + 1) * resolution, j * resolution : (j + 1) * resolution] for i in range(nb_patches_x) for j in range(nb_patches_y)]
-
-        # Concatenation of the inputs (t, variable, x, y) into (t, variables, number of patches, resolution, resolution)
-        x = np.stack(x, axis = 2)
-
-        # Separation of the x and y data (to avoid a mess with timeseries)
-        y = x[:, 0,  :, :, :]
-        x = x[:, 1:, :, :, :]
-
-        # Input - Creation of the input time series, i.e. (index, variable(s)_{t, t + window}, number of patches, resolution, resolution)
-        x = np.stack([x[i : i + window, :, :, :, :] for i in range(t - window - window_oxy)], axis = 0).reshape(t - window - window_oxy, (v - 1) * window, total_patches, resolution, resolution)
-
-        # Output - Creation of the output time series, i.e. (index, variable(s)_{t, t + window}, number of patches, resolution, resolution)
-        y = np.stack([y[i + window - 1 : i + window + window_oxy - 1,  :, :, :] for i in range(t - window - window_oxy)], axis = 0)
+        # Output - Creation of the output time series, i.e. (sample, variable_{t, t + window}, resolution, resolution)
+        y = np.stack([y[i + window_inp - 1 : i + window_inp + window_out - 1, :, :] for i in range(t - window_inp - window_out)], axis = 0)
 
         # ------------------------------------------------
-        #                   TEMPORAL MODE
+        #              PROBLEM FORMULATION
         # ------------------------------------------------
         #
-        # Documentation
-        # -------------
-        # In temporal mode, the dataset is split into training, validation and test sets by
-        # taking non-overlapping timeseries, i.e. therefore we train on the whole spatial domain
-        #
-        if mode == "temporal":
+        # Classification, i.e. the emulator predicts wether or not a region (pixel) is in hypoxia
+        if mode == "classification":
 
-            # Computing size of the training, validation and test sets
-            training_size, validation_size = int(t * datasets_size[0]), int(t * datasets_size[1])
+            # Current shape of the input (ease of comprehension)
+            t, forecasted_days, x_res, y_res = x.shape
 
-            # Splitting the dataset into training, validation and test sets while not taking overlapping timeseries
-            x_train, x_validation, x_test = x[ : training_size - window, :, :, :, :], x[training_size : training_size + validation_size - window, :, :, :, :], x[training_size + validation_size:, :, :, :, :]
-            y_train, y_validation, y_test = y[ : training_size - window, :, :, :, :], y[training_size : training_size + validation_size - window, :, :, :, :], y[training_size + validation_size:, :, :, :, :]
+            # Retrieving indices for regions with or w/o hypoxia
+            index_hypoxia    = y  < self.normalized_deoxygenation_treshold
+            index_no_hypoxia = y >= self.normalized_deoxygenation_treshold
+
+            # Adding new axes and reshaping, i.e (t, f, x, y) to (t, f, number of classes (= 2), x, y)
+            y = np.expand_dims(y, axis = 2)
+            y = np.repeat(y, 2, axis = 2)
+
+            # Adding class for each pixel (c = 0 == no hypoxia, c = 1 == hypoxia)
+            for i in range(2):
+
+                # Current class
+                class_oxy = y[:, :, i, :, :]
+
+                # 1 - Class 0, No-Hypoxia
+                if i == 0:
+                    class_oxy[index_hypoxia]    = 0
+                    class_oxy[index_no_hypoxia] = 1
+
+                # 2 - Class 1, Hypoxia
+                else:
+                    class_oxy[index_hypoxia]    = 1
+                    class_oxy[index_no_hypoxia] = 0
+
+            # Output - Hidding the land and the regions of no interest, i.e. below depth treshold (extra dimension)
+            y[:, :, :, bs_mask_with_depth == 0] = -1
+
+        # Regression, i.e. the emulator predicts the oxygen concentration
+        else:
+
+            # Output - Hidding the land and the regions of no interest, i.e. below depth treshold
+            y[:, :, bs_mask_with_depth == 0] = -1
+
+        # Input - Hidding the land and the regions of no interest, i.e. below depth treshold
+        x[:, :,  bs_mask == 0] = -1
 
         # ------------------------------------------------
-        #                   SPATIAL MODE
+        #              PREPROCESSING (2)
         # ------------------------------------------------
         #
-        # Documentation
-        # -------------
-        # In spatial mode, the dataset is split into training, validation and test sets by
-        # taking non-overlapping patches, i.e. therefore we train on the whole temporal domain
-        #
-        if mode == "spatial":
+        # Computing size of the training, validation and test sets
+        training_size, validation_size = int(t * datasets_size[0]), int(t * datasets_size[1])
 
-            # Fixing the seed for reproducibility
-            np.random.seed(seed = seed)
-
-            # Computing size of the training, validation and test sets
-            training_size, validation_size = int(total_patches * datasets_size[0]), int(total_patches * datasets_size[1])
-
-            # Used to randomly permute the patches !
-            rand_patches = np.random.permutation(total_patches)
-
-            # Randomly shuffling along the patches axis
-            x = x[:, :, rand_patches, :, :]
-            y = y[:, :, rand_patches, :, :]
-
-            # Splitting the dataset into training, validation and test sets
-            x_train, x_validation, x_test = x[:, :, : training_size, :, :], x[:, :, training_size: training_size + validation_size, :, :], x[:, :, training_size + validation_size :, :, :]
-            y_train, y_validation, y_test = y[:, :, : training_size, :, :], y[:, :, training_size: training_size + validation_size, :, :], y[:, :, training_size + validation_size :, :, :]
-
-        # ------------------------------------------------
-        #                  PREPROCESSING (2)
-        # ------------------------------------------------
-        #
-        # It is merging time, i.e. final shape (timesteps * patches, variables * window, resolution, resolution)
-        self.x_train      = merge_timeseries_and_patches(x_train)
-        self.x_validation = merge_timeseries_and_patches(x_validation)
-        self.x_test       = merge_timeseries_and_patches(x_test)
-        self.y_train      = merge_timeseries_and_patches(y_train)
-        self.y_validation = merge_timeseries_and_patches(y_validation)
-        self.y_test       = merge_timeseries_and_patches(y_test)
+        # Splitting the dataset into training, validation and test sets while not taking overlapping timeseries
+        self.x_train, self.x_validation, self.x_test = x[ : training_size - window_inp, :, :, :], x[training_size : training_size + validation_size - window_inp, :, :, :], x[training_size + validation_size:, :, :, :]
+        self.y_train, self.y_validation, self.y_test = y[ : training_size - window_inp, :, :, :], y[training_size : training_size + validation_size - window_inp, :, :, :], y[training_size + validation_size:, :, :, :]
 
     def get_normalized_deoxygenation_treshold(self):
-        r"""Used to retreive the normalized deoxygenation treshold, i.e. if we need the regions with
-            oxygen concentrations above 63 [mmol/m3] we need to normalize 63 [mmol/m3]"""
-
-        # Computes the normalized treshold value (data needs to be rescaled)
+        r"""Used to retreive the normalized deoxygenation treshold"""
         return self.normalized_deoxygenation_treshold
 
-    def get_dataloader(self, type: str, batch_size: int = 32):
+    def get_dataloader(self, type: str, batch_size: int = 64):
         r"""Returns the dataloader for the given type, i.e. training, validation or test"""
 
         # Security
