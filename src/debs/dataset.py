@@ -25,7 +25,7 @@ import numpy as np
 from tools import get_data_path, get_mesh_path
 
 class BlackSea_Dataset():
-    r"""A simple tool to load data for the Black Sea dataset (NEMO Simulator)."""
+    r"""A simple tool to load data of Black Sea simulations (NEMO Simulator)."""
 
     def __init__(self, year_start: int, year_end: int, month_start: int, month_end: int, variable: str, folder:str = "output_HR004"):
         super().__init__()
