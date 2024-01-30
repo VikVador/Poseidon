@@ -25,7 +25,7 @@ import numpy as np
 from tools import get_data_path, get_mesh_path
 
 class BlackSea_Dataset():
-    r"""A simple data loader for the Black Sea dataset (raw)."""
+    r"""A simple tool to load data for the Black Sea dataset (NEMO Simulator)."""
 
     def __init__(self, year_start: int, year_end: int, month_start: int, month_end: int, variable: str, folder:str = "output_HR004"):
         super().__init__()
@@ -138,19 +138,30 @@ class BlackSea_Dataset():
         self.variable    = variable
         self.folder      = folder
 
-    def get_bathymetry(self, to_np_array: bool = True):
+    def translate(self, variable : str):
+        r"""Used to translate the variable name to the one used in the dataset"""
+
+        # Stores all the translations
+        translations = {"temperature" : "votemper",
+                        "salinity"    : "vosaline",
+                        "oxygen"      : "DOX",
+                        "chlorophyll" : "CHL",
+                        "k_short"     : "KBIOS",
+                        "k_long"      : "KBIOL"}
+
+        return translations[variable]
+
+    def get_bathymetry(self):
         r"""Used to retreive the bathymetry mask, i.e. the depth index at which we reach the bottom of the ocean (2D)"""
 
         # Path to the mesh file location
         path_mesh = get_mesh_path()
 
         # Loading the dataset containing information about the Black Sea mesh
-        mesh_data = xarray.open_dataset(path_mesh, engine = "h5netcdf")
+        return xarray.open_dataset(path_mesh, engine = "h5netcdf").mbathy.data
 
-        return mesh_data.mbathy.data if to_np_array else mesh_data.mbathy
-
-    def get_blacksea_mask(self, to_np_array: bool = True, depth: int = None):
-        r"""Used to retreive the black sea mask, i.e. a mask where 0 = the depth is below treshold defined by `depth` and 1 = above that treshold"""
+    def get_mask(self, depth: int = None):
+        r"""Used to retreive a mask of the Black Sea, i.e. 0 if land, 1 if the Black Sea. If depth is given, it will also set to 0 all regions below that depth"""
 
         # Path to the mesh file location
         path_mesh = get_mesh_path()
@@ -158,10 +169,10 @@ class BlackSea_Dataset():
         # Loading the dataset containing information about the Black Sea mesh
         mesh_data = xarray.open_dataset(path_mesh, engine = "h5netcdf")
 
-        # Loading the full Black sea mask (0 if land, 1 if the Black Sea)
+        # Loading the complete Black sea mask
         bs_mask = mesh_data.tmask[0, 0].data
 
-        # Checks if we want to retreive a specific part of the Black Sea, i.e. continental shelf found for all depth > 120m
+        # Checks if we want to hide regions below a given depth
         if not depth == None:
 
             # Retreives the bottom depth in [m] for each pixel
@@ -170,177 +181,63 @@ class BlackSea_Dataset():
             # Remove all information for regions located below the given depth
             bs_mask[depth <= depth_values] = 0
 
-            # Returning the new mask (processed)
-            return bs_mask
+        # Returning the processed mask
+        return bs_mask
 
-        return bs_mask if to_np_array else mesh_data.tmask[0, 0]
-
-    def get_temperature(self, to_np_array: bool = True):
-        r"""Used to retreive the surface temperature (2D)"""
+    def get_bottom(self, data: np.array, depth = None):
+        r"""Used to retreive the data profile (2D) everywhere at the bottom of the Black Sea (None) of for all regions above a given depth"""
 
         # Security
-        assert self.variable == "grid_T", f"ERROR (get_temperature), Dataset is not grid_T ({self.variable})"
-
-        # Retreives the temperature for each day of the month at the surface
-        data_temperature = self.data.votemper[:,0,:,:].data if to_np_array else self.data.votemper[:,0,:,:]
-
-        # Retreives the temperature in the other datasets and concatenates
-        for d in range(1, len(self.dataset_list)):
-
-            # Loading the new dataset
-            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf", drop_variables = self.useless_variables)
-
-            # Loading the temperature field
-            dataset = dataset.votemper[:,0,:,:].data if to_np_array else dataset.votemper[:,0,:,:]
-
-            # Concatenation of datasets along the time dimension
-            data_temperature = np.concatenate((data_temperature, dataset), axis = 0) if to_np_array else \
-                                xarray.concat([data_temperature, dataset], dim  = "time_counter")
-
-        return data_temperature
-
-    def get_salinity(self, to_np_array: bool = True):
-        r"""Used to retreive the surface salinity (2D)"""
-
-        # Security
-        assert self.variable == "grid_T", f"ERROR (get_salinity), Dataset is not grid_T ({self.variable})"
-
-        # Retreives the salinity for each day of the month at the surface
-        data_salinity = self.data.vosaline[:,0,:,:].data if to_np_array else self.data.vosaline[:,0,:,:]
-
-        # Retreives the salinity in the other datasets and concatenates
-        for d in range(1, len(self.dataset_list)):
-
-            # Loading the new dataset
-            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf", drop_variables = self.useless_variables)
-
-            # Loading the salinity field
-            dataset = dataset.vosaline[:,0,:,:].data if to_np_array else dataset.vosaline[:,0,:,:]
-
-            # Concatenation of datasets along the time dimension
-            data_salinity = np.concatenate((data_salinity, dataset), axis = 0) if to_np_array else \
-                             xarray.concat([data_salinity, dataset], dim  = "time_counter")
-
-        return data_salinity
-
-    def get_oxygen(self, to_np_array: bool = True):
-        r"""Used to retreive the full oxygen profile (3D)"""
-
-        # Security
-        assert self.variable == "ptrc_T", f"ERROR (get_oxygen), Dataset is not ptrc_T ({self.variable})"
-
-        # Retreives the oxygen for each day of the month in the whole sea
-        data_oxygen = self.data.DOX.data if to_np_array else self.data.DOX
-
-        # Retreives the oxygen in the other datasets and concatenates
-        for d in range(1, len(self.dataset_list)):
-
-            # Loading the new dataset
-            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf", drop_variables = self.useless_variables)
-
-            # Loading the oxygen field
-            dataset = dataset.DOX.data if to_np_array else dataset.DOX
-
-            # Concatenation of datasets along the time dimension
-            data_oxygen = np.concatenate((data_oxygen, dataset), axis = 0) if to_np_array else \
-                           xarray.concat([data_oxygen, dataset], dim  = "time_counter")
-
-        return data_oxygen
-
-    def get_oxygen_bottom(self, depth = None):
-        r"""Used to retreive the oxygen profile (2D), i.e. the concentration everywhere (None) or for all regions above a given depth"""
-
-        # Security
-        assert self.variable == "ptrc_T", f"ERROR (get_oxygen), Dataset is not ptrc_T ({self.variable})"
+        assert len(data.shape) == 4, f"ERROR (get_bottom), Incorrect data shape ({data.shape}), i.e. input dimensions should be (time, depth, y, x)"
 
         # Retreiving the bathymetry mask b(t, x, y) = z_bottom, i.e. index at which we found bottom of the sea
         bathy_mask = self.get_bathymetry()
 
-        # Retreiving oxygen levels in the whole sea
-        data_oxygen = self.get_oxygen()
-
-        # Creation of x and y indexes to make manipulation, i.e. ox_bottom = ox(t, b(x, y), y, x)
+        # Creation of x and y indexes to make manipulation
         x, y = np.arange(bathy_mask.shape[2]), np.arange(bathy_mask.shape[1])
         xidx = x.reshape(-1,1).repeat(len(y),axis=1).T
         yidx = y.reshape(-1,1).repeat(len(x),axis=1)
 
-        # Retreiving the oxygen concentrations everywhere
-        data_oxygen = data_oxygen[:, bathy_mask[0] - 1, yidx, xidx]
+        # Retreiving the data everywhere at the bottom
+        data = data[:, bathy_mask[0] - 1, yidx, xidx]
 
-        # Retreiving oxygen concentration everywhere or for regions above depth treshold (product with 0, 1 mask applies the mask instantly)
-        data_oxygen = data_oxygen if depth == None else data_oxygen[:] * self.get_blacksea_mask(depth = depth)
+        # Retreiving for regions above depth treshold (product with 0, 1 mask applies the mask instantly) if needed
+        return data if depth == None else data[:] * self.get_mask(depth = depth)
 
-        # A bit of post processing, i.e. setting NANs and < 0 concentrations (not physical) to 0.
-        return np.clip(np.nan_to_num(data_oxygen, nan = 0.), 0, None)
+    def get_data(self, variable : str, type : str = "all", depth : int = None):
+        r"""Used to retreive the data for a given variable and type (surface (2D), bottom (2D) or all (3D))"""
 
-    def get_chlorophyll(self, to_np_array: bool = True):
-        r"""Used to retreive the surface chlorophyll (2D)"""
+        # Security (1)
+        assert variable in ["temperature", "salinity", "oxygen", "chlorophyll", "k_short", "k_long"], f"ERROR (get_data), Incorrect variable ({variable})"
+        assert type in     ["surface", "bottom", "all"],                                              f"ERROR (get_data), Incorrect type ({type})"
 
-        # Security
-        assert self.variable == "ptrc_T", f"ERROR (get_chlorophyll), Dataset is not ptrc_T ({self.variable})"
+        # Security (2)
+        if variable in ["temperature", "salinity"]:
+            assert self.variable == "grid_T", f"ERROR (get_data), Dataset is not grid_T ({self.variable})"
+        else:
+            assert self.variable == "ptrc_T", f"ERROR (get_data), Dataset is not ptrc_T ({self.variable})"
 
-        # Retreives the chlorophyll for each day of the month at the surface
-        data_chlorophyll = self.data.CHL[:,0,:,:].data if to_np_array else self.data.CHL[:,0,:,:]
+        # Security (3)
+        if not depth == None:
+            assert type in ["surface", "bottom"], f"ERROR (get_data), Incorrect type ({type}) if depth is given"
 
-        # Retreives the chlorophyll in the other datasets and concatenates
+        # Translating the variable name
+        variable = self.translate(variable)
+
+        # Retreives the data for each day of the month at the surface
+        dataset = self.data[variable][:, 0, :, :].data if type == "surface" else self.data[variable][:, :, :, :].data
+
+        # Retreives the data in the other datasets and concatenates
         for d in range(1, len(self.dataset_list)):
 
             # Loading the new dataset
-            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf")# drop_variables = self.useless_variables)
+            data = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf", drop_variables = self.useless_variables)
 
-            # Loading the chlorophyll field
-            dataset = dataset.CHL[:,0,:,:].data if to_np_array else dataset.CHL[:,0,:,:]
-
-            # Concatenation of datasets along the time dimension
-            data_chlorophyll = np.concatenate((data_chlorophyll, dataset), axis = 0) if to_np_array else \
-                                xarray.concat([data_chlorophyll, dataset], dim  = "time_counter")
-
-        return data_chlorophyll
-
-    def get_light_attenuation_coefficient_short_waves(self, to_np_array: bool = True):
-        r"""Used to retreive the surface light attenuation coefficient (k) for short waves number (2D)"""
-
-        # Security
-        assert self.variable == "ptrc_T", f"ERROR (get_light_attenuation_coefficient_short_waves), Dataset is not ptrc_T ({self.variable})"
-
-        # Retreives the k_short coefficient for each day of the month at the surface
-        data_k_short = self.data.KBIOS[:,0,:,:].data if to_np_array else self.data.KBIOS[:,0,:,:]
-
-        # Retreives the k_short in the other datasets and concatenates
-        for d in range(1, len(self.dataset_list)):
-
-            # Loading the new dataset
-            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf", drop_variables = self.useless_variables)
-
-            # Loading the k_short
-            dataset = dataset.KBIOS[:,0,:,:].data if to_np_array else dataset.KBIOS[:,0,:,:]
+            # Loading the field
+            data = data[variable][:, 0, :, :].data if type == "surface" else data[variable][:, :, :, :].data
 
             # Concatenation of datasets along the time dimension
-            data_k_short = np.concatenate((data_k_short, dataset), axis = 0) if to_np_array else \
-                            xarray.concat([data_k_short, dataset], dim  = "time_counter")
+            dataset = np.concatenate((dataset, data), axis = 0)
 
-        return data_k_short
-
-    def get_light_attenuation_coefficient_long_waves(self, to_np_array: bool = True):
-        r"""Used to retreive the surface light attenuation coefficient (k) for long waves number (2D)"""
-
-        # Security
-        assert self.variable == "ptrc_T", f"ERROR (get_light_attenuation_coefficient_long_waves), Dataset is not ptrc_T ({self.variable})"
-
-        #Retreives the k_long coefficient for each day of the month at the surface
-        data_k_long = self.data.KBIOL[:,0,:,:].data if to_np_array else self.data.KBIOL[:,0,:,:]
-
-        # Retreives the k_long in the other datasets and concatenates
-        for d in range(1, len(self.dataset_list)):
-
-            # Loading the new dataset
-            dataset = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf", drop_variables = self.useless_variables)
-
-            # Loading the k_long
-            dataset = dataset.KBIOL[:,0,:,:].data if to_np_array else dataset.KBIOL[:,0,:,:]
-
-            # Concatenation of datasets along the time dimension
-            data_k_long = np.concatenate((data_k_long, dataset), axis = 0) if to_np_array else \
-                           xarray.concat([data_k_long, dataset], dim  = "time_counter")
-
-        return data_k_long
+        # Returns only the bottom values if needed
+        return self.get_bottom(data = dataset, depth = depth) if type == "bottom" else dataset
