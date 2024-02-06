@@ -19,7 +19,7 @@
 #
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator, FuncFormatter
+import matplotlib.gridspec as gridspec
 
 # Pytorch
 import torch
@@ -28,212 +28,361 @@ import torch.optim as optim
 
 # Torch metrics (from Pytorch Lightning)
 from torchmetrics.regression     import MeanAbsoluteError, MeanSquaredError, PearsonCorrCoef, R2Score
-from torchmetrics.classification import BinaryAccuracy, BinaryPrecision, BinaryRecall,  BinaryMatthewsCorrCoef
+from torchmetrics.classification import BinaryAccuracy, BinaryPrecision, BinaryRecall, BinaryMatthewsCorrCoef, BinaryROC, BinaryAUROC
 
+# Definition of new metrics
+def PercentageOfBias(y_pred : np.array = None, y_true : np.array = None):
+    r"""Used to compute the percentage of bias"""
+    return lambda y_true, y_pred  : np.nanmean((y_true - y_pred) / np.abs(y_true))
 
+def PercentageOfBiasPerPixel(y_pred : np.array = None, y_true : np.array = None):
+    r"""Used to compute the percentage of bias"""
+    return lambda y_true, y_pred  : np.nanmean((y_true - y_pred) / np.abs(y_true), axis = 0)
+
+def RootMeanSquaredError(y_pred : np.array = None, y_true : np.array = None):
+    r"""Used to compute the root mean squared error"""
+    return lambda y_true, y_pred  : np.sqrt(np.nanmean((y_true - y_pred) ** 2))
+
+def RootMeanSquaredErrorPerPixel(y_pred : np.array = None, y_true : np.array = None):
+    r"""Used to compute the root mean squared error"""
+    return lambda y_true, y_pred  : np.sqrt(np.nanmean((y_true - y_pred) ** 2, axis = 0))
 class BlackSea_Metrics():
     r"""A tool to compute a large variety of metrics to assess the quality of a model."""
 
-    def __init__(self, y_true: np.array, y_pred: np.array, treshold_normalized_oxygen: float, treshold_nb_samples: int = 10):
+    def __init__(self, mode: str, mask : np.array, treshold : float, number_of_batches : int):
+        r"""Initialization of the tool"""
 
-        # Security
-        assert y_true.shape == y_pred.shape, f"ERROR (BlackSea_Metrics) - The shapes of the ground truth and predicted values must be the same {y_true.shape} != ({y_pred.shape})."
+        # Storing information
+        self.mask = mask
+        self.mode = mode
+        self.number_of_batches = number_of_batches
+        self.treshold_normalized_oxygen = treshold
 
-        # Storing dimensions for ease of comprehension
-        self.samples, self.days, self.x, self.y = y_true.shape
+        # Used to store results and plots
+        self.scores, self.scores_names, self.plots = None, None, list()
 
-        # Storing ground truth and prediction
-        self.y_true = y_true
-        self.y_pred = y_pred
-
-        # Stores the number of predictions that must be found in a sample to compute metrics, e.g. it can be 0 sometimes !
-        self.treshold_nb_samples = treshold_nb_samples
-
-        # Stores the treshold for the normalized oxygen, i.e. the concentration level at which hypoxia is considered
-        self.treshold_normalized_oxygen = treshold_normalized_oxygen
-
-        # Metrics used to assess the quality of the model at doing regression (MSE, RMSE, R2, Pearson)
+        # Definition of the metrics
         self.metrics_regression = [MeanSquaredError(),
-                                   MeanSquaredError(),
+                                   RootMeanSquaredError(),
                                    R2Score(),
-                                   PearsonCorrCoef()]
+                                   PearsonCorrCoef(),
+                                   PercentageOfBias()]
 
-        self.metrics_regression_names = ["Mean Squared Error",
-                                         "Root Mean Squared Error",
-                                         "R2 Score",
-                                         "Pearson Correlation Coefficient"]
-
-        # Metrics used to assess the quality of the model at doing classification
         self.metrics_classification = [BinaryAccuracy(),
                                        BinaryPrecision(),
                                        BinaryRecall(),
                                        BinaryMatthewsCorrCoef()]
+
+        # Definition of the nams
+        self.metrics_regression_names = ["Mean Squared Error",
+                                         "Root Mean Squared Error",
+                                         "R2 Score",
+                                         "Pearson Correlation Coefficient",
+                                         "Percentage of Bias"]
 
         self.metrics_classification_names = ["Accuracy",
                                              "Precision",
                                              "Recall",
                                              "Matthews Correlation Coefficient"]
 
-    def get_metrics_names(self):
-        r"""Retreives the name of the metrics used for regression and classification"""
-        return self.metrics_regression_names + self.metrics_classification_names
+    def get_names_metrics(self):
+        r"""Retreives the name of all the metrics"""
+        return      ["Area Under The Curve"] + self.metrics_classification_names if self.mode == "classification" else \
+               self.metrics_regression_names + self.metrics_classification_names
 
-    def get_number_of_valid_samples(self):
-        r"""Only samples with at least a certain amount of predictions (treshold_nb_samples ) are considered valid."""
+    def get_results(self):
+        r"""Retreives the results of all the metrics"""
+        return self.scores
 
-        # Create a boolean mask where values are not equal to -1
-        mask = self.y_true[:, 0] != -1
+    def get_plots(self):
+        r"""Retreives the plots of all the metrics"""
+        return self.plots
 
-        # Count the number of predictions for each sample
-        nb_predictions = torch.sum(mask == 1, dim = (1, 2))
+    def compute_metrics(self, y_pred: np.array, y_true: np.array):
+        r"""Computes each metric for each individual days, i.e. returns a tensor of shape[days, metrics]"""
 
-        return sum([1 if valid_pred >= self.treshold_nb_samples else 0 for valid_pred in nb_predictions])
+        # Retrieving dimensions for ease of comprehension
+        batch_size, days, = y_true.shape[0], y_true.shape[1]
 
-    def compute_metrics(self):
-        r"""Computes the summed value of a metric using all samples (for each indivudal days), i.e. a tensor of shape (days, metrics value)"""
-        return [self.compute_metrics_per_day(self.y_true[:, i], self.y_pred[:, i]) for i in range(self.days)]
+        # Stores results for each days (temporarily)
+        scores_temporary = [self.compute_metrics_(y_true[:, i], y_pred[:, i], i) for i in range(days)]
 
-    def compute_metrics_average(self, metrics_results: torch.Tensor, number_valid_samples: int):
-        r"""Computes the average value of all different metrics for each individual days"""
+        # Converting to numpy matrix and divinding by number of batches, i.e. since we sum all the results, we'll obtain the average over batch
+        scores_temporary = np.array(scores_temporary) / self.number_of_batches
 
-        # Summing all the results accross batches dimensions, i.e. (batch, days of forecast, metrics) -> (days of forecast, metrics
-        metrics_results = torch.sum(metrics_results, dim = 0)
+        # Adding the results
+        self.scores = np.sum([self.scores, scores_temporary], axis = 0) if isinstance(self.scores, (np.ndarray, np.generic)) else \
+                      np.array(scores_temporary)
 
-        # Averaging by the number of valid samples
-        return metrics_results / number_valid_samples
+    def compute_metrics_(self, y_true_per_day: np.array, y_pred_per_day: np.array, index_day : np.array):
+        r"""Computes all the metrics for a given day"""
 
-    def compute_metrics_per_day(self, y_true_per_day: np.array, y_pred_per_day: np.array):
-        r"""Computes the summed value of a metric using all samples"""
+        # Stores all the results from the different metrics as well as the name of the metrics used
+        results, results_name = list(), list()
 
-        # Stores all the results for each metric
-        results = []
+        # In classification problem, we have access to probabilities and we can compute the AUC
+        if self.mode == "classification":
 
-        # ------------ REGRESSION ------------
-        for m_name, m in zip(self.metrics_regression_names, self.metrics_regression):
+            # Retreiving values in the sea, swapping axis (t, c, x, y) to (c, t, x, y) and flattening (c, t * x * y)
+            y_true_per_day = np.swapaxes(y_true_per_day[:, :, self.mask[:-2, :-2] == 1], 0, 1).reshape(2, -1)
+            y_pred_per_day = np.swapaxes(y_pred_per_day[:, :, self.mask[:-2, :-2] == 1], 0, 1).reshape(2, -1)
 
-            # Stores results for the current metric
-            results_metric = []
+            # Used th compute the area under the curve
+            toolAUC = BinaryAUROC()
 
-             # Looping over each sample
-            for s_true, s_pred in zip(y_true_per_day, y_pred_per_day):
+            # Computations
+            results      += [toolAUC(y_pred_per_day, y_true_per_day).item()] # Tool returns a tensor of shape (1, 1) -> (1)
+            results_name += [f"Area Under Curve (D" + str(index_day) + ")"]
 
-                # Extracting the mask
-                mask = s_true != -1
+            # Reshaping the data, i.e. (classes, t * x * y) to (t * x * y) where C = 0 no hypoxia and C = 1 is hypoxia
+            y_true_per_day = np.argmax(y_true_per_day, axis = 0)
+            y_pred_per_day = np.argmax(y_pred_per_day, axis = 0)
 
-                # Makes sure there is at least two predicted values to compute metric (needed for R2)
-                if torch.sum(mask == 1).item() < self.treshold_nb_samples:
-                    continue
+        # In regression problem, we have access to concentrations
+        if self.mode == "regression":
 
-                # Computing the metric
-                if m_name == "Root Mean Squared Error":
-                    results_metric.append(torch.sqrt(torch.nan_to_num(m(s_true[mask], s_pred[mask]), nan = 0.0)))
-                else:
-                    results_metric.append(torch.nan_to_num(m(s_true[mask], s_pred[mask]), nan = 0.0))
+            # Retreiving values in the sea, swapping axis (t, c, x, y) to (c, t, x, y) and flattening (c, t * x * y)
+            y_true_per_day = y_true_per_day[:, self.mask[:-2, :-2] == 1].reshape(-1)
+            y_pred_per_day = y_pred_per_day[:, self.mask[:-2, :-2] == 1].reshape(-1)
 
-            # Storing the sum of all results (it will be normalized by the size of the validation set afterwards)
-            results.append(torch.sum(torch.stack(results_metric)))
+            # Computations
+            results      += [m(y_pred_per_day, y_true_per_day).item() for m in self.metrics_regression]
+            results_name += [n + " (D" + str(index_day) + ")" for n in self.metrics_regression_names]
 
-        # ---------- CLASSIFICATION ----------
-        for m_name, m in zip(self.metrics_classification_names, self.metrics_classification):
+            # Reshaping the data, i.e. (t, days, x, y) to (t, days, x, y) in binary values using treshold
+            y_true_per_day = (y_true_per_day < self.treshold_normalized_oxygen) * 1
+            y_pred_per_day = (y_pred_per_day < self.treshold_normalized_oxygen) * 1
 
-            # Stores results for the current metric
-            results_metric = []
+        # Classification metrics are computed whatever the type of the problem
+        results      += [m(y_pred_per_day, y_true_per_day).item() for m in self.metrics_classification]
+        results_name += [n + " (D" + str(index_day) + ")" for n in self.metrics_classification_names]
 
-            # Looping over each sample
-            for s_true, s_pred in zip(y_true_per_day, y_pred_per_day):
-
-                # Extracting the mask
-                mask = s_true != -1
-
-                # Makes sure there is at least two predicted values to compute metric (needed for R2)
-                if torch.sum(mask == 1).item() < self.treshold_nb_samples:
-                    continue
-
-                # Converting to classification (1 = Hypoxia, 0 = No Hypoxia)
-                s_true = (s_true <= self.treshold_normalized_oxygen).type(torch.int)
-                s_pred = (s_pred <= self.treshold_normalized_oxygen).type(torch.int)
-
-                # Computing the metric
-                results_metric.append(torch.nan_to_num(m(s_true[mask], s_pred[mask]), nan = 0.0))
-
-            # Storing the sum of all results (it will be normalized by the size of the validation set afterwards)
-            results.append(torch.sum(torch.stack(results_metric)))
-
+        # Returning the results and their corresponding names
         return results
 
-    def plot_comparison(self, normalized_deoxygenation_treshold: float, index_sample: int = 0):
-        r"Used to visually compare the prediction and the ground truth in wandb"
+    def compute_plots(self, y_pred: np.array, y_true: np.array):
+        r"""Creates each plots for each individual days, i.e. a tensor of shape[days, metrics]"""
 
-        # Retrieving the dimensions (ease of comprehension)
-        samples, days, x, y = self.y_pred.shape
+        # Looping over each day
+        for i in range(y_true.shape[1]):
+
+            # Retrieving corresponding day
+            y_true_per_day = y_true[:, i]
+            y_pred_per_day = y_pred[:, i]
+
+            # ROCAUC
+            if self.mode == "classification":
+
+                # Computing metrics
+                self.plots += self.compute_plots_classification_ROCAUC(y_pred_per_day[:, :, self.mask[:-2, :-2] == 1],
+                                                                         y_true_per_day[:, :, self.mask[:-2, :-2] == 1],
+                                                                         i)
+                # Changing problem to non-probabilistic
+                y_true_per_day = np.argmax(y_true_per_day, axis = 1)
+                y_pred_per_day = np.argmax(y_pred_per_day, axis = 1)
+
+            # Regression
+            if self.mode == "regression":
+
+                # Computing metrics
+                self.plots += self.compute_plots_regression(y_pred_per_day, y_true_per_day, i)
+
+                # Chaning problem to classification
+                y_pred_per_day = (y_pred_per_day < self.treshold_normalized_oxygen) * 1
+                y_true_per_day = (y_true_per_day < self.treshold_normalized_oxygen) * 1
+
+            # Classification
+            self.plots += self.compute_plots_classification(y_pred_per_day, y_true_per_day, i)
+
+    def make_plots(self, score : np.array, index_day : int, label : str, cmap : str, vminmax : tuple):
+        r"""Creates the plots based on the results"""
+
+        # Flipping vertically to show correctly Black Sea (for you my loving oceanographer <3)
+        score = np.flipud(score)
+
+        # Removing first lines (its just empty sea)
+        score = score[20:, :]
 
         # Creating the figure
-        fig, ax = plt.subplots(4, days, figsize = (3 * days, 10))
+        fig = plt.figure(figsize = (15, 10))
 
-        # Changing the colormaps
-        color_regression     = plt.colormaps["magma"].reversed()
-        color_classification = plt.colormaps["viridis"].reversed()
+        # Adding a grid
+        gs = fig.add_gridspec(3, 4, width_ratios = [1, 1, 0.005, 0.05], height_ratios = [1, 0.5, 0.5])
 
-        # Results for classification, i.e. fixed region over time (2)
-        for i in range(days):
+        # Plotting (1) - Whole map
+        ax_top_plot = fig.add_subplot(gs[0, :2])
+        im1 = ax_top_plot.imshow(score,
+                                 cmap   = cmap,
+                                 vmin   = vminmax[0],
+                                 vmax   = vminmax[1],
+                                 aspect = '0.83')
 
-            # Used to deal with 1D or 2D arrays
-            ax_temp = ax[:, i] if days > 1 else ax
+        # Add min and max values to the top right corner
+        min_val = np.nanmin(score)
+        max_val = np.nanmax(score)
+        ax_top_plot.text(0.97, 0.95, f'Min: {min_val:.4f}\nMax: {max_val:.4f}', transform = ax_top_plot.transAxes,
+                        verticalalignment = 'top',
+                        horizontalalignment = 'right',
+                        color = 'white',
+                        fontsize = 8,
+                        bbox = dict(boxstyle = 'round', facecolor = 'grey', alpha = 0.4))
 
-            # Retreiving samples and mask (needs to be clone otherwise we have problem with masks)
-            y_true_day = torch.clone(self.y_true[index_sample, i, :, :])
-            y_pred_day = torch.clone(self.y_pred[index_sample, i, :, :])
-            mask       = torch.clone(self.y_true[index_sample, i, :, :] == -1)
+        # Plotting (2) - Focusing on top left region
+        ax_bottom_plot_1 = fig.add_subplot(gs[1, 0])
+        im2 = ax_bottom_plot_1.imshow(score[20:110, 175:275],
+                                      cmap   = cmap,
+                                      vmin   = vminmax[0],
+                                      vmax   = vminmax[1],
+                                      aspect = '0.43')
 
-            # Hiding the land (for ease of visualization and also, the neural network cannot predict anything on the land using -1 values)
-            y_pred_day[mask == True] = 10
-            y_true_day[mask == True] = 10
+        # Plotting (3) - Focusing on top bottom region
+        ax_bottom_plot_2 = fig.add_subplot(gs[1, 1])
+        im3 = ax_bottom_plot_2.imshow(score[62:100, 250:470],
+                                      cmap   = cmap,
+                                      vmin   = vminmax[0],
+                                      vmax   = vminmax[1],
+                                      aspect = '2.2')
 
-            # Plotting regression problem
-            im1 = ax_temp[0].imshow(y_pred_day, cmap = color_regression, vmin = 0, vmax = 1)
-            im2 = ax_temp[1].imshow(y_true_day, cmap = color_regression, vmin = 0, vmax = 1)
+        # Plotting (4) - Focusing on bottom region
+        ax_bottom_plot_3 = fig.add_subplot(gs[2, :-1])
+        im4 = ax_bottom_plot_3.imshow(score[200:, :500],
+                                      cmap   = cmap,
+                                      vmin   = vminmax[0],
+                                      vmax   = vminmax[1],
+                                      aspect = '2.35')
 
-            # Highligthing the regions where there is hypoxia
-            y_pred_class = (y_pred_day < normalized_deoxygenation_treshold).long()
-            y_true_class = (y_true_day < normalized_deoxygenation_treshold).long()
+        # Plotting (5) - Colorbar
+        ax_colorbar = fig.add_subplot(gs[:, -1])
+        cbar = plt.colorbar(im1, cax = ax_colorbar)
+        cbar.set_label(label, labelpad = 15)
 
-            # Hiding the land ()
-            y_pred_class[mask == True] = -1
-            y_true_class[mask == True] = -1
+        # Removing x and y labels
+        for ax in [ax_top_plot, ax_bottom_plot_1, ax_bottom_plot_2, ax_bottom_plot_3]:
+            ax.set_xticks([])
+            ax.set_yticks([])
 
-            # Plotting classification problem
-            im3 = ax_temp[2].imshow(y_pred_class, cmap = color_classification, vmin = -1, vmax = 1)
-            im4 = ax_temp[3].imshow(y_true_class, cmap = color_classification, vmin = -1, vmax = 1)
+        # Adjust spacing
+        plt.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.1, wspace = 0.01, hspace = 0.15)
 
-            # Adding more information to the plot
-            ax_temp[0].set_title(f"Day = {i}", fontsize = 11)
+        # Complete figure label
+        fig_name = label + " (D" + str(index_day) + ")"
 
-            for j in range(4):
-                if i != 0:
-                    ax_temp[j].set_yticks([])
-                if j != 3:
-                    ax_temp[j].set_xticks([])
+        return [fig, fig_name]
 
-        def format_classification_ticks(value, _):
-            r"Used to format the ticks of the colorbar"
-            if value == 1:
-                return 'Hypoxia'
-            elif value == 0:
-                return 'Oxygenated'
-            elif value == -1:
-                return 'Land'
-            else:
-                return ''
+    def compute_plots_regression(self, y_pred: np.array, y_true: np.array, index_day : int):
+        r"""Computes pixel-wise regression metrics, i.e. returns a tensor of shape (x, y)"""
 
-        # Adding colorbar (regression)
-        cbar = fig.colorbar(im1, ax = ax[:2], orientation = 'vertical', fraction = 0.1, pad = 0.05)
-        cbar.set_label('Normalized Oxygen Concentration [-]', rotation = 270, labelpad = 30, fontsize = 11)
+        # Retrieving dimensions for ease of use
+        t, x, y = y_true.shape
 
-        # Adding colorbar (classification)
-        cbar = fig.colorbar(im3, ax = ax[2:], orientation = 'vertical', fraction = 0.1, pad = 0.05)
-        cbar_ticks = MaxNLocator(integer = True)
-        cbar.set_ticks(cbar_ticks)
-        cbar.ax.yaxis.set_major_formatter(FuncFormatter(format_classification_ticks))
+        # Preprocessing, i.e (t, x, y) to (t, x * y)
+        y_true = y_true.reshape(t, -1)
+        y_pred = y_pred.reshape(t, -1)
 
-        # Giving back the fig, i.e. to be send to wandb
-        return fig
+        # Definition of the metrics
+        metrics_regression = [MeanSquaredError(num_outputs = x * y),
+                              RootMeanSquaredErrorPerPixel(),
+                              PercentageOfBiasPerPixel(),
+                              PearsonCorrCoef(num_outputs = x * y)]
+
+        metrics_names = ["Mean Squared Error",
+                         "Root Mean Squared Error",
+                         "Percentage of Bias",
+                         "Pearson Correlation Coefficient"]
+
+        metrics_range = [(0,     0.25),
+                         (0,     0.50),
+                         (-0.5,   0.5),
+                         (-1,       1)]
+
+        # Stores all the scores plots, i.e. results of the metrics per pixel
+        scores = list()
+
+        for m, m_name, m_range in zip(metrics_regression, metrics_names, metrics_range):
+
+            # Computing score
+            score = m(y_pred, y_true).reshape(x, y)
+
+            # Masking the land and non-observed region, i.e. NaNs are simply white when plotted
+            score[self.mask[:-2, :-2] == 0] = np.nan
+
+            # Adding results, i.e. fig and name
+            scores.append(self.make_plots(score, index_day, m_name, "PuOr", m_range))
+
+        return scores
+
+    def compute_plots_classification(self, y_pred: np.array, y_true: np.array, index_day : int):
+        r"""Computes pixel-wise regression metrics, i.e. returns a tensor of shape (x, y)"""
+
+        # Retrieving dimensions for ease of use
+        t, x, y = y_true.shape
+
+        # Preprocessing, i.e (t, x, y) to (t, x * y) then (x * y, t)
+        y_true = np.swapaxes(y_true.reshape(t, -1), 0, 1)
+        y_pred = np.swapaxes(y_pred.reshape(t, -1), 0, 1)
+
+        # Definition of the metrics
+        metrics_classification = [BinaryAccuracy(multidim_average  = 'samplewise'),
+                                  BinaryPrecision(multidim_average = 'samplewise'),
+                                  BinaryRecall(multidim_average    = 'samplewise')]
+
+        metrics_names = ["Accuracy",
+                         "Precision",
+                         "Recall"]
+
+        metrics_range = [(0, 1),
+                         (0, 1),
+                         (0, 1)]
+
+        # Stores all the scores, i.e. results of the metrics
+        scores = list()
+
+        for m, m_name, m_range in zip(metrics_classification, metrics_names, metrics_range):
+
+            # Computing score
+            score = m(y_pred, y_true).reshape(x, y)
+
+            # Masking the land and non-observed region, i.e. NaNs are simply white when plotted
+            score[self.mask[:-2, :-2] == 0] = np.nan
+
+            # Adding results, i.e. fig and name
+            scores.append(self.make_plots(score, index_day, m_name, "RdYlBu", m_range))
+
+        return scores
+
+    def compute_plots_classification_ROCAUC(self, y_pred: np.array, y_true: np.array, index_day : int):
+        r"""Computes the ROCAUC metric and returns a plot of it"""
+
+        # Preprocessing, i.e (t, x, y) to (t, x * y) then (x * y, t)
+        y_true = np.swapaxes(y_true, 1, 2).reshape(-1, 2).type(torch.int64)
+        y_pred = np.swapaxes(y_pred, 1, 2).reshape(-1, 2)
+
+        # Loading tools
+        roc_curve = BinaryROC()
+        auroc     = BinaryAUROC()
+
+        # Computing false positive rates, true positive rates and thresholds
+        fpr, tpr, thresholds = roc_curve(y_pred, y_true)
+        auc_score            = auroc(y_pred, y_true)
+
+        # Plotting the results
+        fig = plt.figure(figsize = (7, 7))
+        plt.plot(fpr, tpr, label = f'AUC = {auc_score:.2f}', color = 'red', alpha = 0.6)
+        plt.plot([0, 1], [0, 1], linestyle = '--', color = 'gray', label = 'Random')
+        plt.xlim([0, 1])
+        plt.ylim([0, 1])
+        plt.grid()
+        plt.xlabel("False Positive Rate")
+        plt.ylabel("True Positive Rate")
+        plt.annotate(f'AUC = {auc_score:.2f}',
+                     xy = (0.95, 0.05),
+                     xycoords = 'axes fraction',
+                     ha = 'right',
+                     va = 'bottom',
+                     fontsize = 10,
+                     bbox = dict(boxstyle = 'round', facecolor = 'white', alpha = 0.7))
+
+        # Complete fig name
+        fig_name = "Area Under The Curve (D" + str(index_day) + ")"
+
+        return [[fig, fig_name]]
