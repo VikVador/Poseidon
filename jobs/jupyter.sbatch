@@ -18,17 +18,19 @@
 # -------------
 # A Submission script for Lucia to activate a notebook !
 #
+#     /!\   Don't forget to activate your conda environment (esa) before running this script   /!\
+#
 # --------------
 # Job parameters
 # --------------
 #SBATCH --account=bsmfc
 #SBATCH --job-name=JUPYTER
-#SBATCH --time=24:00:00
+#SBATCH --time=12:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=1
 #SBATCH --gpus=1
-#SBATCH --mem-per-cpu=32G
-#SBATCH --partition=ia
+#SBATCH --mem-per-cpu=64G
+#SBATCH --partition=gpu
 #SBATCH --output=../logs/jupiter_notebook.log
 #SBATCH --mail-user=vmangeleer@uliege.be
 #SBATCH --mail-type=FAIL
