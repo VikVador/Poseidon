@@ -116,7 +116,7 @@ def main(**kwargs):
     # ------------------------------------------
     #
     # ------- WandB -------
-    wandb.init(project = "esa-blacksea-deoxygenation-emulator-V3", config = kwargs)
+    # wandb.init(project = "esa-blacksea-deoxygenation-emulator-V3", config = kwargs)
 
     # Check if GPU is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -171,7 +171,7 @@ def main(**kwargs):
             print("Loss (T) = ", loss.detach().item())
 
             # Sending to wandDB
-            wandb.log({"Loss (T)": loss.detach().item()})
+            # wandb.log({"Loss (T)": loss.detach().item()})
 
             # Accumulating the loss
             training_loss += loss.detach().item()
@@ -194,7 +194,7 @@ def main(**kwargs):
         print("Loss (Training, Averaged over batch): ", training_loss / batch_steps)
 
         # Sending the loss to wandDB
-        wandb.log({"Loss (T, AOB): ": training_loss / batch_steps})
+        # wandb.log({"Loss (T, AOB): ": training_loss / batch_steps})
 
         # ----- VALIDATION -----
         with torch.no_grad():
@@ -221,7 +221,7 @@ def main(**kwargs):
                 print("Loss (V) = ", loss.detach().item())
 
                 # Sending the loss to wandDB the loss
-                wandb.log({"Loss (V)": loss.detach().item()})
+                # wandb.log({"Loss (V)": loss.detach().item()})
 
                 # Accumulating the loss
                 validation_loss += loss.detach().item()
@@ -241,8 +241,8 @@ def main(**kwargs):
             print("Loss (Validation, Averaged over batch): ", validation_loss / batch_steps)
 
             # Sending more information to wandDB
-            wandb.log({"Loss (V, AOB): ": validation_loss / batch_steps})
-            wandb.log({"Epochs : ": nb_epochs - epoch})
+            # wandb.log({"Loss (V, AOB): ": validation_loss / batch_steps})
+            # wandb.log({"Epochs : ": nb_epochs - epoch})
 
             # ---------- WandB (Metrics & Plots) ----------
             #
@@ -258,7 +258,7 @@ def main(**kwargs):
                     m_name = results_name[i] + " D(" + str(d) + ")"
 
                     # Logging
-                    wandb.log({m_name : result})
+                    # wandb.log({m_name : result})
 
             # Getting the plots
             plots = metrics_tool.get_plots()
@@ -271,13 +271,13 @@ def main(**kwargs):
                     p_nam = p_info[1]
 
                     # Logging
-                    wandb.log({p_nam : wandb.Image(p_fig)})
+                    # wandb.log({p_nam : wandb.Image(p_fig)})
 
         # Updating timing
         epoch_time = time.time() - start
 
     # Finishing the run
-    wandb.finish()
+    # wandb.finish()
 
 # ---------------------------------------------------------------------
 #
@@ -405,8 +405,9 @@ if __name__ == "__main__":
 
     parser.add_argument(
         '--depth',
-        help    = 'The maximum depth at which we will recover oxygen concentration, i.e. the depth of the continental shelf is at 120m',
-        default = None)
+        help    = 'The maximum depth at which we will recover oxygen concentration, i.e. the depth of the continental shelf is at ~ 150m',
+        type    = int,
+        default = 200)
 
     parser.add_argument(
         '--architecture',
