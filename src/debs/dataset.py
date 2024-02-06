@@ -195,8 +195,8 @@ class BlackSea_Dataset():
 
         # Creation of x and y indexes to make manipulation
         x, y = np.arange(bathy_mask.shape[2]), np.arange(bathy_mask.shape[1])
-        xidx = x.reshape(-1,1).repeat(len(y),axis=1).T
-        yidx = y.reshape(-1,1).repeat(len(x),axis=1)
+        xidx = x.reshape(-1,1).repeat(len(y), axis = 1).T
+        yidx = y.reshape(-1,1).repeat(len(x), axis = 1)
 
         # Retreiving the data everywhere at the bottom
         data = data[:, bathy_mask[0] - 1, yidx, xidx]
