@@ -21,6 +21,11 @@ import os
 import cv2
 import numpy as np
 
+def to_device(data, device):
+    r"""Moves tensors to a chosen device (CPU or GPU)"""
+    if isinstance(data, (list, tuple)):
+        return [to_device(x, device) for x in data]
+    return data.to(device, non_blocking = True)
 
 def get_data_path(folder:str):
     r"""Checks which path to use to get the data, i.e. if the folder is in the local version or the scratch version"""
