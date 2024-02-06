@@ -159,6 +159,15 @@ class BlackSea_Dataloader():
         r"""Used to retreive the normalized deoxygenation treshold"""
         return self.normalized_deoxygenation_treshold
 
+    def get_number_of_batches(self, type: str, batch_size: int = 64):
+        r"""Returns the number of batches for the given type, i.e. training, validation or test"""
+
+         # Security
+        assert type in ["train", "validation", "test"], f"ERROR (BlackSea_Dataloader) Type must be either 'train', 'validation' or 'test' ({type})"
+
+        # Computing the total number of batches
+        return int(getattr(self, f"x_{type}").shape[0] // batch_size + 1)
+
     def get_dataloader(self, type: str, batch_size: int = 64):
         r"""Returns the dataloader for the given type, i.e. training, validation or test"""
 
@@ -169,14 +178,18 @@ class BlackSea_Dataloader():
             r"""A simple pytorch dataloader"""
 
             def __init__(self, x: np.array, y: np.array):
-                self.x = x
-                self.y = y
+                self.x  = x
+                self.y  = y
+                self.bs = batch_size
 
             def __len__(self):
                 return self.x.shape[0]
 
             def __getitem__(self, idx):
                 return self.x[idx], self.y[idx]
+
+            def get_number_of_batches(self):
+                return int(self.__len__() // self.bs)
 
         # Creation of the dataset for dataloader
         dataset = BS_Dataset(getattr(self, f"x_{type}"), getattr(self, f"y_{type}"))

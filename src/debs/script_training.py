@@ -111,6 +111,9 @@ def main(**kwargs):
     # Normalized oxygen treshold
     norm_oxy = BSD_loader.get_normalized_deoxygenation_treshold()
 
+    # Total number of batches in the training set (used for averaging metrics over the batches)
+    num_batches_train = BSD_loader.get_num_batches(type = "train", batch_size = batch_size)
+
     # ------------------------------------------
     #                   Training
     # ------------------------------------------
@@ -150,7 +153,7 @@ def main(**kwargs):
         metrics_tool = BlackSea_Metrics(mode = problem,
                                         mask = bs_mask_with_depth,
                                         treshold = norm_oxy,
-                                        number_of_batches = len(dataset_validation))
+                                        number_of_batches = num_batches_train)
 
         # ----- TRAINING -----
         for x, y in dataset_train:
