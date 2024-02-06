@@ -19,38 +19,42 @@
 #
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 
 # Pytorch
 import torch
-import torch.nn as nn
-import torch.optim as optim
 
 # Torch metrics (from Pytorch Lightning)
-from torchmetrics.regression     import MeanAbsoluteError, MeanSquaredError, PearsonCorrCoef, R2Score
+from torchmetrics.regression     import MeanSquaredError, PearsonCorrCoef, R2Score
 from torchmetrics.classification import BinaryAccuracy, BinaryPrecision, BinaryRecall, BinaryMatthewsCorrCoef, BinaryROC, BinaryAUROC
 
-# Definition of new metrics
+
+# ----------------------
+#        Metrics
+# ----------------------
+# Definition of new metrics (using lambdas) which do not exist in Pytorch Lightning Metrics
+#
 def PercentageOfBias(y_pred : np.array = None, y_true : np.array = None):
     r"""Used to compute the percentage of bias"""
     return lambda y_true, y_pred  : np.nanmean((y_true - y_pred) / np.abs(y_true))
-
-def PercentageOfBiasPerPixel(y_pred : np.array = None, y_true : np.array = None):
-    r"""Used to compute the percentage of bias"""
-    return lambda y_true, y_pred  : np.nanmean((y_true - y_pred) / np.abs(y_true), axis = 0)
 
 def RootMeanSquaredError(y_pred : np.array = None, y_true : np.array = None):
     r"""Used to compute the root mean squared error"""
     return lambda y_true, y_pred  : np.sqrt(np.nanmean((y_true - y_pred) ** 2))
 
+def PercentageOfBiasPerPixel(y_pred : np.array = None, y_true : np.array = None):
+    r"""Used to compute the percentage of bias per pixel (used for plots)"""
+    return lambda y_true, y_pred  : np.nanmean((y_true - y_pred) / np.abs(y_true), axis = 0)
+
 def RootMeanSquaredErrorPerPixel(y_pred : np.array = None, y_true : np.array = None):
-    r"""Used to compute the root mean squared error"""
+    r"""Used to compute the root mean squared error per pixel (used for plots)"""
     return lambda y_true, y_pred  : np.sqrt(np.nanmean((y_true - y_pred) ** 2, axis = 0))
+
+
 class BlackSea_Metrics():
-    r"""A tool to compute a large variety of metrics to assess the quality of a model."""
+    r"""A tool to compute a large variety of metrics (scalar or visual) to assess the quality of a model."""
 
     def __init__(self, mode: str, mask : np.array, treshold : float, number_of_batches : int):
-        r"""Initialization of the tool"""
+        r"""Initialization of the metrics computation tool"""
 
         # Storing information
         self.mask = mask
@@ -62,68 +66,54 @@ class BlackSea_Metrics():
         self.scores, self.scores_names, self.plots = None, None, list()
 
         # Definition of the metrics
-        self.metrics_regression = [MeanSquaredError(),
-                                   RootMeanSquaredError(),
-                                   R2Score(),
-                                   PearsonCorrCoef(),
-                                   PercentageOfBias()]
+        self.metrics_regression     = [MeanSquaredError(), RootMeanSquaredError(), R2Score(), PearsonCorrCoef(), PercentageOfBias()]
+        self.metrics_classification = [BinaryAccuracy(), BinaryPrecision(), BinaryRecall(), BinaryMatthewsCorrCoef()]
 
-        self.metrics_classification = [BinaryAccuracy(),
-                                       BinaryPrecision(),
-                                       BinaryRecall(),
-                                       BinaryMatthewsCorrCoef()]
-
-        # Definition of the nams
-        self.metrics_regression_names = ["Mean Squared Error",
-                                         "Root Mean Squared Error",
-                                         "R2 Score",
-                                         "Pearson Correlation Coefficient",
-                                         "Percentage of Bias"]
-
-        self.metrics_classification_names = ["Accuracy",
-                                             "Precision",
-                                             "Recall",
-                                             "Matthews Correlation Coefficient"]
+        # Definition of the names of each metric
+        self.metrics_regression_names     = ["Mean Squared Error", "Root Mean Squared Error", "R2 Score", "Pearson Correlation Coefficient", "Percentage of Bias"]
+        self.metrics_classification_names = ["Accuracy",  "Precision",  "Recall", "Matthews Correlation Coefficient"]
 
     def get_names_metrics(self):
-        r"""Retreives the name of all the metrics"""
+        r"""Retreives the name of all the metrics (scalar)"""
         return      ["Area Under The Curve"] + self.metrics_classification_names if self.mode == "classification" else \
                self.metrics_regression_names + self.metrics_classification_names
 
+    def get_names_plots(self):
+        r"""Retreives the name of all the metrics (visual)"""
+        return      ["Area Under The Curve"] + ["Accuracy", "Precision", "Recall"] if self.mode == "classification" else \
+                    ["Mean Squared Error", "Root Mean Squared Error", "Percentage of Bias", "Pearson Correlation Coefficient"] + ["Accuracy", "Precision", "Recall"]
+
     def get_results(self):
         r"""Retreives the results of all the metrics"""
-        return self.scores
+        return self.scores, self.get_names_metrics()
 
     def get_plots(self):
         r"""Retreives the plots of all the metrics"""
-        return self.plots
+        return self.plots, self.get_names_plots()
 
     def compute_metrics(self, y_pred: np.array, y_true: np.array):
-        r"""Computes each metric for each individual days, i.e. returns a tensor of shape[days, metrics]"""
+        r"""Computes each metric (scalar) for each individual forecasted day, i.e. returns a tensor of shape [forecasted days, metrics]"""
 
         # Retrieving dimensions for ease of comprehension
         batch_size, days, = y_true.shape[0], y_true.shape[1]
 
-        # Stores results for each days (temporarily)
-        scores_temporary = [self.compute_metrics_(y_true[:, i], y_pred[:, i], i) for i in range(days)]
+        # Stores results for each days, convert to numpy and average over number of batches (everything is summed so at the end, we will have the true average)
+        scores_temporary = np.array([self.compute_metrics_(y_pred[:, i], y_true[:, i]) for i in range(days)]) / self.number_of_batches
 
-        # Converting to numpy matrix and divinding by number of batches, i.e. since we sum all the results, we'll obtain the average over batch
-        scores_temporary = np.array(scores_temporary) / self.number_of_batches
-
-        # Adding the results
+        # Adding the results to previous one or initialize it
         self.scores = np.sum([self.scores, scores_temporary], axis = 0) if isinstance(self.scores, (np.ndarray, np.generic)) else \
                       np.array(scores_temporary)
 
-    def compute_metrics_(self, y_true_per_day: np.array, y_pred_per_day: np.array, index_day : np.array):
-        r"""Computes all the metrics for a given day"""
+    def compute_metrics_(self, y_pred_per_day: np.array, y_true_per_day: np.array):
+        r"""Computes the metrics (scalar) for a given day and returns them as a list of values"""
 
-        # Stores all the results from the different metrics as well as the name of the metrics used
-        results, results_name = list(), list()
+        # Stores all the scores
+        results = list()
 
-        # In classification problem, we have access to probabilities and we can compute the AUC
+        # ------- CLASSIFICATION (ROCAUC) -------
         if self.mode == "classification":
 
-            # Retreiving values in the sea, swapping axis (t, c, x, y) to (c, t, x, y) and flattening (c, t * x * y)
+            # Retrieving values in the sea, swapping axis (t, c, x, y) to (c, t, x, y) and flattening (c, t * x * y)
             y_true_per_day = np.swapaxes(y_true_per_day[:, :, self.mask[:-2, :-2] == 1], 0, 1).reshape(2, -1)
             y_pred_per_day = np.swapaxes(y_pred_per_day[:, :, self.mask[:-2, :-2] == 1], 0, 1).reshape(2, -1)
 
@@ -131,68 +121,28 @@ class BlackSea_Metrics():
             toolAUC = BinaryAUROC()
 
             # Computations
-            results      += [toolAUC(y_pred_per_day, y_true_per_day).item()] # Tool returns a tensor of shape (1, 1) -> (1)
-            results_name += [f"Area Under Curve (D" + str(index_day) + ")"]
+            results += [toolAUC(y_pred_per_day, y_true_per_day).item()]
 
-            # Reshaping the data, i.e. (classes, t * x * y) to (t * x * y) where C = 0 no hypoxia and C = 1 is hypoxia
+            # Transforming the problem to non-probabilistic
             y_true_per_day = np.argmax(y_true_per_day, axis = 0)
             y_pred_per_day = np.argmax(y_pred_per_day, axis = 0)
 
-        # In regression problem, we have access to concentrations
+        # ------- REGRESSION -------
         if self.mode == "regression":
 
-            # Retreiving values in the sea, swapping axis (t, c, x, y) to (c, t, x, y) and flattening (c, t * x * y)
+            # Retrieving values in the sea and flattening (t * x * y)
             y_true_per_day = y_true_per_day[:, self.mask[:-2, :-2] == 1].reshape(-1)
             y_pred_per_day = y_pred_per_day[:, self.mask[:-2, :-2] == 1].reshape(-1)
 
             # Computations
-            results      += [m(y_pred_per_day, y_true_per_day).item() for m in self.metrics_regression]
-            results_name += [n + " (D" + str(index_day) + ")" for n in self.metrics_regression_names]
+            results += [metric(y_pred_per_day, y_true_per_day).item() for metric in self.metrics_regression]
 
-            # Reshaping the data, i.e. (t, days, x, y) to (t, days, x, y) in binary values using treshold
+            # Transforming problem to classification
             y_true_per_day = (y_true_per_day < self.treshold_normalized_oxygen) * 1
             y_pred_per_day = (y_pred_per_day < self.treshold_normalized_oxygen) * 1
 
-        # Classification metrics are computed whatever the type of the problem
-        results      += [m(y_pred_per_day, y_true_per_day).item() for m in self.metrics_classification]
-        results_name += [n + " (D" + str(index_day) + ")" for n in self.metrics_classification_names]
-
-        # Returning the results and their corresponding names
-        return results
-
-    def compute_plots(self, y_pred: np.array, y_true: np.array):
-        r"""Creates each plots for each individual days, i.e. a tensor of shape[days, metrics]"""
-
-        # Looping over each day
-        for i in range(y_true.shape[1]):
-
-            # Retrieving corresponding day
-            y_true_per_day = y_true[:, i]
-            y_pred_per_day = y_pred[:, i]
-
-            # ROCAUC
-            if self.mode == "classification":
-
-                # Computing metrics
-                self.plots += self.compute_plots_classification_ROCAUC(y_pred_per_day[:, :, self.mask[:-2, :-2] == 1],
-                                                                         y_true_per_day[:, :, self.mask[:-2, :-2] == 1],
-                                                                         i)
-                # Changing problem to non-probabilistic
-                y_true_per_day = np.argmax(y_true_per_day, axis = 1)
-                y_pred_per_day = np.argmax(y_pred_per_day, axis = 1)
-
-            # Regression
-            if self.mode == "regression":
-
-                # Computing metrics
-                self.plots += self.compute_plots_regression(y_pred_per_day, y_true_per_day, i)
-
-                # Chaning problem to classification
-                y_pred_per_day = (y_pred_per_day < self.treshold_normalized_oxygen) * 1
-                y_true_per_day = (y_true_per_day < self.treshold_normalized_oxygen) * 1
-
-            # Classification
-            self.plots += self.compute_plots_classification(y_pred_per_day, y_true_per_day, i)
+        # ------- CLASSIFICATION (ACC, PRE, ...) -------
+        return results + [metric(y_pred_per_day, y_true_per_day).item() for metric in self.metrics_classification]
 
     def make_plots(self, score : np.array, index_day : int, label : str, cmap : str, vminmax : tuple):
         r"""Creates the plots based on the results"""
@@ -264,64 +214,93 @@ class BlackSea_Metrics():
         # Adjust spacing
         plt.subplots_adjust(left = 0.1, right = 0.9, bottom = 0.1, wspace = 0.01, hspace = 0.15)
 
-        # Complete figure label
-        fig_name = label + " (D" + str(index_day) + ")"
+        return fig
 
-        return [fig, fig_name]
+    def compute_plots(self, y_pred: np.array, y_true: np.array):
+        r"""Computes each metric per pixel for each individual forecasted day and show the results on a plot"""
+
+        # Retrieving dimensions for ease of comprehension
+        batch_size, days, = y_true.shape[0], y_true.shape[1]
+
+        # Looping over each day
+        for i in range(days):
+
+            # Retrieving corresponding day
+            y_true_per_day = y_true[:, i]
+            y_pred_per_day = y_pred[:, i]
+
+            # ------- CLASSIFICATION (ROCAUC) -------
+            if self.mode == "classification":
+
+                # Drawing plot
+                self.plots += self.compute_plots_classification_ROCAUC(y_pred_per_day[:, :, self.mask[:-2, :-2] == 1], y_true_per_day[:, :, self.mask[:-2, :-2] == 1], i)
+
+                # Transforming problem to non-probabilistic
+                y_true_per_day = np.argmax(y_true_per_day, axis = 1)
+                y_pred_per_day = np.argmax(y_pred_per_day, axis = 1)
+
+            # ------- REGRESSION -------
+            if self.mode == "regression":
+
+                # Drawing plots
+                self.plots += self.compute_plots_regression(y_pred_per_day, y_true_per_day, i)
+
+                # Transforming problem to classification
+                y_pred_per_day = (y_pred_per_day < self.treshold_normalized_oxygen) * 1
+                y_true_per_day = (y_true_per_day < self.treshold_normalized_oxygen) * 1
+
+            # ------- CLASSIFICATION (ACC, PRE, ...) -------
+            self.plots += self.compute_plots_classification(y_pred_per_day, y_true_per_day, i)
 
     def compute_plots_regression(self, y_pred: np.array, y_true: np.array, index_day : int):
-        r"""Computes pixel-wise regression metrics, i.e. returns a tensor of shape (x, y)"""
+        r"""Computes each metric per pixel and show the results on a plot"""
 
-        # Retrieving dimensions for ease of use
+        # Retrieving dimensions (Ease of comprehension)
         t, x, y = y_true.shape
 
         # Preprocessing, i.e (t, x, y) to (t, x * y)
         y_true = y_true.reshape(t, -1)
         y_pred = y_pred.reshape(t, -1)
 
-        # Definition of the metrics
-        metrics_regression = [MeanSquaredError(num_outputs = x * y),
-                              RootMeanSquaredErrorPerPixel(),
-                              PercentageOfBiasPerPixel(),
-                              PearsonCorrCoef(num_outputs = x * y)]
+        # Definition of the pixelwise metrics (Pytorch Lightning Metrics and customs)
+        metrics_regression = [MeanSquaredError(num_outputs = x * y), RootMeanSquaredErrorPerPixel(), PercentageOfBiasPerPixel(), PearsonCorrCoef(num_outputs = x * y)]
 
+        # Labels for the plots
         metrics_names = ["Mean Squared Error",
                          "Root Mean Squared Error",
                          "Percentage of Bias",
                          "Pearson Correlation Coefficient"]
 
-        metrics_range = [(0,     0.25),
-                         (0,     0.50),
-                         (-0.5,   0.5),
-                         (-1,       1)]
+        # Definition of the range for the colorbar
+        metrics_range = [(0, 0.25), (0, 0.50), (-0.5, 0.5), (-1, 1)]
 
-        # Stores all the scores plots, i.e. results of the metrics per pixel
-        scores = list()
+        # Stores all the plots
+        plots = list()
 
-        for m, m_name, m_range in zip(metrics_regression, metrics_names, metrics_range):
+        for metric, name, limits in zip(metrics_regression, metrics_names, metrics_range):
 
             # Computing score
-            score = m(y_pred, y_true).reshape(x, y)
+            score = metric(y_pred, y_true).reshape(x, y)
 
-            # Masking the land and non-observed region, i.e. NaNs are simply white when plotted
+            # Masking the land and non-observed region, i.e. NaNs are white when plotted so thats the best !
             score[self.mask[:-2, :-2] == 0] = np.nan
 
             # Adding results, i.e. fig and name
-            scores.append(self.make_plots(score, index_day, m_name, "PuOr", m_range))
+            plots.append(self.make_plots(score, index_day, name, "PuOr", limits))
 
-        return scores
+        return plots
 
     def compute_plots_classification(self, y_pred: np.array, y_true: np.array, index_day : int):
-        r"""Computes pixel-wise regression metrics, i.e. returns a tensor of shape (x, y)"""
+        r"""Computes each metric per pixel and show the results on a plot"""
 
         # Retrieving dimensions for ease of use
         t, x, y = y_true.shape
 
-        # Preprocessing, i.e (t, x, y) to (t, x * y) then (x * y, t)
+        # Preprocessing, i.e (t, x, y) to (t, x * y) then finally (x * y, t)
         y_true = np.swapaxes(y_true.reshape(t, -1), 0, 1)
         y_pred = np.swapaxes(y_pred.reshape(t, -1), 0, 1)
 
-        # Definition of the metrics
+        # Definition of the pixelwise metrics (Pytorch Lightning Metrics and customs)
         metrics_classification = [BinaryAccuracy(multidim_average  = 'samplewise'),
                                   BinaryPrecision(multidim_average = 'samplewise'),
                                   BinaryRecall(multidim_average    = 'samplewise')]
@@ -330,34 +309,33 @@ class BlackSea_Metrics():
                          "Precision",
                          "Recall"]
 
-        metrics_range = [(0, 1),
-                         (0, 1),
-                         (0, 1)]
+        # Definition of the range for the colorbar
+        metrics_range = [(0, 1), (0, 1), (0, 1)]
 
-        # Stores all the scores, i.e. results of the metrics
+        # Stores all the plots
         scores = list()
 
-        for m, m_name, m_range in zip(metrics_classification, metrics_names, metrics_range):
+        for metric, name, limits in zip(metrics_classification, metrics_names, metrics_range):
 
             # Computing score
-            score = m(y_pred, y_true).reshape(x, y)
+            score = metric(y_pred, y_true).reshape(x, y)
 
-            # Masking the land and non-observed region, i.e. NaNs are simply white when plotted
+            # Masking the land and non-observed region, i.e. NaNs are white when plotted so thats the best !
             score[self.mask[:-2, :-2] == 0] = np.nan
 
             # Adding results, i.e. fig and name
-            scores.append(self.make_plots(score, index_day, m_name, "RdYlBu", m_range))
+            scores.append(self.make_plots(score, index_day, name, "RdYlBu", limits))
 
         return scores
 
     def compute_plots_classification_ROCAUC(self, y_pred: np.array, y_true: np.array, index_day : int):
-        r"""Computes the ROCAUC metric and returns a plot of it"""
+        r"""Computes the ROC metric and returns a plot of it with the AUC value"""
 
         # Preprocessing, i.e (t, x, y) to (t, x * y) then (x * y, t)
         y_true = np.swapaxes(y_true, 1, 2).reshape(-1, 2).type(torch.int64)
         y_pred = np.swapaxes(y_pred, 1, 2).reshape(-1, 2)
 
-        # Loading tools
+        # Loading Pytorch Metrics Tools
         roc_curve = BinaryROC()
         auroc     = BinaryAUROC()
 
@@ -365,7 +343,7 @@ class BlackSea_Metrics():
         fpr, tpr, thresholds = roc_curve(y_pred, y_true)
         auc_score            = auroc(y_pred, y_true)
 
-        # Plotting the results
+        # Plotting the ROC curve
         fig = plt.figure(figsize = (7, 7))
         plt.plot(fpr, tpr, label = f'AUC = {auc_score:.2f}', color = 'red', alpha = 0.6)
         plt.plot([0, 1], [0, 1], linestyle = '--', color = 'gray', label = 'Random')
@@ -374,6 +352,8 @@ class BlackSea_Metrics():
         plt.grid()
         plt.xlabel("False Positive Rate")
         plt.ylabel("True Positive Rate")
+
+        # Adding the Area Under The Curve value
         plt.annotate(f'AUC = {auc_score:.2f}',
                      xy = (0.95, 0.05),
                      xycoords = 'axes fraction',
@@ -385,4 +365,4 @@ class BlackSea_Metrics():
         # Complete fig name
         fig_name = "Area Under The Curve (D" + str(index_day) + ")"
 
-        return [[fig, fig_name]]
+        return [fig]

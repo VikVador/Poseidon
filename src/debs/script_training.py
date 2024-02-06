@@ -112,7 +112,7 @@ def main(**kwargs):
     norm_oxy = BSD_loader.get_normalized_deoxygenation_treshold()
 
     # Total number of batches in the training set (used for averaging metrics over the batches)
-    num_batches_train = BSD_loader.get_num_batches(type = "train", batch_size = batch_size)
+    num_batches_train = BSD_loader.get_number_of_batches(type = "train", batch_size = batch_size)
 
     # ------------------------------------------
     #                   Training
@@ -250,8 +250,7 @@ def main(**kwargs):
             # ---------- WandB (Metrics & Plots) ----------
             #
             # Getting results of each metric (averaged over each batch)
-            results = metrics_tool.get_results()
-            results_name = metrics_tool.get_names_metrics()
+            results, results_name = metrics_tool.get_results()
 
             # Sending these results to wandDB
             for d, day_results in enumerate(results):
@@ -264,17 +263,14 @@ def main(**kwargs):
                     # wandb.log({m_name : result})
 
             # Getting the plots
-            plots = metrics_tool.get_plots()
+            plots, plots_name = metrics_tool.get_plots()
 
             # Sending the plots to wandDB
-            for p_info in plots:
-
-                    # Ease of comprehension
-                    p_fig = p_info[0]
-                    p_nam = p_info[1]
+            for plot, name in zip(plots, plots_name):
 
                     # Logging
-                    # wandb.log({p_nam : wandb.Image(p_fig)})
+                    # wandb.log({name : wandb.Image(plot)})
+                    pass
 
         # Updating timing
         epoch_time = time.time() - start
