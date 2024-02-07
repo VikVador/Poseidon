@@ -17,10 +17,6 @@
 # -------------
 # A script to train a neural network to become a oxygen concentration forecaster in the Black Sea.
 #
-#   Dawgz = False : compute the distributions over a given time period given by the user as arguments
-#
-#   Dawgz = True  : compute the distributions over all the possible time periods
-#
 import time
 import wandb
 import argparse
@@ -119,7 +115,7 @@ def main(**kwargs):
     # ------------------------------------------
     #
     # ------- WandB -------
-    # wandb.init(project = "esa-blacksea-deoxygenation-emulator-V3", config = kwargs)
+    wandb.init(project = "esa-blacksea-deoxygenation-emulator-V3", config = kwargs)
 
     # Check if GPU is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -174,7 +170,7 @@ def main(**kwargs):
             print("Loss (T) = ", loss.detach().item())
 
             # Sending to wandDB
-            # wandb.log({"Loss (T)": loss.detach().item()})
+            wandb.log({"Loss (T)": loss.detach().item()})
 
             # Accumulating the loss
             training_loss += loss.detach().item()
@@ -197,7 +193,7 @@ def main(**kwargs):
         print("Loss (Training, Averaged over batch): ", training_loss / batch_steps)
 
         # Sending the loss to wandDB
-        # wandb.log({"Loss (T, AOB): ": training_loss / batch_steps})
+        wandb.log({"Loss (T, AOB): ": training_loss / batch_steps})
 
         # ----- VALIDATION -----
         with torch.no_grad():
@@ -224,7 +220,7 @@ def main(**kwargs):
                 print("Loss (V) = ", loss.detach().item())
 
                 # Sending the loss to wandDB the loss
-                # wandb.log({"Loss (V)": loss.detach().item()})
+                wandb.log({"Loss (V)": loss.detach().item()})
 
                 # Accumulating the loss
                 validation_loss += loss.detach().item()
@@ -244,8 +240,8 @@ def main(**kwargs):
             print("Loss (Validation, Averaged over batch): ", validation_loss / batch_steps)
 
             # Sending more information to wandDB
-            # wandb.log({"Loss (V, AOB): ": validation_loss / batch_steps})
-            # wandb.log({"Epochs : ": nb_epochs - epoch})
+            wandb.log({"Loss (V, AOB): ": validation_loss / batch_steps})
+            wandb.log({"Epochs : ": nb_epochs - epoch})
 
             # ---------- WandB (Metrics & Plots) ----------
             #
@@ -260,7 +256,7 @@ def main(**kwargs):
                     m_name = results_name[i] + " D(" + str(d) + ")"
 
                     # Logging
-                    # wandb.log({m_name : result})
+                    wandb.log({m_name : result})
 
             # Getting the plots
             plots, plots_name = metrics_tool.get_plots()
@@ -269,14 +265,14 @@ def main(**kwargs):
             for plot, name in zip(plots, plots_name):
 
                     # Logging
-                    # wandb.log({name : wandb.Image(plot)})
+                    wandb.log({name : wandb.Image(plot)})
                     pass
 
         # Updating timing
         epoch_time = time.time() - start
 
     # Finishing the run
-    # wandb.finish()
+    wandb.finish()
 
 # ---------------------------------------------------------------------
 #
