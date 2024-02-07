@@ -20,6 +20,7 @@
 import time
 import wandb
 import argparse
+import numpy as np
 import matplotlib.pyplot as plt
 
 # Pytorch
@@ -28,11 +29,12 @@ import torch.nn as nn
 import torch.optim as optim
 
 # Custom libraries
-from dataset              import BlackSea_Dataset
-from dataloader           import BlackSea_Dataloader
-from metrics              import BlackSea_Metrics
-from neural_networks      import FCNN
-from tools                import to_device
+from dataset                 import BlackSea_Dataset
+from dataloader              import BlackSea_Dataloader
+from metrics                 import BlackSea_Metrics
+from tools                   import to_device
+from neural_networks.FCNN    import FCNN
+from neural_networks.AVERAGE import AVERAGE
 
 # Dawgz library (used to parallelized the jobs)
 from dawgz import job, schedule
@@ -87,6 +89,13 @@ def main(**kwargs):
     bs_mask             = Dataset_phy.get_mask(depth = None)
     bs_mask_with_depth  = Dataset_phy.get_mask(depth = depth)
 
+    # Size of the training and validation sets (needed for AverageNet and test set size is inferred)
+    size_training = 0.6
+    size_validation = 0.3
+
+    # Treshold for detecting hypoxia
+    hypoxia_treshold = 63
+
     # ------- Preprocessing -------
     BSD_loader = BlackSea_Dataloader(x = input_datasets,
                                      y = data_oxygen,
@@ -95,8 +104,8 @@ def main(**kwargs):
                                   mode = problem,
                             window_inp = windows_inputs,
                             window_out = windows_outputs,
-                      hypoxia_treshold = 63,
-                         datasets_size = [0.6, 0.3],
+                      hypoxia_treshold = hypoxia_treshold,
+                         datasets_size = [size_training, size_validation],
                                   seed = 2701)
 
     # Retreiving the individual dataloader
@@ -110,6 +119,46 @@ def main(**kwargs):
     # Total number of batches in the training set (used for averaging metrics over the batches)
     num_batches_train = BSD_loader.get_number_of_batches(type = "train", batch_size = batch_size)
 
+    # -------- AverageNet ----------
+    average_output = None
+
+    # If we use AverageNet, i.e. a NN that only predicts the average, we need this information
+    if architecture == "AVERAGE":
+
+        # Retrieving dimensions
+        t = data_oxygen.shape[0]
+
+        # Number of training samples
+        train_samples = int(t * size_training)
+
+        # ----- Regression ------
+        if problem == "regression":
+
+            # Determine the minimum and maximum values of the data
+            min_value = np.nanmin(data_oxygen)
+            max_value = np.nanmax(data_oxygen)
+
+            # Rescale the data to ensure non-negative values
+            average_output = data_oxygen + np.abs(min_value) if min_value < 0 else data_oxygen
+
+            # Normalizing the data
+            average_output = (average_output - min_value) / (max_value - min_value)
+
+            # Average concentration
+            average_output = torch.mean(torch.from_numpy(average_output[: train_samples, :-2, :-2]), dim = 0)
+
+        # ----- Classification ------
+        else:
+
+            # Converting to classification
+            average_output =  torch.from_numpy((data_oxygen[: train_samples, :-2, :-2] < hypoxia_treshold) * 1)
+
+            # Summing over time, i.e. if total number of hypoxic days is greater than 50% of the time, then it is hypoxic
+            average_output = (torch.sum(average_output, dim = 0) >= train_samples // 2) * 1
+
+            # Conversion to "probabilities", i.e. (t, x, y) to (t, c, x, y) with c = 0 no hypoxia, c = 1 hypoxia
+            average_output = torch.stack([(average_output == 0) * 1, average_output]).float()
+
     # ------------------------------------------
     #                   Training
     # ------------------------------------------
@@ -121,7 +170,23 @@ def main(**kwargs):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Initialization of neural network and pushing it to device (GPU)
-    neural_net = FCNN(inputs = len(input_datasets), outputs =  windows_outputs, problem = problem, kernel_size = kernel_size)
+    neural_net = None
+
+    if architecture == "FCNN":
+        neural_net = FCNN(inputs      = len(input_datasets),
+                          outputs     =  windows_outputs,
+                          problem     = problem,
+                          kernel_size = kernel_size)
+
+    elif architecture == "AVERAGE":
+        neural_net = AVERAGE(average    = average_output,
+                             outputs    = windows_outputs,
+                             batch_size = batch_size)
+
+    else:
+        raise ValueError("Unknown architecture")
+
+    # Pushing to correct device
     neural_net.to(device)
 
     # Initialization of the optimizer and the loss function
@@ -139,7 +204,7 @@ def main(**kwargs):
         print("Epoch : ", epoch + 1, "/", nb_epochs, "\n")
 
         # Used to approximate time left for current epoch and in total
-        start      = time.time()
+        start = time.time()
 
         # Used to store instantaneous loss and compute the average per batch (AOB) training loss
         training_loss = 0.0
@@ -175,14 +240,17 @@ def main(**kwargs):
             # Accumulating the loss
             training_loss += loss.detach().item()
 
-            # Reseting the gradients
-            optimizer.zero_grad()
+            # No needs for AverageNet !
+            if architecture != "AVERAGE":
 
-            # Backward pass
-            loss.backward()
+                # Reseting the gradients
+                optimizer.zero_grad()
 
-            # Optimizing the parameters
-            optimizer.step()
+                # Backward pass
+                loss.backward()
+
+                # Optimizing the parameters
+                optimizer.step()
 
             # Updating epoch information
             batch_steps += 1
@@ -266,7 +334,6 @@ def main(**kwargs):
 
                     # Logging
                     wandb.log({name : wandb.Image(plot)})
-                    pass
 
         # Updating timing
         epoch_time = time.time() - start
@@ -409,7 +476,7 @@ if __name__ == "__main__":
         help    = 'The neural network architecture to be used',
         type    = str,
         default = 'FCNN',
-        choices = ["FCNN"])
+        choices = ["FCNN", "AVERAGE"])
 
     parser.add_argument(
         '--learning_rate',

@@ -15,25 +15,26 @@
 #
 # Documentation
 # -------------
-# A library of neural networks to be tested as Black Sea deoxygenation emulator
+# A neural network definition to be used as emulator
 #
 # Pytorch
-import torch
 import torch.nn as nn
 
 
 class FCNN(nn.Sequential):
     r"""A fully convolutional neural network"""
 
-    def __init__(self, inputs: int, outputs: int, problem = "classification", kernel_size: int = 3):
+    def __init__(self, inputs: int, outputs: int, problem : str,  kernel_size: int = 3):
 
         # Initialization
         self.n_in    = inputs
-        self.n_out   = outputs * 2 if problem == "classification" else outputs
         self.padding = kernel_size // 2
         self.problem = problem
 
-        # Architecture
+        # Number of output channels,
+        self.n_out   = outputs * 2 if problem == "classification" else outputs
+
+        # ------ Architecture ------
         block1 = self._make_subblock(nn.Conv2d(self.n_in, 256, kernel_size, padding = self.padding))
         block2 = self._make_subblock(nn.Conv2d(256,       128, kernel_size, padding = self.padding))
         block3 = self._make_subblock(nn.Conv2d(128,        32, kernel_size, padding = self.padding))
@@ -50,12 +51,23 @@ class FCNN(nn.Sequential):
         return [conv, nn.GELU(), nn.BatchNorm2d(conv.out_channels)]
 
     def forward(self, x):
+
+        # Forward pass
         x = super().forward(x)
 
+        # Reshaping the output, i.e. (b, c, x, y) -> (b, c/2, 2, x, y) for classification
         if self.problem == "classification":
-            x = x.reshape(x.shape[0], self.n_out // 2, 2, x.shape[2], x.shape[3])
+
+            # Retrieiving dimensions (Ease of comprehension)
+            b, c, x_res, y_res = x.shape
+
+            # Reshaping
+            x = x.reshape(b, self.n_out // 2, 2, x_res, y_res)
+
+            # Turning to probabilities
             sf = nn.Softmax(dim = 2)
-            x  = sf(x)
+
+            return sf(x)
 
         return x
 

@@ -114,7 +114,6 @@ def generateFakeDataset(number_of_variables: int = 5, number_of_samples: int = 1
     # Creates a list of numpy arrays
     return [np.array(s) for s in list_fake_samples]
 
-# Used to display a simple progress bar while training for 1 epoch
 def progressBar(loss_training, loss_validation, learning_rate, estimated_time_epoch, nb_epoch_left, percent, width = 15):
 
     # Setting up the useful information
