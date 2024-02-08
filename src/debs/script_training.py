@@ -32,10 +32,10 @@ import torch.optim as optim
 from dataset                  import BlackSea_Dataset
 from dataloader               import BlackSea_Dataloader
 from metrics                  import BlackSea_Metrics
-from tools                    import to_device
 from neural_networks.FCNN     import FCNN
 from neural_networks.FCNN_BIG import FCNN_BIG
 from neural_networks.AVERAGE  import AVERAGE
+from tools                    import to_device, get_complete_mask, get_complete_mask_plot, get_ratios
 
 # Dawgz library (used to parallelized the jobs)
 from dawgz import job, schedule
@@ -89,6 +89,10 @@ def main(**kwargs):
     # Loading the black sea mask
     bs_mask             = Dataset_phy.get_mask(depth = None)
     bs_mask_with_depth  = Dataset_phy.get_mask(depth = depth)
+    bs_mask_complete    = get_complete_mask(data_oxygen, bs_mask_with_depth)
+
+    # Retrive the ratios of the different classes
+    ratio_oxygenated, ratio_switching, ratio_hypoxia = get_ratios(bs_mask_complete)
 
     # Size of the training and validation sets (needed for AverageNet and test set size is inferred)
     size_training = 0.6
@@ -165,10 +169,18 @@ def main(**kwargs):
     # ------------------------------------------
     #
     # ------- WandB -------
-    wandb.init(project = "esa-blacksea-deoxygenation-emulator-V3", config = kwargs)
+    wandb.init(project = "esa-blacksea-deoxygenation-emulator-TEST", config = kwargs)
 
     # Check if GPU is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Sending visual information about the dataset to WandB (1)
+    wandb.log({"Dataset" : wandb.Image(get_complete_mask_plot(bs_mask_complete))})
+
+    # Sending information about the dataset to WandB (1)
+    wandb.log({"Ratio Oxygenated" : ratio_oxygenated,
+               "Ratio Switching"  : ratio_switching,
+               "Ratio Hypoxia"    : ratio_hypoxia})
 
     # Initialization of neural network and pushing it to device (GPU)
     neural_net = None
@@ -179,7 +191,7 @@ def main(**kwargs):
                           problem     = problem,
                           kernel_size = kernel_size)
 
-    if architecture == "FCNNBIG":
+    elif architecture == "FCNNBIG":
         neural_net = FCNN_BIG(inputs      = len(input_datasets),
                               outputs     = windows_outputs,
                               problem     = problem,
@@ -193,6 +205,9 @@ def main(**kwargs):
 
     else:
         raise ValueError("Unknown architecture")
+
+    # Sending information about the Neural Network
+    wandb.log({"Trainable Parameters" : neural_net.count_parameters()})
 
     # Pushing to correct device
     neural_net.to(device)
@@ -221,6 +236,7 @@ def main(**kwargs):
         # Used to compute our metrics
         metrics_tool = BlackSea_Metrics(mode = problem,
                                         mask = bs_mask_with_depth,
+                                        mask_complete = bs_mask_complete,
                                         treshold = norm_oxy,
                                         number_of_batches = num_batches_train)
 
@@ -372,12 +388,12 @@ arguments = {
     'month_end'       : [12],
     'year_start'      : [0],
     'year_end'        : [9],
-    'Inputs'          : [["temperature"], ["salinity"], ["chlorophyll"], ["kshort"], ["klong"]],
+    'Inputs'          : input_list,
     'Problem'         : ["regression", "classification"],
     'Window (Inputs)' : [1],
     'Window (Output)' : [1],
     'Depth'           : [200],
-    'Architecture'    : ["FCNN"],
+    'Architecture'    : ["AVERAGE"],
     'Learning Rate'   : [0.001],
     'Kernel Size'     : [3],
     'Batch Size'      : [64],

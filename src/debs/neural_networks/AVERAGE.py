@@ -53,4 +53,4 @@ class AVERAGE(nn.Sequential):
         return torch.stack([x for i in range(self.bs)], dim = 0)
 
     def count_parameters(self,):
-        print("Model parameters  =", sum(p.numel() for p in self.parameters() if p.requires_grad))
+        return int(sum(p.numel() for p in self.parameters() if p.requires_grad))

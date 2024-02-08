@@ -20,6 +20,7 @@
 import os
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 
 def to_device(data, device):
     r"""Moves tensors to a chosen device (CPU or GPU)"""
@@ -49,6 +50,72 @@ def get_mesh_path():
 
     print("ERROR (get_mesh_path) - No path found")
     exit()
+
+def get_complete_mask(data: np.array, bs_mask_with_depth: np.array):
+    r"""Used to retrieve the indices of land, oxygenated, hypoxia and switching zones (regions where, in this loaded dataset, they switch from oxygenated to hypoxia and reverse)."""
+
+    # Converting to classification
+    oxygen = (data < 63) * 1
+
+    # Averaging, i.e. if = 1, always in hypoxia, if = 0, never in hypoxia and value in between means there is a switch
+    oxygen = np.nanmean(oxygen, axis = 0)
+
+    # Applying masks (1)
+    oxygen[oxygen == 0]             = 0
+
+    # Indices where hypoxia remains a constant
+    indices_hypoxia = np.where(oxygen == 1)
+
+    # Applying masks (2)
+    oxygen[oxygen == 1]             = 0
+    oxygen[0 < oxygen]              = 1
+    oxygen[indices_hypoxia]         = 2
+    oxygen[bs_mask_with_depth == 0] = np.nan
+
+    return oxygen
+
+def get_complete_mask_plot(mask: np.array):
+    r"""Used to plot the complete mask of the black sea."""
+
+    # Flipping vertically to show correctly Black Sea (for you my loving oceanographer <3)
+    mask = np.flipud(mask)
+
+    # Labels for each of the classes
+    labels = ['Not Observed', 'Oxygenated', 'Switching', 'Hypoxia']
+
+    # Replace NaN values with a placeholder value
+    mask_without_nans = np.nan_to_num(mask, nan = -1)
+    unique_values     = np.unique(mask_without_nans)
+
+    # Creation of the plot
+    fig = plt.figure(figsize = (20, 10))
+    plt.imshow(mask_without_nans, cmap = "viridis", vmin = unique_values.min(), vmax = unique_values.max())
+    plt.grid(alpha = 0.25)
+    plt.xlabel("Longitude")
+    plt.ylabel("Latitude")
+
+    # Modify colorbar to display labels
+    cbar = plt.colorbar(ticks = unique_values, fraction = 0.021)
+    cbar.ax.set_yticklabels(labels)
+
+    return fig
+
+def get_ratios(mask: np.array):
+    r"""Used to retrieve the ratios of the different classes in the mask."""
+
+    # Total number of elements (only in the observed region)
+    total = mask[0 <= mask].size
+
+    # Number of regions that always remain oxygenated
+    oxygenated = (mask[mask == 0].size / total) * 100
+
+    # Number of regions that always remain hypoxia
+    hypoxia = (mask[mask == 2].size / total) * 100
+
+    # Number of regions that switch between hypoxia and oxygenated
+    switching = (mask[mask == 1].size / total) * 100
+
+    return oxygenated, switching, hypoxia
 
 def generateFakeDataset(number_of_variables: int = 5, number_of_samples: int = 14, oxygen : bool = False, resolution : int = 64, resolution_snapshot : tuple = (258, 258)):
     r"""Used to generate a list of fake datasets (numpy arrays) for testing purposes, i.e. each zone will be named to become easily recognizable"""

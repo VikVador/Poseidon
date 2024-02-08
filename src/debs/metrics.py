@@ -53,12 +53,13 @@ def RootMeanSquaredErrorPerPixel(y_pred : np.array = None, y_true : np.array = N
 class BlackSea_Metrics():
     r"""A tool to compute a large variety of metrics (scalar or visual) to assess the quality of a model."""
 
-    def __init__(self, mode: str, mask : np.array, treshold : float, number_of_batches : int):
+    def __init__(self, mode: str, mask : np.array, mask_complete : np.array, treshold : float, number_of_batches : int):
         r"""Initialization of the metrics computation tool"""
 
         # Storing information
         self.mask = mask
         self.mode = mode
+        self.mask_complete = mask_complete
         self.number_of_batches = number_of_batches
         self.treshold_normalized_oxygen = treshold
 
@@ -146,6 +147,10 @@ class BlackSea_Metrics():
 
     def make_plots(self, score : np.array, index_day : int, label : str, cmap : str, vminmax : tuple):
         r"""Creates the plots based on the results"""
+
+        # Hides all the regions that are not relevant for this metric
+        if "Precision" in label or "Recall" in label:
+            score[self.mask_complete[:-2, :-2] == 0] = np.nan
 
         # Flipping vertically to show correctly Black Sea (for you my loving oceanographer <3)
         score = np.flipud(score)

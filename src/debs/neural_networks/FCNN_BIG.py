@@ -75,4 +75,4 @@ class FCNN_BIG(nn.Sequential):
         return x
 
     def count_parameters(self,):
-        print("Model parameters  =", sum(p.numel() for p in self.parameters() if p.requires_grad))
+        return int(sum(p.numel() for p in self.parameters() if p.requires_grad))
