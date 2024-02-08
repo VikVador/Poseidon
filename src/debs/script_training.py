@@ -155,7 +155,7 @@ def main(**kwargs):
             average_output =  torch.from_numpy((data_oxygen[: train_samples, :-2, :-2] < hypoxia_treshold) * 1)
 
             # Summing over time, i.e. if total number of hypoxic days is greater than 50% of the time, then it is hypoxic
-            average_output = (torch.sum(average_output, dim = 0) >= train_samples // 2) * 1
+            average_output = (torch.sum(average_output, dim = 0) > train_samples // 2) * 1
 
             # Conversion to "probabilities", i.e. (t, x, y) to (t, c, x, y) with c = 0 no hypoxia, c = 1 hypoxia
             average_output = torch.stack([(average_output == 0) * 1, average_output]).float()
@@ -178,7 +178,7 @@ def main(**kwargs):
                           outputs     =  windows_outputs,
                           problem     = problem,
                           kernel_size = kernel_size)
-        
+
     if architecture == "FCNNBIG":
         neural_net = FCNN_BIG(inputs      = len(input_datasets),
                               outputs     = windows_outputs,
