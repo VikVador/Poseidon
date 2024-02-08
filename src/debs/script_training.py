@@ -29,12 +29,13 @@ import torch.nn as nn
 import torch.optim as optim
 
 # Custom libraries
-from dataset                 import BlackSea_Dataset
-from dataloader              import BlackSea_Dataloader
-from metrics                 import BlackSea_Metrics
-from tools                   import to_device
-from neural_networks.FCNN    import FCNN
-from neural_networks.AVERAGE import AVERAGE
+from dataset                  import BlackSea_Dataset
+from dataloader               import BlackSea_Dataloader
+from metrics                  import BlackSea_Metrics
+from tools                    import to_device
+from neural_networks.FCNN     import FCNN
+from neural_networks.FCNN_BIG import FCNN_BIG
+from neural_networks.AVERAGE  import AVERAGE
 
 # Dawgz library (used to parallelized the jobs)
 from dawgz import job, schedule
@@ -177,11 +178,18 @@ def main(**kwargs):
                           outputs     =  windows_outputs,
                           problem     = problem,
                           kernel_size = kernel_size)
+        
+    if architecture == "FCNNBIG":
+        neural_net = FCNN_BIG(inputs      = len(input_datasets),
+                              outputs     = windows_outputs,
+                              problem     = problem,
+                              kernel_size = kernel_size)
 
     elif architecture == "AVERAGE":
         neural_net = AVERAGE(average    = average_output,
                              outputs    = windows_outputs,
-                             batch_size = batch_size)
+                             batch_size = batch_size,
+                             device     = device)
 
     else:
         raise ValueError("Unknown architecture")
@@ -255,8 +263,6 @@ def main(**kwargs):
             # Updating epoch information
             batch_steps += 1
 
-            break
-
         # Information over terminal (3)
         print("Loss (Training, Averaged over batch): ", training_loss / batch_steps)
 
@@ -301,8 +307,6 @@ def main(**kwargs):
 
                 # Updating epoch information
                 batch_steps += 1
-
-                break
 
             # Information over terminal (5)
             print("Loss (Validation, Averaged over batch): ", validation_loss / batch_steps)
@@ -352,6 +356,7 @@ def main(**kwargs):
 # -------------
 # Creation of all the inputs combinations
 input_list = ["temperature"]
+#input_list = [["temperature"], ["salinity"], ["chlorophyll"], ["kshort"], ["klong"]]
 
 # Generate all combinations
 all_combinations = []
@@ -364,11 +369,11 @@ all_combinations = [list(combination) for combination in all_combinations]
 # Storing all the information
 arguments = {
     'month_start'     : [0],
-    'month_end'       : [1],
+    'month_end'       : [12],
     'year_start'      : [0],
-    'year_end'        : [0],
-    'Inputs'          : all_combinations,
-    'Problem'         : ["regression"],
+    'year_end'        : [9],
+    'Inputs'          : [["temperature"], ["salinity"], ["chlorophyll"], ["kshort"], ["klong"]],
+    'Problem'         : ["regression", "classification"],
     'Window (Inputs)' : [1],
     'Window (Output)' : [1],
     'Depth'           : [200],
@@ -376,7 +381,7 @@ arguments = {
     'Learning Rate'   : [0.001],
     'Kernel Size'     : [3],
     'Batch Size'      : [64],
-    'Epochs'          : [3]
+    'Epochs'          : [20]
 }
 
 # Generate all combinations
@@ -388,7 +393,7 @@ param_dicts = [dict(zip(arguments.keys(), combo)) for combo in param_combination
 # ----
 # Jobs
 # ----
-@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '64GB', time = '0:20:00', project = 'bsmfc', partition = "debug-gpu", user = 'vmangeleer@uliege.be', type = 'FAIL')
+@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '512GB', time = '4:00:00', project = 'bsmfc', partition = "ia", user = 'vmangeleer@uliege.be', type = 'FAIL')
 def train_model(i: int):
 
     # Launching the main
@@ -476,7 +481,7 @@ if __name__ == "__main__":
         help    = 'The neural network architecture to be used',
         type    = str,
         default = 'FCNN',
-        choices = ["FCNN", "AVERAGE"])
+        choices = ["FCNN", "FCNNBIG", "AVERAGE"])
 
     parser.add_argument(
         '--learning_rate',
