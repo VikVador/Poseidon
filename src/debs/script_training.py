@@ -111,8 +111,8 @@ def main(**kwargs):
 
     # Retreiving the individual dataloader
     dataset_train      = BSD_loader.get_dataloader("train",      batch_size = batch_size)
-    dataset_validation = BSD_loader.get_dataloader("validation", batch_size = batch_size)
-    dataset_test       = BSD_loader.get_dataloader("test",       batch_size = batch_size)
+    dataset_validation = BSD_loader.get_dataloader("validation", batch_size = 365)
+    dataset_test       = BSD_loader.get_dataloader("test",       batch_size = 365)
 
     # Normalized oxygen treshold
     norm_oxy = BSD_loader.get_normalized_deoxygenation_treshold()

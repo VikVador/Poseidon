@@ -266,18 +266,21 @@ class BlackSea_Metrics():
         metrics_regression = [MeanSquaredError(num_outputs = x * y), RootMeanSquaredErrorPerPixel(), PercentageOfBiasPerPixel(), PearsonCorrCoef(num_outputs = x * y)]
 
         # Labels for the plots
-        metrics_names = ["Mean Squared Error",
-                         "Root Mean Squared Error",
-                         "Percentage of Bias",
-                         "Pearson Correlation Coefficient"]
+        metrics_names = ["Mean Squared Error $[(mmol/m^3)^2]$",
+                         "Root Mean Squared Error $[mmol/m^3$]",
+                         "Percentage of Bias [%]",
+                         "Pearson Correlation Coefficient [-]"]
 
         # Definition of the range for the colorbar
-        metrics_range = [(0, 0.25), (0, 0.50), (-0.5, 0.5), (-1, 1)]
+        metrics_ranges = [(0, 1), (0, 1), (-100, 100), (-1, 1)]
+
+        # Colors for the plots (need to have sequential colors and diverging )
+        metrics_colors = ["GnBu", "GnBu", "RdBu", "RdBu"]
 
         # Stores all the plots
         plots = list()
 
-        for metric, name, limits in zip(metrics_regression, metrics_names, metrics_range):
+        for metric, name, limits, color in zip(metrics_regression, metrics_names, metrics_ranges, metrics_colors):
 
             # Computing score
             score = metric(y_pred, y_true).reshape(x, y)
@@ -285,8 +288,8 @@ class BlackSea_Metrics():
             # Masking the land and non-observed region, i.e. NaNs are white when plotted so thats the best !
             score[self.mask[:-2, :-2] == 0] = np.nan
 
-            # Adding results, i.e. fig and name
-            plots.append(self.make_plots(score, index_day, name, "PuOr", limits))
+            # Adding results, i.e. fig and name (multipliy by 100 for percentage)
+            plots.append(self.make_plots(score * limits[1], index_day, name, color, limits))
 
         return plots
 
@@ -305,12 +308,12 @@ class BlackSea_Metrics():
                                   BinaryPrecision(multidim_average = 'samplewise'),
                                   BinaryRecall(multidim_average    = 'samplewise')]
 
-        metrics_names = ["Accuracy",
-                         "Precision",
-                         "Recall"]
+        metrics_names = ["Accuracy [%]",
+                         "Precision [%]",
+                         "Recall [%]"]
 
         # Definition of the range for the colorbar
-        metrics_range = [(0, 1), (0, 1), (0, 1)]
+        metrics_range = [(0, 100), (0, 100), (0, 100)]
 
         # Stores all the plots
         scores = list()
@@ -324,7 +327,7 @@ class BlackSea_Metrics():
             score[self.mask[:-2, :-2] == 0] = np.nan
 
             # Adding results, i.e. fig and name
-            scores.append(self.make_plots(score, index_day, name, "RdYlBu", limits))
+            scores.append(self.make_plots(score * 100, index_day, name, "RdBu", limits))
 
         return scores
 
