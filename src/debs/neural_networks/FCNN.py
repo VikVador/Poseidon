@@ -24,7 +24,7 @@ import torch.nn as nn
 class FCNN(nn.Sequential):
     r"""A fully convolutional neural network"""
 
-    def __init__(self, problem : str, inputs: int, outputs: int,  kernel_size: int = 3, scaling : int = 1):
+    def __init__(self, problem : str, inputs : int, outputs : int,  kernel_size : int = 3, scaling : int = 1):
 
         # Initialization
         self.n_in    = inputs
