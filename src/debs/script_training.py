@@ -33,7 +33,6 @@ from dataset                  import BlackSea_Dataset
 from dataloader               import BlackSea_Dataloader
 from metrics                  import BlackSea_Metrics
 from neural_networks.FCNN     import FCNN
-from neural_networks.FCNN_BIG import FCNN_BIG
 from neural_networks.AVERAGE  import AVERAGE
 from tools                    import to_device, get_complete_mask, get_complete_mask_plot, get_ratios
 
@@ -370,9 +369,8 @@ def main(**kwargs):
 # -------------
 # Possibilities
 # -------------
-# Creation of all the inputs combinations
+# Creation of all the inputs combinations (Example : ["temperature"], ["salinity"], ["chlorophyll"], ["kshort"], ["klong"])
 input_list = ["temperature"]
-#input_list = [["temperature"], ["salinity"], ["chlorophyll"], ["kshort"], ["klong"]]
 
 # Generate all combinations
 all_combinations = []
