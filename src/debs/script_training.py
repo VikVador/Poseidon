@@ -33,6 +33,7 @@ from dataset                  import BlackSea_Dataset
 from dataloader               import BlackSea_Dataloader
 from metrics                  import BlackSea_Metrics
 from neural_networks.FCNN     import FCNN
+from neural_networks.UNET     import UNET
 from neural_networks.AVERAGE  import AVERAGE
 from tools                    import to_device, get_complete_mask, get_complete_mask_plot, get_ratios
 
@@ -65,6 +66,7 @@ def main(**kwargs):
     windows_outputs = kwargs['Window (Output)']
     depth           = kwargs['Depth']
     architecture    = kwargs['Architecture']
+    scaling         = kwargs['Scaling']
     learning_rate   = kwargs['Learning Rate']
     kernel_size     = kwargs['Kernel Size']
     batch_size      = kwargs['Batch Size']
@@ -90,6 +92,12 @@ def main(**kwargs):
     bs_mask_with_depth  = Dataset_phy.get_mask(depth = depth)
     bs_mask_complete    = get_complete_mask(data_oxygen, bs_mask_with_depth)
 
+    # Loading bathymetry data (normalized between 0 and 1)
+    bathy = Dataset_phy.get_depth() if "bathymetry" in inputs else None
+
+    # Loading the mesh (normalized x, y between 0 and 1)
+    mesh = Dataset_phy.get_mesh(data_oxygen.shape[1] - 2, data_oxygen.shape[2] - 2) if "mesh" in inputs else None
+
     # Retrive the ratios of the different classes
     ratio_oxygenated, ratio_switching, ratio_hypoxia = get_ratios(bs_mask_complete)
 
@@ -113,9 +121,9 @@ def main(**kwargs):
                                   seed = 2701)
 
     # Retreiving the individual dataloader
-    dataset_train      = BSD_loader.get_dataloader("train",      batch_size = batch_size)
-    dataset_validation = BSD_loader.get_dataloader("validation", batch_size = 365)
-    dataset_test       = BSD_loader.get_dataloader("test",       batch_size = 365)
+    dataset_train      = BSD_loader.get_dataloader("train",      bathy, mesh, batch_size = batch_size)
+    dataset_validation = BSD_loader.get_dataloader("validation", bathy, mesh, batch_size = 365)
+    dataset_test       = BSD_loader.get_dataloader("test",       bathy, mesh, batch_size = 365)
 
     # Normalized oxygen treshold
     norm_oxy = BSD_loader.get_normalized_deoxygenation_treshold()
@@ -168,7 +176,7 @@ def main(**kwargs):
     # ------------------------------------------
     #
     # ------- WandB -------
-    wandb.init(project = "esa-blacksea-deoxygenation-emulator-TEST", config = kwargs)
+    wandb.init(project = "esa-blacksea-deoxygenation-emulator-V4", config = kwargs)
 
     # Check if GPU is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -181,20 +189,26 @@ def main(**kwargs):
                "Ratio Switching"  : ratio_switching,
                "Ratio Hypoxia"    : ratio_hypoxia})
 
+    # Number of inputs
+    nb_inputs = len(input_datasets)
+    nb_inputs = nb_inputs + 1 if "bathymetry" in inputs else nb_inputs
+    nb_inputs = nb_inputs + 2 if "mesh"       in inputs else nb_inputs
+
     # Initialization of neural network and pushing it to device (GPU)
     neural_net = None
 
     if architecture == "FCNN":
-        neural_net = FCNN(inputs      = len(input_datasets),
-                          outputs     =  windows_outputs,
+        neural_net = FCNN(inputs      = nb_inputs,
+                          outputs     = windows_outputs,
+                          scaling     = scaling,
                           problem     = problem,
                           kernel_size = kernel_size)
 
-    elif architecture == "FCNNBIG":
-        neural_net = FCNN_BIG(inputs      = len(input_datasets),
-                              outputs     = windows_outputs,
-                              problem     = problem,
-                              kernel_size = kernel_size)
+    elif architecture == "UNET":
+        neural_net = UNET(inputs      = nb_inputs,
+                          outputs     = windows_outputs,
+                          scaling     = scaling,
+                          problem     = problem)
 
     elif architecture == "AVERAGE":
         neural_net = AVERAGE(average    = average_output,
@@ -351,8 +365,8 @@ def main(**kwargs):
             # Sending the plots to wandDB
             for plot, name in zip(plots, plots_name):
 
-                    # Logging
-                    wandb.log({name : wandb.Image(plot)})
+                # Logging
+                wandb.log({name : wandb.Image(plot)})
 
         # Updating timing
         epoch_time = time.time() - start
@@ -392,6 +406,7 @@ arguments = {
     'Window (Output)' : [1],
     'Depth'           : [200],
     'Architecture'    : ["AVERAGE"],
+    'Scaling'         : [1],
     'Learning Rate'   : [0.001],
     'Kernel Size'     : [3],
     'Batch Size'      : [64],
@@ -495,7 +510,13 @@ if __name__ == "__main__":
         help    = 'The neural network architecture to be used',
         type    = str,
         default = 'FCNN',
-        choices = ["FCNN", "FCNNBIG", "AVERAGE"])
+        choices = ["FCNN", "UNET", "AVERAGE"])
+
+    parser.add_argument(
+        '--scaling',
+        help    = 'A scaling factor to be used for the neural network architecture, i.e. it increases the capacity of the network',
+        type    = int,
+        default = 1)
 
     parser.add_argument(
         '--learning_rate',
@@ -565,6 +586,7 @@ if __name__ == "__main__":
 
             # Training
             "Architecture"    : args.architecture,
+            "Scaling"         : args.scaling,
             "Learning Rate"   : args.learning_rate,
             "Kernel Size"     : args.kernel_size,
             "Batch Size"      : args.batch_size,

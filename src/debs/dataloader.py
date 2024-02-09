@@ -184,23 +184,25 @@ class BlackSea_Dataloader():
                 self.x     = x
                 self.y     = y
                 self.mesh  = mesh
-                self.bathy = bathy[:, :-2, :-2]
+
+                # Reshaping bathymetry to be multiple of 2
+                self.bathy = torch.from_numpy(bathy[:, :-2, :-2]) if bathy is not None else None
 
             def __len__(self):
                 return self.x.shape[0]
 
             def __getitem__(self, idx):
 
-                # Loading samples
-                x = self.x[idx]
+                # Extracting the sample
+                xi = self.x[idx]
 
-                # Adding bathymetry
-                x = np.concatenate([x, self.bathy], axis = 0) if self.bathy is not None else x
+                # Adding bathymetry if needed
+                xi = np.concatenate((xi, self.bathy), axis = 0) if self.bathy is not None else xi
 
-                # Adding grid (x and y coordinates)
-                x = np.concatenate([x, self.mesh], axis = 0) if self.mesh is not None else x
+                # Adding the mesh
+                xi = np.concatenate((xi, self.mesh), axis = 0) if self.mesh is not None else xi
 
-                return x, self.y[idx]
+                return xi, self.y[idx]
 
         # Creation of the dataset for dataloader
         dataset = BS_Dataset(x = getattr(self, f"x_{type}"), y = getattr(self, f"y_{type}"), bathy = bathy, mesh = mesh)
