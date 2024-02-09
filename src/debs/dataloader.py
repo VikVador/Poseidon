@@ -20,8 +20,9 @@
 import numpy as np
 
 # Torch
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
+import torch
+from   torch.utils.data import Dataset
+from   torch.utils.data import DataLoader
 
 
 class BlackSea_Dataloader():
@@ -168,7 +169,7 @@ class BlackSea_Dataloader():
         # Computing the total number of batches
         return int(getattr(self, f"x_{type}").shape[0] // batch_size + 1)
 
-    def get_dataloader(self, type: str, batch_size: int = 64):
+    def get_dataloader(self, type: str, bathy : torch.Tensor = None, mesh : torch.Tensor = None, batch_size: int = 64):
         r"""Returns the dataloader for the given type, i.e. training, validation or test"""
 
         # Security
@@ -177,22 +178,32 @@ class BlackSea_Dataloader():
         class BS_Dataset(Dataset):
             r"""A simple pytorch dataloader"""
 
-            def __init__(self, x: np.array, y: np.array):
-                self.x  = x
-                self.y  = y
-                self.bs = batch_size
+            def __init__(self, x: np.array, y: np.array, bathy : np.array = None, mesh : np.array = None):
+
+                # Storing info for the dataloader (reshaping bathymetry to be multiple of 2)
+                self.x     = x
+                self.y     = y
+                self.mesh  = mesh
+                self.bathy = bathy[:, :-2, :-2]
 
             def __len__(self):
                 return self.x.shape[0]
 
             def __getitem__(self, idx):
-                return self.x[idx], self.y[idx]
 
-            def get_number_of_batches(self):
-                return int(self.__len__() // self.bs)
+                # Loading samples
+                x = self.x[idx]
+
+                # Adding bathymetry
+                x = np.concatenate([x, self.bathy], axis = 0) if self.bathy is not None else x
+
+                # Adding grid (x and y coordinates)
+                x = np.concatenate([x, self.mesh], axis = 0) if self.mesh is not None else x
+
+                return x, self.y[idx]
 
         # Creation of the dataset for dataloader
-        dataset = BS_Dataset(getattr(self, f"x_{type}"), getattr(self, f"y_{type}"))
+        dataset = BS_Dataset(x = getattr(self, f"x_{type}"), y = getattr(self, f"y_{type}"), bathy = bathy, mesh = mesh)
 
         # Creation of the dataloader
         return DataLoader(dataset, batch_size = batch_size)
