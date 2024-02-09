@@ -20,9 +20,7 @@
 import os
 import xarray
 import numpy as np
-
-# Custom library
-from tools import get_data_path, get_mesh_path
+from   tools import get_data_path, get_mesh_path
 
 class BlackSea_Dataset():
     r"""A simple tool to load data of Black Sea simulations (NEMO Simulator)."""
@@ -151,8 +149,26 @@ class BlackSea_Dataset():
 
         return translations[variable]
 
+    def get_mesh(self, x: int, y: int):
+        r"""Creates a mesh with normalized coordinates for the given shape (x, y)"""
+
+        # Creation of the mesh
+        x_mesh, y_mesh = np.meshgrid(np.linspace(0, 1, num = x), np.linspace(0, 1, num = y), indexing = 'ij')
+
+        # Concatenation of the mesh
+        return np.stack((x_mesh, y_mesh), axis = 0)
+
+    def get_depth(self):
+        r"""Used to retreive the bathymetry information, i.e. the depth in [m] for each region of the sea (2D)"""
+
+        # Path to the mesh file location
+        path_mesh = get_mesh_path()
+
+        # Loading the dataset containing information about the Black Sea mesh
+        return xarray.open_dataset(path_mesh, engine = "h5netcdf").bathy_metry.data
+
     def get_bathymetry(self):
-        r"""Used to retreive the bathymetry mask, i.e. the depth index at which we reach the bottom of the ocean (2D)"""
+        r"""Used to retreive the bathymetry mask, i.e. the depth index at which we reach the bottom of the sea (2D)"""
 
         # Path to the mesh file location
         path_mesh = get_mesh_path()
