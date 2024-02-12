@@ -122,8 +122,8 @@ def main(**kwargs):
 
     # Retreiving the individual dataloader
     dataset_train      = BSD_loader.get_dataloader("train",      bathy, mesh, batch_size = batch_size)
-    dataset_validation = BSD_loader.get_dataloader("validation", bathy, mesh, batch_size = 365)
-    dataset_test       = BSD_loader.get_dataloader("test",       bathy, mesh, batch_size = 365)
+    dataset_validation = BSD_loader.get_dataloader("validation", bathy, mesh, batch_size = batch_size)
+    dataset_test       = BSD_loader.get_dataloader("test",       bathy, mesh, batch_size = batch_size)
 
     # Normalized oxygen treshold
     norm_oxy = BSD_loader.get_normalized_deoxygenation_treshold()
@@ -176,13 +176,13 @@ def main(**kwargs):
     # ------------------------------------------
     #
     # ------- WandB -------
-    wandb.init(project = "esa-blacksea-deoxygenation-emulator-V4", config = kwargs)
+    wandb.init(project = "esa-blacksea-deoxygenation-emulator-analysis", config = kwargs)
 
     # Check if GPU is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Sending visual information about the dataset to WandB (1)
-    wandb.log({"Dataset" : wandb.Image(get_complete_mask_plot(bs_mask_complete))})
+    # wandb.log({"Dataset" : wandb.Image(get_complete_mask_plot(bs_mask_complete))})
 
     # Sending information about the dataset to WandB (1)
     wandb.log({"Ratio Oxygenated" : ratio_oxygenated,
@@ -383,16 +383,8 @@ def main(**kwargs):
 # -------------
 # Possibilities
 # -------------
-# Creation of all the inputs combinations (Example : ["temperature"], ["salinity"], ["chlorophyll"], ["kshort"], ["klong"])
-input_list = ["temperature"]
-
-# Generate all combinations
-all_combinations = []
-for r in range(1, len(input_list) + 1):
-    all_combinations.extend(combinations(input_list, r))
-
-# Convert combinations to lists
-all_combinations = [list(combination) for combination in all_combinations]
+# Creation of all the inputs combinations (Example : ["temperature"], ["salinity"], ["chlorophyll"], ["k_short"], ["k_long"])
+input_list = [["temperature"], ["salinity"], ["chlorophyll"], ["k_short"], ["k_long"], ["temperature", "salinity", "chlorophyll", "k_short", "k_long"]]
 
 # Storing all the information
 arguments = {
@@ -404,12 +396,12 @@ arguments = {
     'Problem'         : ["regression", "classification"],
     'Window (Inputs)' : [1],
     'Window (Output)' : [1],
-    'Depth'           : [200],
-    'Architecture'    : ["AVERAGE"],
-    'Scaling'         : [1],
+    'Depth'           : [150],
+    'Architecture'    : ["FCNN", "UNET"],
+    'Scaling'         : [4],
     'Learning Rate'   : [0.001],
     'Kernel Size'     : [3],
-    'Batch Size'      : [64],
+    'Batch Size'      : [16],
     'Epochs'          : [20]
 }
 
@@ -422,7 +414,7 @@ param_dicts = [dict(zip(arguments.keys(), combo)) for combo in param_combination
 # ----
 # Jobs
 # ----
-@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '512GB', time = '4:00:00', project = 'bsmfc', partition = "ia", user = 'vmangeleer@uliege.be', type = 'FAIL')
+@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '512GB', time = '6:00:00', project = 'bsmfc', partition = "ia", user = 'vmangeleer@uliege.be', type = 'FAIL')
 def train_model(i: int):
 
     # Launching the main
