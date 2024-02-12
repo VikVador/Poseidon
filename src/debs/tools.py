@@ -21,6 +21,9 @@ import os
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import matplotlib.patches as mpatches
+
 
 def to_device(data, device):
     r"""Moves tensors to a chosen device (CPU or GPU)"""
@@ -82,21 +85,30 @@ def get_complete_mask_plot(mask: np.array):
 
     # Labels for each of the classes
     labels = ['Not Observed', 'Oxygenated', 'Switching', 'Hypoxia']
+    colors = ['#d6d6d6', '#94bac8', '#dac87e', '#bd2714']
+    values = [-1, 0, 1, 2]
 
     # Replace NaN values with a placeholder value
     mask_without_nans = np.nan_to_num(mask, nan = -1)
-    unique_values     = np.unique(mask_without_nans)
+    unique_values = np.unique(mask_without_nans)
+
+    # Create a custom colormap with discrete colors
+    cmap   = mcolors.ListedColormap(colors)
+    bounds = np.arange(-1.5, 2.6, 1)  # Define boundaries for each value
+    norm   = mcolors.BoundaryNorm(bounds, cmap.N)
 
     # Creation of the plot
-    fig = plt.figure(figsize = (20, 10))
-    plt.imshow(mask_without_nans, cmap = "viridis", vmin = unique_values.min(), vmax = unique_values.max())
+    fig = plt.figure(figsize = (25, 15))
+
+    # Plot the masked array using the custom colormap
+    plt.imshow(mask_without_nans, cmap = cmap, norm = norm)
     plt.grid(alpha = 0.25)
     plt.xlabel("Longitude")
     plt.ylabel("Latitude")
 
-    # Modify colorbar to display labels
-    cbar = plt.colorbar(ticks = unique_values, fraction = 0.021)
-    cbar.ax.set_yticklabels(labels)
+    # Create custom legend with colored patches using the custom colormap
+    patches = [mpatches.Patch(color = cmap(norm(value)), label = label) for value, label in zip(values, labels)]
+    plt.legend(handles = patches, loc = 'upper right')
 
     return fig
 
