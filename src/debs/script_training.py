@@ -176,18 +176,18 @@ def main(**kwargs):
     # ------------------------------------------
     #
     # ------- WandB -------
-    wandb.init(project = "esa-blacksea-deoxygenation-emulator-analysis", config = kwargs)
+    # wandb.init(project = "esa-blacksea-deoxygenation-emulator-test", config = kwargs)
 
     # Check if GPU is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Sending visual information about the dataset to WandB (1)
-    # wandb.log({"Dataset" : wandb.Image(get_complete_mask_plot(bs_mask_complete))})
+    # # wandb.log({"Dataset" : # wandb.Image(get_complete_mask_plot(bs_mask_complete))})
 
     # Sending information about the dataset to WandB (1)
-    wandb.log({"Ratio Oxygenated" : ratio_oxygenated,
-               "Ratio Switching"  : ratio_switching,
-               "Ratio Hypoxia"    : ratio_hypoxia})
+    # wandb.log({"Ratio Oxygenated" : ratio_oxygenated,
+    #           "Ratio Switching"  : ratio_switching,
+    #           "Ratio Hypoxia"    : ratio_hypoxia})
 
     # Number of inputs
     nb_inputs = len(input_datasets)
@@ -220,7 +220,7 @@ def main(**kwargs):
         raise ValueError("Unknown architecture")
 
     # Sending information about the Neural Network
-    wandb.log({"Trainable Parameters" : neural_net.count_parameters()})
+    # wandb.log({"Trainable Parameters" : neural_net.count_parameters()})
 
     # Pushing to correct device
     neural_net.to(device)
@@ -272,7 +272,7 @@ def main(**kwargs):
             print("Loss (T) = ", loss.detach().item())
 
             # Sending to wandDB
-            wandb.log({"Loss (T)": loss.detach().item()})
+            # wandb.log({"Loss (T)": loss.detach().item()})
 
             # Accumulating the loss
             training_loss += loss.detach().item()
@@ -296,7 +296,7 @@ def main(**kwargs):
         print("Loss (Training, Averaged over batch): ", training_loss / batch_steps)
 
         # Sending the loss to wandDB
-        wandb.log({"Loss (T, AOB): ": training_loss / batch_steps})
+        # wandb.log({"Loss (T, AOB): ": training_loss / batch_steps})
 
         # ----- VALIDATION -----
         with torch.no_grad():
@@ -323,7 +323,7 @@ def main(**kwargs):
                 print("Loss (V) = ", loss.detach().item())
 
                 # Sending the loss to wandDB the loss
-                wandb.log({"Loss (V)": loss.detach().item()})
+                # wandb.log({"Loss (V)": loss.detach().item()})
 
                 # Accumulating the loss
                 validation_loss += loss.detach().item()
@@ -341,8 +341,8 @@ def main(**kwargs):
             print("Loss (Validation, Averaged over batch): ", validation_loss / batch_steps)
 
             # Sending more information to wandDB
-            wandb.log({"Loss (V, AOB): ": validation_loss / batch_steps})
-            wandb.log({"Epochs : ": nb_epochs - epoch})
+            # wandb.log({"Loss (V, AOB): ": validation_loss / batch_steps})
+            # wandb.log({"Epochs : ": nb_epochs - epoch})
 
             # ---------- WandB (Metrics & Plots) ----------
             #
@@ -357,7 +357,7 @@ def main(**kwargs):
                     m_name = results_name[i] + " D(" + str(d) + ")"
 
                     # Logging
-                    wandb.log({m_name : result})
+                    # wandb.log({m_name : result})
 
             # Getting the plots
             plots, plots_name = metrics_tool.get_plots()
@@ -366,13 +366,14 @@ def main(**kwargs):
             for plot, name in zip(plots, plots_name):
 
                 # Logging
-                wandb.log({name : wandb.Image(plot)})
+                # wandb.log({name : # wandb.Image(plot)})
+                pass
 
         # Updating timing
         epoch_time = time.time() - start
 
     # Finishing the run
-    wandb.finish()
+    # wandb.finish()
 
 # ---------------------------------------------------------------------
 #
@@ -383,8 +384,16 @@ def main(**kwargs):
 # -------------
 # Possibilities
 # -------------
-# Creation of all the inputs combinations (Example : ["temperature"], ["salinity"], ["chlorophyll"], ["k_short"], ["k_long"])
-input_list = [["temperature"], ["salinity"], ["chlorophyll"], ["k_short"], ["k_long"], ["temperature", "salinity", "chlorophyll", "k_short", "k_long"]]
+# Creation of all the inputs combinations (Example : ["temperature"], ["salinity"], ["chlorophyll"], ["kshort"], ["klong"])
+input_list = [["temperature"]]
+
+# Generate all combinations
+all_combinations = []
+for r in range(1, len(input_list) + 1):
+    all_combinations.extend(combinations(input_list, r))
+
+# Convert combinations to lists
+all_combinations = [list(combination) for combination in all_combinations]
 
 # Storing all the information
 arguments = {
@@ -397,11 +406,11 @@ arguments = {
     'Window (Inputs)' : [1],
     'Window (Output)' : [1],
     'Depth'           : [150],
-    'Architecture'    : ["FCNN", "UNET"],
-    'Scaling'         : [4],
+    'Architecture'    : ["AVERAGE"],
+    'Scaling'         : [1],
     'Learning Rate'   : [0.001],
     'Kernel Size'     : [3],
-    'Batch Size'      : [16],
+    'Batch Size'      : [64],
     'Epochs'          : [20]
 }
 

@@ -145,8 +145,8 @@ class BlackSea_Dataset():
                         "salinity"    : "vosaline",
                         "oxygen"      : "DOX",
                         "chlorophyll" : "CHL",
-                        "k_short"     : "KBIOS",
-                        "k_long"      : "KBIOL"}
+                        "kshort"      : "KBIOS",
+                        "klong"       : "KBIOL"}
 
         return translations[variable]
 
@@ -225,8 +225,8 @@ class BlackSea_Dataset():
         r"""Used to retreive the data for a given variable and type (surface (2D), bottom (2D) or all (3D))"""
 
         # Security (1)
-        assert variable in ["temperature", "salinity", "oxygen", "chlorophyll", "k_short", "k_long"], f"ERROR (get_data), Incorrect variable ({variable})"
-        assert type in     ["surface", "bottom", "all"],                                              f"ERROR (get_data), Incorrect type ({type})"
+        assert variable in ["temperature", "salinity", "oxygen", "chlorophyll", "kshort", "klong"], f"ERROR (get_data), Incorrect variable ({variable})"
+        assert type in     ["surface", "bottom", "all"],                                            f"ERROR (get_data), Incorrect type ({type})"
 
         # Security (2)
         if variable in ["temperature", "salinity"]:
