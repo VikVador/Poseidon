@@ -72,22 +72,46 @@ def main(**kwargs):
     batch_size      = kwargs['Batch Size']
     nb_epochs       = kwargs['Epochs']
 
+    # ------- Parameters -------
+    #
+    # Project name on Weight and Bias
+    project_name = "esa-blacksea-deoxygenation-emulator-working"
+
+    # Size of the sets
+    size_training   = 0.6
+    size_validation = 0.3
+
+    # Treshold for detecting hypoxia
+    hypoxia_treshold = 63
+
+    # Seed to fix randomness
+    seed_of_chaos = 2701
+
     # ------- Data -------
     Dataset_phy = BlackSea_Dataset(year_start = start_year, year_end = end_year, month_start = start_month,  month_end = end_month, variable = "grid_T")
     Dataset_bio = BlackSea_Dataset(year_start = start_year, year_end = end_year, month_start = start_month,  month_end = end_month, variable = "ptrc_T")
 
-    # Loading the inputs
+    # Stores all the inputs
     input_datasets = list()
-    for inp in inputs:
-        if inp in ["temperature", "salinity"]:
-            input_datasets.append(Dataset_phy.get_data(variable = inp, type = "surface", depth = None))
-        if inp in ["chlorophyll", "kshort", "klong"]:
-            input_datasets.append(Dataset_bio.get_data(variable = inp, type = "surface", depth = None))
+
+    # Loading the inputs
+    for i in inputs:
+
+        # Checking for physical variables
+        if i in ["temperature", "salinity"]:
+            input_datasets.append(Dataset_phy.get_data(variable = i, type = "surface", depth = None))
+
+        # Checking for biogeochemical variables
+        if i in ["chlorophyll", "kshort", "klong"]:
+            input_datasets.append(Dataset_bio.get_data(variable = i, type = "surface", depth = None))
 
     # Loading the output
     data_oxygen = Dataset_bio.get_data(variable = "oxygen", type = "bottom", depth = depth)
 
-    # Loading the black sea mask
+    # Retrieving dimensions (Ease of comprehension)
+    t, x_res, y_res = data_oxygen.shape
+
+    # Loading the black sea masks
     bs_mask             = Dataset_phy.get_mask(depth = None)
     bs_mask_with_depth  = Dataset_phy.get_mask(depth = depth)
     bs_mask_complete    = get_complete_mask(data_oxygen, bs_mask_with_depth)
@@ -95,18 +119,11 @@ def main(**kwargs):
     # Loading bathymetry data (normalized between 0 and 1)
     bathy = Dataset_phy.get_depth() if "bathymetry" in inputs else None
 
-    # Loading the mesh (normalized x, y between 0 and 1)
-    mesh = Dataset_phy.get_mesh(data_oxygen.shape[1] - 2, data_oxygen.shape[2] - 2) if "mesh" in inputs else None
+    # Loading the mesh (normalized x, y between 0 and 1, -2 to be multiple of 2)
+    mesh = Dataset_phy.get_mesh(x_res - 2, y_res - 2) if "mesh" in inputs else None
 
     # Retrive the ratios of the different classes
     ratio_oxygenated, ratio_switching, ratio_hypoxia = get_ratios(bs_mask_complete)
-
-    # Size of the training and validation sets (needed for AverageNet and test set size is inferred)
-    size_training = 0.6
-    size_validation = 0.3
-
-    # Treshold for detecting hypoxia
-    hypoxia_treshold = 63
 
     # ------- Preprocessing -------
     BSD_loader = BlackSea_Dataloader(x = input_datasets,
@@ -118,12 +135,12 @@ def main(**kwargs):
                             window_out = windows_outputs,
                       hypoxia_treshold = hypoxia_treshold,
                          datasets_size = [size_training, size_validation],
-                                  seed = 2701)
+                                  seed = seed_of_chaos)
 
     # Retreiving the individual dataloader
-    dataset_train      = BSD_loader.get_dataloader("train",      bathy, mesh, batch_size = batch_size)
-    dataset_validation = BSD_loader.get_dataloader("validation", bathy, mesh, batch_size = batch_size)
-    dataset_test       = BSD_loader.get_dataloader("test",       bathy, mesh, batch_size = batch_size)
+    dataset_train      = BSD_loader.get_dataloader(type = "train",      bathy = bathy, mesh =  mesh, batch_size = batch_size)
+    dataset_validation = BSD_loader.get_dataloader(type = "validation", bathy = bathy, mesh =  mesh, batch_size = batch_size)
+    dataset_test       = BSD_loader.get_dataloader(type = "test",       bathy = bathy, mesh =  mesh, batch_size = batch_size)
 
     # Normalized oxygen treshold
     norm_oxy = BSD_loader.get_normalized_deoxygenation_treshold()
@@ -136,9 +153,6 @@ def main(**kwargs):
 
     # If we use AverageNet, i.e. a NN that only predicts the average, we need this information
     if architecture == "AVERAGE":
-
-        # Retrieving dimensions
-        t = data_oxygen.shape[0]
 
         # Number of training samples
         train_samples = int(t * size_training)
@@ -163,7 +177,7 @@ def main(**kwargs):
         else:
 
             # Converting to classification
-            average_output =  torch.from_numpy((data_oxygen[: train_samples, :-2, :-2] < hypoxia_treshold) * 1)
+            average_output = torch.from_numpy((data_oxygen[: train_samples, :-2, :-2] < hypoxia_treshold) * 1)
 
             # Summing over time, i.e. if total number of hypoxic days is greater than 50% of the time, then it is hypoxic
             average_output = (torch.sum(average_output, dim = 0) > train_samples // 2) * 1
@@ -176,23 +190,23 @@ def main(**kwargs):
     # ------------------------------------------
     #
     # ------- WandB -------
-    # wandb.init(project = "esa-blacksea-deoxygenation-emulator-test", config = kwargs)
+    wandb.init(project = project_name, config = kwargs)
 
     # Check if GPU is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Sending visual information about the dataset to WandB (1)
-    # # wandb.log({"Dataset" : # wandb.Image(get_complete_mask_plot(bs_mask_complete))})
+    wandb.log({"Dataset" : wandb.Image(get_complete_mask_plot(bs_mask_complete))})
 
     # Sending information about the dataset to WandB (1)
-    # wandb.log({"Ratio Oxygenated" : ratio_oxygenated,
-    #           "Ratio Switching"  : ratio_switching,
-    #           "Ratio Hypoxia"    : ratio_hypoxia})
+    wandb.log({"Ratio Oxygenated" : ratio_oxygenated,
+               "Ratio Switching"  : ratio_switching,
+               "Ratio Hypoxia"    : ratio_hypoxia})
 
     # Number of inputs
     nb_inputs = len(input_datasets)
-    nb_inputs = nb_inputs + 1 if "bathymetry" in inputs else nb_inputs
-    nb_inputs = nb_inputs + 2 if "mesh"       in inputs else nb_inputs
+    nb_inputs += 1 if "bathymetry" in inputs else 0
+    nb_inputs += 2 if "mesh"       in inputs else 0
 
     # Initialization of neural network and pushing it to device (GPU)
     neural_net = None
@@ -220,7 +234,7 @@ def main(**kwargs):
         raise ValueError("Unknown architecture")
 
     # Sending information about the Neural Network
-    # wandb.log({"Trainable Parameters" : neural_net.count_parameters()})
+    wandb.log({"Trainable Parameters" : neural_net.count_parameters()})
 
     # Pushing to correct device
     neural_net.to(device)
@@ -272,7 +286,7 @@ def main(**kwargs):
             print("Loss (T) = ", loss.detach().item())
 
             # Sending to wandDB
-            # wandb.log({"Loss (T)": loss.detach().item()})
+            wandb.log({"Loss (T)": loss.detach().item()})
 
             # Accumulating the loss
             training_loss += loss.detach().item()
@@ -296,7 +310,7 @@ def main(**kwargs):
         print("Loss (Training, Averaged over batch): ", training_loss / batch_steps)
 
         # Sending the loss to wandDB
-        # wandb.log({"Loss (T, AOB): ": training_loss / batch_steps})
+        wandb.log({"Loss (T, AOB): ": training_loss / batch_steps})
 
         # ----- VALIDATION -----
         with torch.no_grad():
@@ -323,7 +337,7 @@ def main(**kwargs):
                 print("Loss (V) = ", loss.detach().item())
 
                 # Sending the loss to wandDB the loss
-                # wandb.log({"Loss (V)": loss.detach().item()})
+                wandb.log({"Loss (V)": loss.detach().item()})
 
                 # Accumulating the loss
                 validation_loss += loss.detach().item()
@@ -341,8 +355,8 @@ def main(**kwargs):
             print("Loss (Validation, Averaged over batch): ", validation_loss / batch_steps)
 
             # Sending more information to wandDB
-            # wandb.log({"Loss (V, AOB): ": validation_loss / batch_steps})
-            # wandb.log({"Epochs : ": nb_epochs - epoch})
+            wandb.log({"Loss (V, AOB): ": validation_loss / batch_steps})
+            wandb.log({"Epochs : ": nb_epochs - epoch})
 
             # ---------- WandB (Metrics & Plots) ----------
             #
@@ -357,7 +371,7 @@ def main(**kwargs):
                     m_name = results_name[i] + " D(" + str(d) + ")"
 
                     # Logging
-                    # wandb.log({m_name : result})
+                    wandb.log({m_name : result})
 
             # Getting the plots
             plots, plots_name = metrics_tool.get_plots()
@@ -366,14 +380,13 @@ def main(**kwargs):
             for plot, name in zip(plots, plots_name):
 
                 # Logging
-                # wandb.log({name : # wandb.Image(plot)})
-                pass
+                wandb.log({name : wandb.Image(plot)})
 
         # Updating timing
         epoch_time = time.time() - start
 
     # Finishing the run
-    # wandb.finish()
+    wandb.finish()
 
 # ---------------------------------------------------------------------
 #
@@ -386,14 +399,6 @@ def main(**kwargs):
 # -------------
 # Creation of all the inputs combinations (Example : ["temperature"], ["salinity"], ["chlorophyll"], ["kshort"], ["klong"])
 input_list = [["temperature"]]
-
-# Generate all combinations
-all_combinations = []
-for r in range(1, len(input_list) + 1):
-    all_combinations.extend(combinations(input_list, r))
-
-# Convert combinations to lists
-all_combinations = [list(combination) for combination in all_combinations]
 
 # Storing all the information
 arguments = {
