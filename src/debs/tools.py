@@ -24,23 +24,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.patches as mpatches
 
-
-def to_device(data, device):
-    r"""Moves tensors to a chosen device (CPU or GPU)"""
-    if isinstance(data, (list, tuple)):
-        return [to_device(x, device) for x in data]
-    return data.to(device, non_blocking = True)
-
-def get_data_path(folder:str):
-    r"""Checks which path to use to get the data, i.e. if the folder is in the local version or the scratch version"""
-    # Cluster OR local
-    if os.path.exists("../../../../../../../projects/acad/bsmfc/nemo4.2.0/BSFS_BIO/"):
-        return f"../../../../../../../projects/acad/bsmfc/nemo4.2.0/BSFS_BIO/{folder}/"
-    if os.path.exists("../../data/"):
-        return f"../../data/{folder}/"
-
-    print("ERROR (get_data_path) - No path found")
-    exit()
+# ------------- Data ----------------
 
 def get_mesh_path():
     r"""Checks which path to use to get the mesh, i.e. if the folder is in the local version or the scratch version"""
@@ -54,8 +38,19 @@ def get_mesh_path():
     print("ERROR (get_mesh_path) - No path found")
     exit()
 
+def get_data_path(folder:str):
+    r"""Checks which path to use to get the data, i.e. if the folder is in the local version or the scratch version"""
+    # Cluster OR local
+    if os.path.exists("../../../../../../../projects/acad/bsmfc/nemo4.2.0/BSFS_BIO/"):
+        return f"../../../../../../../projects/acad/bsmfc/nemo4.2.0/BSFS_BIO/{folder}/"
+    if os.path.exists("../../data/"):
+        return f"../../data/{folder}/"
+
+    print("ERROR (get_data_path) - No path found")
+    exit()
+
 def get_complete_mask(data: np.array, bs_mask_with_depth: np.array):
-    r"""Used to retrieve the indices of land, oxygenated, hypoxia and switching zones (regions where, in this loaded dataset, they switch from oxygenated to hypoxia and reverse)."""
+    r"""Used to retrieve a mask highliting the land, oxygenated, hypoxia and switching zones"""
 
     # Converting to classification
     oxygen = (data < 63) * 1
@@ -98,13 +93,14 @@ def get_complete_mask_plot(mask: np.array):
     norm   = mcolors.BoundaryNorm(bounds, cmap.N)
 
     # Creation of the plot
-    fig = plt.figure(figsize = (25, 15))
+    fig = plt.figure(figsize = (15, 10))
 
     # Plot the masked array using the custom colormap
     plt.imshow(mask_without_nans, cmap = cmap, norm = norm)
     plt.grid(alpha = 0.25)
     plt.xlabel("Longitude")
     plt.ylabel("Latitude")
+    plt.tight_layout()
 
     # Create custom legend with colored patches using the custom colormap
     patches = [mpatches.Patch(color = cmap(norm(value)), label = label) for value, label in zip(values, labels)]
@@ -113,7 +109,7 @@ def get_complete_mask_plot(mask: np.array):
     return fig
 
 def get_ratios(mask: np.array):
-    r"""Used to retrieve the ratios of the different classes in the mask."""
+    r"""Used to retrieve the ratios (in %) of the different classes in the mask."""
 
     # Total number of elements (only in the observed region)
     total = mask[0 <= mask].size
@@ -128,6 +124,73 @@ def get_ratios(mask: np.array):
     switching = (mask[mask == 1].size / total) * 100
 
     return oxygenated, switching, hypoxia
+
+def get_ratios_plot(data: np.array, bs_mask_with_depth: np.array):
+    r"""Used to plot a ratios, i.e. it shows the tendency of a given region to be more oxygenated or in hypoxia."""
+
+    # Retrieving dimensions (Ease of comprehension)
+    t, x, y = data.shape
+
+    # Converting to classification
+    oxygen = (data < 63) * 1
+
+    # Counting the number of ones, i.e. number of times Hypoxia has occured
+    oxygen_hypoxia = np.sum(oxygen, axis=0)
+
+    # Creating ratios, i.e. the closer to 1 the more oxygenated
+    oxygen_hypoxia = (t - oxygen_hypoxia) / t
+
+    # Hiding unobserved regions
+    oxygen_hypoxia[bs_mask_with_depth == 0] = np.nan
+
+    # Flipping vertically to show correctly Black Sea (for you my loving oceanographer <3)
+    oxygen_hypoxia = np.flipud(oxygen_hypoxia)
+
+    # Define a custom colormap where np.nan values are mapped to grey
+    cmap = plt.cm.RdBu
+    cmap.set_bad(color = '#d6d6d6')
+    fig = plt.figure(figsize=(15, 10))
+    plt.imshow(oxygen_hypoxia, vmin=0, vmax=1, cmap=cmap)
+    plt.grid(alpha=0.25)
+    plt.xlabel("Longitude")
+    plt.ylabel("Latitude")
+    plt.tight_layout()
+
+    # Customize colorbar ticks and labels
+    cbar = plt.colorbar(fraction = 0.021, location = 'bottom', pad = 0.1)
+    cbar.set_ticks([0, 0.5, 1])
+    cbar.set_ticklabels(['Often in Hypoxia', 'Mixed', 'Often Oxygenated'])
+    plt.tight_layout()
+
+    return fig
+
+# ------------- Terminal ----------------
+def progression(epoch : int, number_epoch : int, loss_training : float, loss_training_aob : float, loss_validation : float, loss_validation_aob : float):
+    r"""Used to display the progress of the training"""
+    print(f"Epoch [{epoch}/{number_epoch}] | Loss (T): {loss_training:.4f} | Loss (T, AOB): {loss_training_aob:.4f} | Loss (V) : {loss_validation:.4f}, | Loss (V, AOB) : {loss_validation_aob:.4f}")
+
+def project_title(kwargs : dict):
+    r"""Used to display information about the run"""
+    print("-------------------------------------------------------")
+    print("                                                       ")
+    print("                    ESA - PROJECT                      ")
+    print("                                                       ")
+    print("          BLACK SEA DEOXYGENATION EMULATOR             ")
+    print("                                                       ")
+    print("-------------------------------------------------------")
+    print("                                                       ")
+    for k, v in kwargs.items():
+        print(f"- {k} : {v}")
+    print("\n-----------------")
+    print("Emulator Training")
+    print("-----------------")
+
+# ------------- Others ----------------
+def to_device(data, device):
+    r"""Moves tensors to a chosen device (CPU or GPU)"""
+    if isinstance(data, (list, tuple)):
+        return [to_device(x, device) for x in data]
+    return data.to(device, non_blocking = True)
 
 def generateFakeDataset(number_of_variables: int = 5, number_of_samples: int = 14, oxygen : bool = False, resolution : int = 64, resolution_snapshot : tuple = (258, 258)):
     r"""Used to generate a list of fake datasets (numpy arrays) for testing purposes, i.e. each zone will be named to become easily recognizable"""
@@ -191,46 +254,3 @@ def generateFakeDataset(number_of_variables: int = 5, number_of_samples: int = 1
 
     # Creates a list of numpy arrays
     return [np.array(s) for s in list_fake_samples]
-
-def progressBar(loss_training, loss_validation, learning_rate, estimated_time_epoch, nb_epoch_left, percent, width = 15):
-
-    # Setting up the useful information
-    left            = width * percent // 100
-    right           = width - left
-    tags            = "-" * int(left)
-    spaces          = " " * int(right)
-    percents        = f"{percent:.2f} %"
-    loss_training   = f"{loss_training * 1:.3f}"
-    loss_validation = f"{loss_validation * 1:.3f}"
-    learning_rate   = f"{learning_rate[-1] * 1:.6f}"
-
-    # Total timing left in seconds
-    total_time_left = nb_epoch_left * estimated_time_epoch
-
-    # Contains the unit of the timer and message to be printed
-    timer_unit, estimated_time_total = str(), str()
-
-    # Conversion to hours
-    if total_time_left > 3600:
-        total_time_left      = total_time_left/3600
-        timer_unit           = "h"
-        estimated_time_total = f"{total_time_left:.0f} {timer_unit}"
-
-    # Conversion to minutes
-    elif total_time_left > 60:
-        total_time_left      = total_time_left/60
-        timer_unit           = "min"
-        estimated_time_total = f"{total_time_left:.0f} {timer_unit}"
-
-    # A few seconds left
-    else:
-        timer_unit           = "s"
-        estimated_time_total = f"{total_time_left:.0f} {timer_unit}"
-
-    # Nothing to print for now
-    if total_time_left == 0:
-        estimated_time_total = " - "
-
-    # Displaying a really cool progress bar !
-    print("\r[", tags, spaces, "] - ", percents, " | Loss (Training) = ", loss_training, " | Loss (Validation) = ", loss_validation,
-          " | LR : ", learning_rate, " | Time : ", estimated_time_total, " | ", sep = "", end = "", flush = True)

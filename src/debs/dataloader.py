@@ -15,7 +15,7 @@
 #
 # Documentation
 # -------------
-# A tool to create a dataloader for Black Sea dataset, i.e. used for training, validating and testing the model
+# A tool to preprocess data and create a dataloader, i.e. used for training, validating and testing the model
 #
 import numpy as np
 
@@ -26,7 +26,7 @@ from   torch.utils.data import DataLoader
 
 
 class BlackSea_Dataloader():
-    r"""A dataloader for Black Sea dataset, i.e. used to generate training, validating and testing sets."""
+    r"""A tool to preprocess data and create a dataloader, i.e. used for training, validating and testing the model"""
 
     def __init__(self, x: list,
                        y: np.array,
@@ -161,22 +161,17 @@ class BlackSea_Dataloader():
         return self.normalized_deoxygenation_treshold
 
     def get_number_of_batches(self, type: str, batch_size: int = 64):
-        r"""Returns the number of batches for the given type, i.e. training, validation or test"""
-
-         # Security
-        assert type in ["train", "validation", "test"], f"ERROR (BlackSea_Dataloader) Type must be either 'train', 'validation' or 'test' ({type})"
-
-        # Computing the total number of batches
+        r"""Returns the number of batches in a given dataset, i.e. training, validation or test"""
         return int(getattr(self, f"x_{type}").shape[0] // batch_size + 1)
 
     def get_dataloader(self, type: str, bathy : torch.Tensor = None, mesh : torch.Tensor = None, batch_size: int = 64):
-        r"""Returns the dataloader for the given type, i.e. training, validation or test"""
+        r"""Creates and returns a dataloader for a given type, i.e. training, validation or test"""
 
         # Security
         assert type in ["train", "validation", "test"], f"ERROR (BlackSea_Dataloader) Type must be either 'train', 'validation' or 'test' ({type})"
 
         class BS_Dataset(Dataset):
-            r"""A simple pytorch dataloader"""
+            r"""A custom pytorch dataloader"""
 
             def __init__(self, x: np.array, y: np.array, bathy : np.array = None, mesh : np.array = None):
 

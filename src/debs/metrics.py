@@ -25,13 +25,13 @@ import torch
 
 # Torch metrics (from Pytorch Lightning)
 from torchmetrics.regression     import MeanSquaredError, PearsonCorrCoef, R2Score
-from torchmetrics.classification import BinaryAccuracy, BinaryPrecision, BinaryRecall, BinaryMatthewsCorrCoef, BinaryROC, BinaryAUROC
+from torchmetrics.classification import BinaryROC, BinaryAUROC, BinaryAccuracy, BinaryPrecision, BinaryRecall, BinaryMatthewsCorrCoef
 
 
 # ----------------------
 #        Metrics
 # ----------------------
-# Definition of new metrics (using lambdas) which do not exist in Pytorch Lightning Metrics
+# Definition of new metrics that do not exist in Pytorch Lightning Metrics
 #
 def PercentageOfBias(y_pred : np.array = None, y_true : np.array = None):
     r"""Used to compute the percentage of bias"""
@@ -146,7 +146,7 @@ class BlackSea_Metrics():
         return results + [metric(y_pred_per_day, y_true_per_day).item() for metric in self.metrics_classification]
 
     def make_plots(self, score : np.array, index_day : int, label : str, cmap : str, vminmax : tuple):
-        r"""Creates the plots based on the results"""
+        r"""Creates a custom plot for each metric"""
 
         # Hides all the regions that are not relevant for this metric
         if "Precision" in label or "Recall" in label:
@@ -277,10 +277,10 @@ class BlackSea_Metrics():
                          "Pearson Correlation Coefficient [-]"]
 
         # Definition of the range for the colorbar
-        metrics_ranges = [(0, 1), (0, 1), (-100, 100), (-1, 1)]
+        metrics_ranges = [(0, 0.1), (0, 0.1), (-100, 100), (-1, 1)]
 
         # Colors for the plots (need to have sequential colors and diverging )
-        metrics_colors = ["GnBu", "GnBu", "RdBu", "RdBu"]
+        metrics_colors = ["coolwarm", "coolwarm", "RdBu", "RdBu"]
 
         # Stores all the plots
         plots = list()
@@ -332,7 +332,7 @@ class BlackSea_Metrics():
             score[self.mask[:-2, :-2] == 0] = np.nan
 
             # Adding results, i.e. fig and name
-            scores.append(self.make_plots(score * 100, index_day, name, "RdBu", limits))
+            scores.append(self.make_plots(score * 100, index_day, name, "Spectral", limits))
 
         return scores
 

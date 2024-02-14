@@ -138,7 +138,7 @@ class BlackSea_Dataset():
         self.folder      = folder
 
     def translate(self, variable : str):
-        r"""Used to translate the variable name to the one used in the dataset"""
+        r"""Used to translate a variable name to the one used in the dataset produced by NEMO"""
 
         # Stores all the translations
         translations = {"temperature" : "votemper",
@@ -169,7 +169,7 @@ class BlackSea_Dataset():
         return xarray.open_dataset(path_mesh, engine = "h5netcdf").bathy_metry.data.astype('float32')
 
     def get_bathymetry(self):
-        r"""Used to retreive the bathymetry mask, i.e. the depth index at which we reach the bottom of the sea (2D)"""
+        r"""Used to retreive the bathymetry mask, i.e. the index (z-direction) at which we reach the bottom of the sea (2D)"""
 
         # Path to the mesh file location
         path_mesh = get_mesh_path()

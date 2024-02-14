@@ -35,7 +35,7 @@ from metrics                  import BlackSea_Metrics
 from neural_networks.FCNN     import FCNN
 from neural_networks.UNET     import UNET
 from neural_networks.AVERAGE  import AVERAGE
-from tools                    import to_device, get_complete_mask, get_complete_mask_plot, get_ratios
+from tools                    import *
 
 # Dawgz library (used to parallelized the jobs)
 from dawgz import job, schedule
@@ -75,7 +75,7 @@ def main(**kwargs):
     # ------- Parameters -------
     #
     # Project name on Weight and Bias
-    project_name = "esa-blacksea-deoxygenation-emulator-working"
+    project_name = "esa-blacksea-deoxygenation-emulator-test-bceloss"
 
     # Size of the sets
     size_training   = 0.6
@@ -195,13 +195,13 @@ def main(**kwargs):
     # Check if GPU is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Sending visual information about the dataset to WandB (1)
-    wandb.log({"Dataset" : wandb.Image(get_complete_mask_plot(bs_mask_complete))})
-
     # Sending information about the dataset to WandB (1)
-    wandb.log({"Ratio Oxygenated" : ratio_oxygenated,
-               "Ratio Switching"  : ratio_switching,
-               "Ratio Hypoxia"    : ratio_hypoxia})
+    wandb.log({"Dataset & Architecture/Dataset (Visualisation, Regions)" : wandb.Image(get_complete_mask_plot(bs_mask_complete)),
+                "Dataset & Architecture/Dataset (Visualisation, Ratios)"  : wandb.Image(get_ratios_plot(data_oxygen, bs_mask_with_depth)),
+                "Dataset & Architecture/Ratio Oxygenated"                 : ratio_oxygenated,
+                "Dataset & Architecture/Ratio Switching"                  : ratio_switching,
+                "Dataset & Architecture/Ratio Hypoxia"                    : ratio_hypoxia})
+
 
     # Number of inputs
     nb_inputs = len(input_datasets)
@@ -234,14 +234,21 @@ def main(**kwargs):
         raise ValueError("Unknown architecture")
 
     # Sending information about the Neural Network
-    wandb.log({"Trainable Parameters" : neural_net.count_parameters()})
+    wandb.log({"Dataset & Architecture/Trainable Parameters" : neural_net.count_parameters()})
 
     # Pushing to correct device
     neural_net.to(device)
 
+    # Custom weights for the loss function
+    w = torch.unsqueeze(torch.tensor([1, 10]), 1)
+    criterion = torch.nn.BCEWithLogitsLoss(pos_weight = w)
+
     # Initialization of the optimizer and the loss function
     optimizer  = optim.Adam(neural_net.parameters(), lr = learning_rate)
-    criterion  = nn.MSELoss() if problem == "regression" else nn.BCELoss()
+    criterion  = nn.MSELoss() if problem == "regression" else nn.BCEWithLogitsLoss(pos_weight = w)
+
+    # Information over terminal (1)
+    project_title(kwargs)
 
     # Used to compute time left
     epoch_time = 0.0
@@ -249,16 +256,12 @@ def main(**kwargs):
     # Starting training !
     for epoch in range(nb_epochs):
 
-        # Information over terminal (1)
-        print("\n") if epoch == 0 else print("")
-        print("Epoch : ", epoch + 1, "/", nb_epochs, "\n")
-
         # Used to approximate time left for current epoch and in total
         start = time.time()
 
         # Used to store instantaneous loss and compute the average per batch (AOB) training loss
-        training_loss = 0.0
-        batch_steps   = 0
+        training_loss        = 0.0
+        training_batch_steps = 0
 
         # Used to compute our metrics
         metrics_tool = BlackSea_Metrics(mode = problem,
@@ -277,19 +280,35 @@ def main(**kwargs):
             pred = neural_net.forward(x)
 
             # Determine the indices of the valid samples, i.e. inside the observed region (-1 is the masked region)
-            indices = torch.where(y != -1)
+            indices = y[0, 0, 0] != -1
+
+            # Reshaping the data
+            pred1 = pred[:, :, :, indices]
+            y1    =    y[:, :, :, indices]
+
+            #  Dimensions for ease of comprehension
+            b, d, c, xy = pred1.shape
+
+            # Reshaping the data
+            pred1 = pred1.reshape(b * d, c, -1)
+            y1    =    y1.reshape(b * d, c, -1)
 
             # Computing the loss
-            loss = criterion(pred[indices], y[indices])
+            loss_t = criterion(pred1, y1)
 
             # Information over terminal (2)
-            print("Loss (T) = ", loss.detach().item())
+            progression(epoch               = epoch,
+                        number_epoch        = nb_epochs,
+                        loss_training       = loss_t.detach().item(),
+                        loss_training_aob   = 0,
+                        loss_validation     = 0,
+                        loss_validation_aob = 0)
 
             # Sending to wandDB
-            wandb.log({"Loss (T)": loss.detach().item()})
+            wandb.log({"Training/Loss (T)": loss_t.detach().item()})
 
             # Accumulating the loss
-            training_loss += loss.detach().item()
+            training_loss += loss_t.detach().item()
 
             # No needs for AverageNet !
             if architecture != "AVERAGE":
@@ -298,26 +317,31 @@ def main(**kwargs):
                 optimizer.zero_grad()
 
                 # Backward pass
-                loss.backward()
+                loss_t.backward()
 
                 # Optimizing the parameters
                 optimizer.step()
 
             # Updating epoch information
-            batch_steps += 1
+            training_batch_steps += 1
 
         # Information over terminal (3)
-        print("Loss (Training, Averaged over batch): ", training_loss / batch_steps)
+        progression(epoch               = epoch,
+                    number_epoch        = nb_epochs,
+                    loss_training       = loss_t.detach().item(),
+                    loss_training_aob   = training_loss / training_batch_steps,
+                    loss_validation     = 0,
+                    loss_validation_aob = 0)
 
         # Sending the loss to wandDB
-        wandb.log({"Loss (T, AOB): ": training_loss / batch_steps})
+        wandb.log({"Training/Loss (Training): ": training_loss / training_batch_steps})
 
         # ----- VALIDATION -----
         with torch.no_grad():
 
             # Used to store instantaneous loss and compute the average per batch (AOB) training loss
-            validation_loss = 0.0
-            batch_steps = 0
+            validation_loss        = 0.0
+            validation_batch_steps = 0
 
             for x, y in dataset_validation:
 
@@ -328,35 +352,56 @@ def main(**kwargs):
                 pred = neural_net.forward(x)
 
                 # Determine the indices of the valid samples, i.e. inside the observed region (-1 is the masked region)
-                indices = torch.where(y != -1)
+                indices = y[0, 0, 0] != -1
+
+                # Reshaping the data
+                pred2 = pred[:, :, :, indices]
+                y2    =    y[:, :, :, indices]
+
+                #  Dimensions for ease of comprehension
+                b, d, c, xy = pred2.shape
+
+                # Reshaping the data
+                pred2 = pred2.reshape(b * d, c, -1)
+                y2    =    y2.reshape(b * d, c, -1)
 
                 # Computing the loss
-                loss = criterion(pred[indices], y[indices])
+                loss_v = criterion(pred2, y2)
 
                 # Information over terminal (4)
-                print("Loss (V) = ", loss.detach().item())
+                progression(epoch               = epoch,
+                            number_epoch        = nb_epochs,
+                            loss_training       = loss_t.detach().item(),
+                            loss_training_aob   = training_loss / training_batch_steps,
+                            loss_validation     = loss_v.detach().item(),
+                            loss_validation_aob = 0)
 
                 # Sending the loss to wandDB the loss
-                wandb.log({"Loss (V)": loss.detach().item()})
+                wandb.log({"Training/Loss (V)": loss_v.detach().item()})
 
                 # Accumulating the loss
-                validation_loss += loss.detach().item()
+                validation_loss += loss_v.detach().item()
 
                 # Used to compute the metrics
                 metrics_tool.compute_metrics(y_pred = pred.cpu(), y_true = y.cpu())
 
                 # Visual inspection (Only on the first batch)
-                metrics_tool.compute_plots(y_pred = pred.cpu(), y_true = y.cpu()) if batch_steps == 0 else None
+                metrics_tool.compute_plots(y_pred = pred.cpu(), y_true = y.cpu()) if validation_batch_steps == 0 else None
 
                 # Updating epoch information
-                batch_steps += 1
+                validation_batch_steps += 1
 
             # Information over terminal (5)
-            print("Loss (Validation, Averaged over batch): ", validation_loss / batch_steps)
+            progression(epoch               = epoch,
+                        number_epoch        = nb_epochs,
+                        loss_training       = loss_t.detach().item(),
+                        loss_training_aob   = training_loss / training_batch_steps,
+                        loss_validation     = loss_v.detach().item(),
+                        loss_validation_aob = validation_loss / validation_batch_steps)
 
             # Sending more information to wandDB
-            wandb.log({"Loss (V, AOB): ": validation_loss / batch_steps})
-            wandb.log({"Epochs : ": nb_epochs - epoch})
+            wandb.log({"Training/Loss (Validation): ": validation_loss / validation_batch_steps})
+            wandb.log({"Training/Epochs : ": nb_epochs - epoch})
 
             # ---------- WandB (Metrics & Plots) ----------
             #
@@ -367,11 +412,11 @@ def main(**kwargs):
             for d, day_results in enumerate(results):
                 for i, result in enumerate(day_results):
 
-                    # Current name of metric with corresponding day
-                    m_name = results_name[i] + " D(" + str(d) + ")"
+                    # Metric with corresponding forecasted day (Only if more than 1 day is forecasted)
+                    m_name = results_name[i] + " D(" + str(d) + ")" if windows_outputs > 1 else results_name[i]
 
                     # Logging
-                    wandb.log({m_name : result})
+                    wandb.log({f"Metrics/{m_name}" : result})
 
             # Getting the plots
             plots, plots_name = metrics_tool.get_plots()
@@ -380,10 +425,14 @@ def main(**kwargs):
             for plot, name in zip(plots, plots_name):
 
                 # Logging
-                wandb.log({name : wandb.Image(plot)})
+                wandb.log({f"Visualization/{name}" : wandb.Image(plot)})
+                pass
 
         # Updating timing
         epoch_time = time.time() - start
+
+        # Sending time left to WandB
+        wandb.log({"Training/Time (left) : ": (nb_epochs - epoch) * epoch_time})
 
     # Finishing the run
     wandb.finish()
@@ -563,7 +612,9 @@ if __name__ == "__main__":
     if args.dawgz == "True":
 
         # Information over terminal
-        print("Running with dawgz")
+        print("------------------------")
+        print("----- Using Dawgz ------")
+        print("------------------------\n\n")
 
         # Running the jobs
         schedule(train_model, name = 'neural_network_training', backend = 'slurm', export = 'ALL')
@@ -572,7 +623,10 @@ if __name__ == "__main__":
     else:
 
         # Information over terminal
-        print("Running without dawgz")
+        print("----------------------------")
+        print("----- Not Using Dawgz ------")
+        print("----------------------------\n\n")
+
 
         # Storing all the information
         arguments = {
@@ -600,7 +654,7 @@ if __name__ == "__main__":
         }
 
         # Adding boolean information about variable used (wandb cannot handle a list for parameters plotting)
-        for v in ["temperature", "salinity", "chlorophyll", "kshort", "klong"]:
+        for v in ["temperature", "salinity", "chlorophyll", "kshort", "klong", "mesh", "bathymetry"]:
             arguments[v] = True if v in arguments['Inputs'] else False
 
         # Launching the main
