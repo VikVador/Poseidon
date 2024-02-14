@@ -109,9 +109,7 @@ class UNET(nn.Module):
             # Reshaping
             x = x.reshape(b, self.n_out // 2, 2, x_res, y_res)
 
-            # Turning to probabilities
-            sf = nn.Softmax(dim = 2)
-            x  = sf(x)
+            # Note: The BCELosswithdigits applies a sigmoid function on the output thus we do not need to apply it ourselves
 
         return x
 

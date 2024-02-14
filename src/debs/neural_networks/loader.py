@@ -59,9 +59,9 @@ def load_neural_network(architecture : str, data_output : np.array, device : str
                    problem = problem).to(device)
 
     elif architecture == "AVERAGE":
-        return AVERAGE(average = data_output,
-                    outputs    = windows_outputs,
-                    batch_size = batch_size,
-                    device     = device).to(device)
+        return AVERAGE(data_output = data_output,
+                            device = device,
+                            kwargs = kwargs).to(device)
+
     else:
         raise ValueError("Unknown architecture")

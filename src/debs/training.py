@@ -58,19 +58,21 @@ def main(**kwargs):
     # ------------------------------------------
     #
     # ------- Arguments -------
-    start_month     = kwargs['month_start']
-    end_month       = kwargs['month_end']
-    start_year      = kwargs['year_start']
-    end_year        = kwargs['year_end']
-    inputs          = kwargs['Inputs']
-    problem         = kwargs['Problem']
-    windows_inputs  = kwargs['Window (Inputs)']
-    windows_outputs = kwargs['Window (Output)']
-    depth           = kwargs['Depth']
-    architecture    = kwargs['Architecture']
-    learning_rate   = kwargs['Learning Rate']
-    batch_size      = kwargs['Batch Size']
-    nb_epochs       = kwargs['Epochs']
+    start_month      = kwargs['month_start']
+    end_month        = kwargs['month_end']
+    start_year       = kwargs['year_start']
+    end_year         = kwargs['year_end']
+    inputs           = kwargs['Inputs']
+    problem          = kwargs['Problem']
+    windows_inputs   = kwargs['Window (Inputs)']
+    windows_outputs  = kwargs['Window (Output)']
+    depth            = kwargs['Depth']
+    hypoxia_treshold = kwargs['Hypoxia Treshold']
+    architecture     = kwargs['Architecture']
+    learning_rate    = kwargs['Learning Rate']
+    batch_size       = kwargs['Batch Size']
+    dataset_size     = kwargs['Dataset Size']
+    nb_epochs        = kwargs['Epochs']
 
     # ------- Parameters -------
     #
@@ -78,11 +80,7 @@ def main(**kwargs):
     project_name = "esa-blacksea-deoxygenation-emulator-test-bceloss"
 
     # Size of the different datasets
-    size_training   = 0.6
-    size_validation = 0.3
-
-    # Treshold for detecting hypoxia
-    hypoxia_treshold = 63
+    size_training, size_validation = dataset_size[0], dataset_size[1]
 
     # Seed to fix randomness
     seed_of_chaos = 2701
@@ -148,48 +146,6 @@ def main(**kwargs):
     # Number of batches in training set (used for averaging metrics over the batches)
     num_batches_train = BSD_loader.get_number_of_batches(type = "train", batch_size = batch_size)
 
-    # --------------- TO BE REMOVED -------------------
-    #
-    # -------- AverageNet ----------
-    average_output = None
-
-    # If we use AverageNet, i.e. a NN that only predicts the average, we need this information
-    if architecture == "AVERAGE":
-
-        # Number of training samples
-        train_samples = int(t * size_training)
-
-        # ----- Regression ------
-        if problem == "regression":
-
-            # Determine the minimum and maximum values of the data
-            min_value = np.nanmin(data_oxygen)
-            max_value = np.nanmax(data_oxygen)
-
-            # Rescale the data to ensure non-negative values
-            average_output = data_oxygen + np.abs(min_value) if min_value < 0 else data_oxygen
-
-            # Normalizing the data
-            average_output = (average_output - min_value) / (max_value - min_value)
-
-            # Average concentration
-            average_output = torch.mean(torch.from_numpy(average_output[: train_samples, :-2, :-2]), dim = 0)
-
-        # ----- Classification ------
-        else:
-
-            # Converting to classification
-            average_output = torch.from_numpy((data_oxygen[: train_samples, :-2, :-2] < hypoxia_treshold) * 1)
-
-            # Summing over time, i.e. if total number of hypoxic days is greater than 50% of the time, then it is hypoxic
-            average_output = (torch.sum(average_output, dim = 0) > train_samples // 2) * 1
-
-            # Conversion to "probabilities", i.e. (t, x, y) to (t, c, x, y) with c = 0 no hypoxia, c = 1 hypoxia
-            average_output = torch.stack([(average_output == 0) * 1, average_output]).float()
-
-    # --------------- TO BE REMOVED -------------------
-
-
     # ------------------------------------------
     #
     #                   TRAINING
@@ -211,7 +167,7 @@ def main(**kwargs):
 
     # Initialization of neural network and pushing it to correct device
     neural_net = load_neural_network(architecture = architecture,
-                                     data_output  = average_output,
+                                     data_output  = data_oxygen,
                                      device       = device,
                                      kwargs       = kwargs)
 
@@ -286,6 +242,8 @@ def main(**kwargs):
             # Optimizing the parameters
             optimizer.step()
 
+            break
+
         # Information over terminal (3)
         progression(epoch = epoch,
                     number_epoch        = nb_epochs,
@@ -328,6 +286,9 @@ def main(**kwargs):
 
                 # Accumulating the loss
                 validation_loss += loss_v.detach().item()
+
+                # Transforming to probabilities (not done in forward pass because BCEWithLogitsLoss does it for us)
+                x = nn.Softmax(dim = 2)(pred) if problem == "classification" else pred
 
                 # Moving to CPU
                 pred, y = pred.cpu(), y.cpu()
@@ -511,6 +472,12 @@ if __name__ == "__main__":
         default = 200)
 
     parser.add_argument(
+        '--hypoxia_treshold',
+        help    = 'The concentration treshold used to detect hypoxia, i.e. here it is set to 63 mmol/m^3 (see M. Grégoire & al. 2017, Biogeosciences, 14, 1733-1752)',
+        type    = int,
+        default = 63)
+
+    parser.add_argument(
         '--architecture',
         help    = 'The neural network architecture to be used',
         type    = str,
@@ -548,6 +515,13 @@ if __name__ == "__main__":
         help    = 'The batch size used for the training',
         type    = int,
         default = 64)
+
+    parser.add_argument(
+        '--dataset_size',
+        help    = "The size of the dataset used for the training and validation datasets, i.e. for example [0.6, 0.3, inferred]",
+        nargs   = '+',
+        type    = float,
+        default = [0.6, 0.3])
 
     parser.add_argument(
         '--epochs',
@@ -589,26 +563,28 @@ if __name__ == "__main__":
         arguments = {
 
             # Temporal Information
-            'month_start'     : args.start_month,
-            'month_end'       : args.end_month,
-            'year_start'      : args.start_year,
-            'year_end'        : args.end_year,
+            'month_start'      : args.start_month,
+            'month_end'        : args.end_month,
+            'year_start'       : args.start_year,
+            'year_end'         : args.end_year,
 
             # Datasets
-            "Inputs"          : args.inputs,
-            "Problem"         : args.problem,
-            "Window (Inputs)" : args.windows_inputs,
-            "Window (Output)" : args.windows_outputs,
-            "Depth"           : args.depth,
+            "Inputs"           : args.inputs,
+            "Problem"          : args.problem,
+            "Window (Inputs)"  : args.windows_inputs,
+            "Window (Output)"  : args.windows_outputs,
+            "Depth"            : args.depth,
+            "Hypoxia Treshold" : args.hypoxia_treshold,
 
             # Training
-            "Architecture"    : args.architecture,
-            "Scaling"         : args.scaling,
-            "Kernel Size"     : args.kernel_size,
-            "Loss Weights"    : args.loss_weights,
-            "Learning Rate"   : args.learning_rate,
-            "Batch Size"      : args.batch_size,
-            "Epochs"          : args.epochs
+            "Architecture"     : args.architecture,
+            "Scaling"          : args.scaling,
+            "Kernel Size"      : args.kernel_size,
+            "Loss Weights"     : args.loss_weights,
+            "Learning Rate"    : args.learning_rate,
+            "Batch Size"       : args.batch_size,
+            "Dataset Size"     : args.dataset_size,
+            "Epochs"           : args.epochs
         }
 
         # Adding boolean information about variable used (wandb cannot handle a list for parameters plotting)
