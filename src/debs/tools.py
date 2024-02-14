@@ -167,7 +167,7 @@ def get_ratios_plot(data: np.array, bs_mask_with_depth: np.array):
 # ------------- Terminal ----------------
 def progression(epoch : int, number_epoch : int, loss_training : float, loss_training_aob : float, loss_validation : float, loss_validation_aob : float):
     r"""Used to display the progress of the training"""
-    print(f"Epoch [{epoch}/{number_epoch}] | Loss (T): {loss_training:.4f} | Loss (T, AOB): {loss_training_aob:.4f} | Loss (V) : {loss_validation:.4f}, | Loss (V, AOB) : {loss_validation_aob:.4f}")
+    print(f"Epoch [{epoch + 1}/{number_epoch}] | Loss (T): {loss_training:.4f} | Loss (T, AOB): {loss_training_aob:.4f} | Loss (V) : {loss_validation:.4f}, | Loss (V, AOB) : {loss_validation_aob:.4f}")
 
 def project_title(kwargs : dict):
     r"""Used to display information about the run"""
