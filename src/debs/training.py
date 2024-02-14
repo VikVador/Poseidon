@@ -77,7 +77,7 @@ def main(**kwargs):
     # ------- Parameters -------
     #
     # Project name on Weights and Biases
-    project_name = "esa-blacksea-deoxygenation-emulator-test-bceloss"
+    project_name = "esa-blacksea-deoxygenation-emulator-testing"
 
     # Size of the different datasets
     size_training, size_validation = dataset_size[0], dataset_size[1]
@@ -153,17 +153,17 @@ def main(**kwargs):
     # ------------------------------------------
     #
     # ------- WandB -------
-    # wandb.init(project = project_name, config = kwargs)
+    wandb.init(project = project_name, config = kwargs)
 
     # Check if GPU is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Sending information about the dataset to WandB (1)
-    # wandb.log({"Dataset & Architecture/Dataset (Visualisation, Regions)" : # wandb.Image(get_complete_mask_plot(bs_mask_complete)),
-                #"Dataset & Architecture/Dataset (Visualisation, Ratios)"  : # wandb.Image(get_ratios_plot(data_oxygen, bs_mask_with_depth)),
-                #"Dataset & Architecture/Ratio Oxygenated"                 : ratio_oxygenated,
-                #"Dataset & Architecture/Ratio Switching"                  : ratio_switching,
-                #"Dataset & Architecture/Ratio Hypoxia"                    : ratio_hypoxia})
+    wandb.log({"Dataset & Architecture/Dataset (Visualisation, Regions)" : wandb.Image(get_complete_mask_plot(bs_mask_complete)),
+               "Dataset & Architecture/Dataset (Visualisation, Ratios)"  : wandb.Image(get_ratios_plot(data_oxygen, bs_mask_with_depth)),
+               "Dataset & Architecture/Ratio Oxygenated"                 : ratio_oxygenated,
+               "Dataset & Architecture/Ratio Switching"                  : ratio_switching,
+               "Dataset & Architecture/Ratio Hypoxia"                    : ratio_hypoxia})
 
     # Initialization of neural network and pushing it to correct device
     neural_net = load_neural_network(architecture = architecture,
@@ -172,7 +172,7 @@ def main(**kwargs):
                                      kwargs       = kwargs)
 
     # Sending information about the Neural Network
-    # wandb.log({"Dataset & Architecture/Trainable Parameters" : neural_net.count_parameters()})
+    wandb.log({"Dataset & Architecture/Trainable Parameters" : neural_net.count_parameters()})
 
     # Initialization of the optimizer and the loss function
     optimizer  = optim.Adam(neural_net.parameters(), lr = learning_rate)
@@ -221,7 +221,7 @@ def main(**kwargs):
                         loss_validation_aob = 0)
 
             # Sending to wandDB
-            # wandb.log({"Training/Loss (T)": loss_t.detach().item()})
+            wandb.log({"Training/Loss (T)": loss_t.detach().item()})
 
             # Accumulating the loss
             training_loss += loss_t.detach().item()
@@ -253,7 +253,7 @@ def main(**kwargs):
                     loss_validation_aob = 0)
 
         # Sending the loss to wandDB
-        # wandb.log({"Training/Loss (Training): ": training_loss / training_batch_steps})
+        wandb.log({"Training/Loss (Training): ": training_loss / training_batch_steps})
 
         # ----- VALIDATION -----
         with torch.no_grad():
@@ -282,7 +282,7 @@ def main(**kwargs):
                             loss_validation_aob = 0)
 
                 # Sending the loss to wandDB the loss
-                # wandb.log({"Training/Loss (V)": loss_v.detach().item()})
+                wandb.log({"Training/Loss (V)": loss_v.detach().item()})
 
                 # Accumulating the loss
                 validation_loss += loss_v.detach().item()
@@ -311,8 +311,8 @@ def main(**kwargs):
                         loss_validation_aob = validation_loss / validation_batch_steps)
 
             # Sending more information to wandDB
-            # wandb.log({"Training/Loss (Validation)": validation_loss / validation_batch_steps,
-            #            "Training/Epochs"           : nb_epochs - epoch})
+            wandb.log({"Training/Loss (Validation)": validation_loss / validation_batch_steps,
+                       "Training/Epochs"           : nb_epochs - epoch})
 
             # ---------- WandB (Metrics & Plots) ----------
             #
@@ -327,7 +327,7 @@ def main(**kwargs):
                     m_name = results_name[i] + " D(" + str(d) + ")" if windows_outputs > 1 else results_name[i]
 
                     # Logging
-                    # wandb.log({f"Metrics/{m_name}" : result})
+                    wandb.log({f"Metrics/{m_name}" : result})
 
             # Getting the plots
             plots, plots_name = metrics_tool.get_plots()
@@ -336,17 +336,17 @@ def main(**kwargs):
             for plot, name in zip(plots, plots_name):
 
                 # Logging
-                # wandb.log({f"Visualization/{name}" : # wandb.Image(plot)})
+                wandb.log({f"Visualization/{name}" : wandb.Image(plot)})
                 pass
 
         # Updating timing
         epoch_time = time.time() - start
 
         # Sending time left to WandB
-        # wandb.log({"Training/Time Left": (nb_epochs - epoch) * epoch_time})
+        wandb.log({"Training/Time Left": (nb_epochs - epoch) * epoch_time})
 
     # Finishing the Weight and Biases run
-    # wandb.finish()
+    wandb.finish()
 
 # ---------------------------------------------------------------------
 #
@@ -365,16 +365,17 @@ arguments = {
     'month_start'     : [0],
     'month_end'       : [12],
     'year_start'      : [0],
-    'year_end'        : [9],
+    'year_end'        : [0],
     'Inputs'          : input_list,
     'Problem'         : ["regression", "classification"],
     'Window (Inputs)' : [1],
     'Window (Output)' : [1],
-    'Depth'           : [150],
-    'Architecture'    : ["AVERAGE"],
+    'Depth'           : [200],
+    'Architecture'    : ["FCNN", "UNET", "AVERAGE"],
     'Scaling'         : [1],
-    'Learning Rate'   : [0.001],
     'Kernel Size'     : [3],
+    'Loss Weights'    : [[1, 1], [1, 2], [1, 5], [1, 10]],
+    'Learning Rate'   : [0.001],
     'Batch Size'      : [64],
     'Epochs'          : [20]
 }
@@ -388,7 +389,7 @@ param_dicts = [dict(zip(arguments.keys(), combo)) for combo in param_combination
 # ----
 # Jobs
 # ----
-@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '512GB', time = '6:00:00', project = 'bsmfc', partition = "ia", user = 'vmangeleer@uliege.be', type = 'FAIL')
+@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '128GB', time = '1:00:00', project = 'bsmfc', partition = "debug-gpu", user = 'vmangeleer@uliege.be', type = 'FAIL')
 def train_model(i: int):
 
     # Launching the main
