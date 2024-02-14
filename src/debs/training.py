@@ -210,7 +210,7 @@ def main(**kwargs):
             pred = neural_net.forward(x)
 
             # Computing the loss
-            loss_t = compute_loss(y_pred = pred, y_true = y, problem = problem, kwargs = kwargs)
+            loss_t = compute_loss(y_pred = pred, y_true = y, problem = problem, device = device, kwargs = kwargs)
 
             # Information over terminal (2)
             progression(epoch = epoch,
@@ -242,8 +242,6 @@ def main(**kwargs):
             # Optimizing the parameters
             optimizer.step()
 
-            break
-
         # Information over terminal (3)
         progression(epoch = epoch,
                     number_epoch        = nb_epochs,
@@ -271,7 +269,7 @@ def main(**kwargs):
                 pred = neural_net.forward(x)
 
                 # Computing the loss
-                loss_v = compute_loss(y_pred = pred, y_true = y, problem = problem, kwargs = kwargs)
+                loss_v = compute_loss(y_pred = pred, y_true = y, problem = problem, device = device, kwargs = kwargs)
 
                 # Information over terminal (4)
                 progression(epoch = epoch,
@@ -367,17 +365,19 @@ arguments = {
     'year_start'      : [0],
     'year_end'        : [0],
     'Inputs'          : input_list,
-    'Problem'         : ["regression", "classification"],
+    'Problem'         : ["classification"],
     'Window (Inputs)' : [1],
     'Window (Output)' : [1],
+    'Hypoxia Treshold': [63],
     'Depth'           : [200],
-    'Architecture'    : ["FCNN", "UNET", "AVERAGE"],
-    'Scaling'         : [1],
+    'Architecture'    : ["FCNN", "UNET"],
+    'Scaling'         : [4],
     'Kernel Size'     : [3],
     'Loss Weights'    : [[1, 1], [1, 2], [1, 5], [1, 10]],
     'Learning Rate'   : [0.001],
     'Batch Size'      : [64],
-    'Epochs'          : [20]
+    'Dataset Size'    : [[0.6, 0.3]],
+    'Epochs'          : [10],
 }
 
 # Generate all combinations
@@ -389,7 +389,7 @@ param_dicts = [dict(zip(arguments.keys(), combo)) for combo in param_combination
 # ----
 # Jobs
 # ----
-@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '128GB', time = '1:00:00', project = 'bsmfc', partition = "debug-gpu", user = 'vmangeleer@uliege.be', type = 'FAIL')
+@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '128GB', time = '00:30:00', project = 'bsmfc', partition = "gpu", user = 'vmangeleer@uliege.be', type = 'FAIL')
 def train_model(i: int):
 
     # Launching the main
