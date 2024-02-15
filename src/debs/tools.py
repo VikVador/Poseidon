@@ -19,6 +19,7 @@
 #
 import os
 import cv2
+import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
@@ -191,6 +192,21 @@ def to_device(data, device):
     if isinstance(data, (list, tuple)):
         return [to_device(x, device) for x in data]
     return data.to(device, non_blocking = True)
+
+def get_video(data: np.array):
+    r"""Used to transform array into a video"""
+
+    # Assuming 'tensor' is your tensor of shape (t, x, y)
+    tensor = torch.from_numpy(data)
+
+    # Reshape the tensor to add a channel dimension
+    tensor_reshaped = torch.unsqueeze(tensor, dim=1)
+
+    # Expand the tensor along the new channel dimension
+    tensor_expanded = tensor_reshaped.expand(-1, 3, -1, -1)
+
+    # Returning tensor to numpy (Needed by WandB)
+    return tensor_expanded.numpy()
 
 def generateFakeDataset(number_of_variables: int = 5, number_of_samples: int = 14, oxygen : bool = False, resolution : int = 64, resolution_snapshot : tuple = (258, 258)):
     r"""Used to generate a list of fake datasets (numpy arrays) for testing purposes, i.e. each zone will be named to become easily recognizable"""

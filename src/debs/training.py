@@ -77,7 +77,7 @@ def main(**kwargs):
     # ------- Parameters -------
     #
     # Project name on Weights and Biases
-    project_name = "esa-blacksea-deoxygenation-emulator-testing"
+    project_name = "esa-blacksea-deoxygenation-emulator-one-month"
 
     # Size of the different datasets
     size_training, size_validation = dataset_size[0], dataset_size[1]
@@ -159,11 +159,12 @@ def main(**kwargs):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Sending information about the dataset to WandB (1)
-    wandb.log({"Dataset & Architecture/Dataset (Visualisation, Regions)" : wandb.Image(get_complete_mask_plot(bs_mask_complete)),
-               "Dataset & Architecture/Dataset (Visualisation, Ratios)"  : wandb.Image(get_ratios_plot(data_oxygen, bs_mask_with_depth)),
-               "Dataset & Architecture/Ratio Oxygenated"                 : ratio_oxygenated,
-               "Dataset & Architecture/Ratio Switching"                  : ratio_switching,
-               "Dataset & Architecture/Ratio Hypoxia"                    : ratio_hypoxia})
+    wandb.log({"Dataset & Architecture/Dataset (Visualisation, Image, Regions)" : wandb.Image(get_complete_mask_plot(bs_mask_complete)),
+               "Dataset & Architecture/Dataset (Visualisation, Image, Ratios)"  : wandb.Image(get_ratios_plot(data_oxygen, bs_mask_with_depth)),
+               "Dataset & Architecture/Dataset (Visualisation, Video, Oxygen)"  : wandb.Video(get_video(data = data_oxygen), fps = 4),
+               "Dataset & Architecture/Ratio Oxygenated"                        : ratio_oxygenated,
+               "Dataset & Architecture/Ratio Switching"                         : ratio_switching,
+               "Dataset & Architecture/Ratio Hypoxia"                           : ratio_hypoxia})
 
     # Initialization of neural network and pushing it to correct device
     neural_net = load_neural_network(architecture = architecture,
