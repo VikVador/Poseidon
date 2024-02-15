@@ -374,3 +374,60 @@ class BlackSea_Metrics():
         fig_name = "Area Under The Curve (D" + str(index_day) + ")"
 
         return [fig]
+
+    def compute_plots_comparison(self, y_pred : torch.tensor, y_true : torch.tensor):
+        """Plot and compare two tensors"""
+
+        def convert_prob_to_classification(tensor : torch.tensor):
+            """Convert probabilities to classification"""
+            if len(tensor.shape) == 5:
+                mask = tensor[0, 0, 0] == -1
+                tensor = torch.argmax(tensor, dim=2)
+            else:
+                mask = (tensor[0, 0] == -1) * 1
+            return tensor, mask
+
+        # Determining the type of problem
+        prob_type = len(y_pred.shape)
+
+        # Defining color map
+        cmap = "viridis" if prob_type == 4 else "viridis"
+
+        # Convert probabilities to classification
+        y_pred, _         = convert_prob_to_classification(y_pred)
+        y_true, mask_true = convert_prob_to_classification(y_true)
+
+        # Hiding the land
+        y_pred[:, :, mask_true == 1] = np.nan if prob_type == 4 else -1
+        y_true[:, :, mask_true == 1] = np.nan if prob_type == 4 else -1
+
+        # Flipping vertically (ease of comprehension)
+        y_pred = torch.flip(y_pred, dims = (2,))
+        y_true = torch.flip(y_true, dims = (2,))
+
+        # Plotting the results
+        fig, axes = plt.subplots(2, 1, figsize = (20, 10))
+
+        # Plot Prediction
+        im1 = axes[0].imshow(y_pred[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1, vmax=1)  # Set vmin and vmax
+        axes[0].set_ylabel('Prediction')
+        axes[0].set_xticks([])
+        axes[0].set_yticks([])
+
+        # Add colorbar to the right of the Prediction plot
+        cbar1 = fig.colorbar(im1, ax=axes[0], fraction = 0.025, pad = 0.04)
+
+        # Plot Ground Truth
+        im2 = axes[1].imshow(y_true[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1, vmax=1)  # Set vmin and vmax
+        axes[1].set_ylabel('Ground Truth')
+        axes[1].set_xticks([])
+        axes[1].set_yticks([])
+
+        # Add colorbar to the right of the Ground Truth plot
+        cbar2 = fig.colorbar(im2, ax=axes[1], fraction=0.025, pad=0.04)
+
+        # Adjust layout
+        plt.tight_layout()
+        plt.show()
+
+        return fig

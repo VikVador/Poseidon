@@ -161,7 +161,7 @@ def main(**kwargs):
     # Sending information about the dataset to WandB (1)
     wandb.log({"Dataset & Architecture/Dataset (Visualisation, Image, Regions)" : wandb.Image(get_complete_mask_plot(bs_mask_complete)),
                "Dataset & Architecture/Dataset (Visualisation, Image, Ratios)"  : wandb.Image(get_ratios_plot(data_oxygen, bs_mask_with_depth)),
-               "Dataset & Architecture/Dataset (Visualisation, Video, Oxygen)"  : wandb.Video(get_video(data = data_oxygen), fps = 4),
+               "Dataset & Architecture/Dataset (Visualisation, Video, Oxygen)"  : wandb.Video(get_video(data = data_oxygen), fps = 1),
                "Dataset & Architecture/Ratio Oxygenated"                        : ratio_oxygenated,
                "Dataset & Architecture/Ratio Switching"                         : ratio_switching,
                "Dataset & Architecture/Ratio Hypoxia"                           : ratio_hypoxia})
@@ -180,6 +180,9 @@ def main(**kwargs):
 
     # Information over terminal (1)
     project_title(kwargs)
+
+    # Determining the type of loss (needed for the metrics in WandB)
+    loss_type = "MSE" if problem == "regression" else "BCE"
 
     # Used to compute time left
     epoch_time = 0.0
@@ -222,7 +225,7 @@ def main(**kwargs):
                         loss_validation_aob = 0)
 
             # Sending to wandDB
-            wandb.log({"Training/Loss (T)": loss_t.detach().item()})
+            wandb.log({f"Training/Loss ({loss_type}, T)": loss_t.detach().item()})
 
             # Accumulating the loss
             training_loss += loss_t.detach().item()
@@ -252,7 +255,7 @@ def main(**kwargs):
                     loss_validation_aob = 0)
 
         # Sending the loss to wandDB
-        wandb.log({"Training/Loss (Training): ": training_loss / training_batch_steps})
+        wandb.log({f"Training/Loss ({loss_type}, Training): ": training_loss / training_batch_steps})
 
         # ----- VALIDATION -----
         with torch.no_grad():
@@ -281,7 +284,7 @@ def main(**kwargs):
                             loss_validation_aob = 0)
 
                 # Sending the loss to wandDB the loss
-                wandb.log({"Training/Loss (V)": loss_v.detach().item()})
+                wandb.log({f"Training/Loss ({loss_type}, V)": loss_v.detach().item()})
 
                 # Accumulating the loss
                 validation_loss += loss_v.detach().item()
@@ -298,6 +301,9 @@ def main(**kwargs):
                 # Visual inspection (Only on the first batch)
                 metrics_tool.compute_plots(y_pred = pred, y_true = y) if validation_batch_steps == 0 else None
 
+                # Visual inspection (Only on the first batch)
+                wandb.log({f"Visualization/Prediction VS Ground Truth": wandb.Image(metrics_tool.compute_plots_comparison(y_pred = pred, y_true = y))}) if validation_batch_steps == 0 else None
+
                 # Updating epoch information
                 validation_batch_steps += 1
 
@@ -310,8 +316,8 @@ def main(**kwargs):
                         loss_validation_aob = validation_loss / validation_batch_steps)
 
             # Sending more information to wandDB
-            wandb.log({"Training/Loss (Validation)": validation_loss / validation_batch_steps,
-                       "Training/Epochs"           : nb_epochs - epoch})
+            wandb.log({"Training/Loss ({loss_type}, Validation)": validation_loss / validation_batch_steps,
+                       "Training/Epochs" : nb_epochs - epoch})
 
             # ---------- WandB (Metrics & Plots) ----------
             #
