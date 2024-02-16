@@ -316,8 +316,8 @@ def main(**kwargs):
                         loss_validation_aob = validation_loss / validation_batch_steps)
 
             # Sending more information to wandDB
-            wandb.log({"Training/Loss ({loss_type}, Validation)": validation_loss / validation_batch_steps,
-                       "Training/Epochs" : nb_epochs - epoch})
+            wandb.log({f"Training/Loss ({loss_type}, Validation)": validation_loss / validation_batch_steps,
+                        "Training/Epochs" : nb_epochs - epoch})
 
             # ---------- WandB (Metrics & Plots) ----------
             #
@@ -367,8 +367,8 @@ input_list = [["temperature", "salinity", "chlorophyll", "kshort", "klong", "mes
 
 # Storing all the information
 arguments = {
-    'month_start'     : [3],
-    'month_end'       : [4],
+    'month_start'     : [7],
+    'month_end'       : [8],
     'year_start'      : [0],
     'year_end'        : [0],
     'Inputs'          : input_list,
@@ -382,7 +382,7 @@ arguments = {
     'Kernel Size'     : [3],
     'Loss Weights'    : [[1, 1]],
     'Learning Rate'   : [0.001],
-    'Batch Size'      : [64],
+    'Batch Size'      : [4],
     'Dataset Size'    : [[0.6, 0.3]],
     'Epochs'          : [10],
 }

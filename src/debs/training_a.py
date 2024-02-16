@@ -77,7 +77,7 @@ def main(**kwargs):
     # ------- Parameters -------
     #
     # Project name on Weights and Biases
-    project_name = "esa-blacksea-deoxygenation-emulator-one-month"
+    project_name = "esa-blacksea-deoxygenation-emulator-one-month-V2"
 
     # Size of the different datasets
     size_training, size_validation = dataset_size[0], dataset_size[1]
@@ -143,8 +143,8 @@ def main(**kwargs):
     # Normalized oxygen treshold
     norm_oxy = BSD_loader.get_normalized_deoxygenation_treshold()
 
-    # Number of batches in training set (used for averaging metrics over the batches)
-    num_batches_train = BSD_loader.get_number_of_batches(type = "train", batch_size = batch_size)
+    # Number of samples in validation set (used for averaging metrics over the samples)
+    number_samples_validation = BSD_loader.get_number_of_samples(type = "validation")
 
     # ------------------------------------------
     #
@@ -202,7 +202,7 @@ def main(**kwargs):
                                         mask = bs_mask_with_depth,
                                         mask_complete = bs_mask_complete,
                                         treshold = norm_oxy,
-                                        number_of_batches = num_batches_train)
+                                        number_of_samples = number_samples_validation)
 
         # ----- TRAINING -----
         for x, y in dataset_train:
@@ -367,22 +367,22 @@ input_list = [["temperature", "salinity", "chlorophyll", "kshort", "klong", "mes
 
 # Storing all the information
 arguments = {
-    'month_start'     : [3],
-    'month_end'       : [4],
+    'month_start'     : [7],
+    'month_end'       : [8],
     'year_start'      : [0],
     'year_end'        : [0],
     'Inputs'          : input_list,
-    'Problem'         : ["regression"],
-    'Window (Inputs)' : [1, 3, 7, 15, 30],
+    'Problem'         : ["classification"],
+    'Window (Inputs)' : [1, 3],
     'Window (Output)' : [1],
     'Hypoxia Treshold': [63],
     'Depth'           : [200],
     'Architecture'    : ["FCNN", "UNET"],
     'Scaling'         : [4],
     'Kernel Size'     : [3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25],
-    'Loss Weights'    : [[1, 1]],
-    'Learning Rate'   : [0.001],
-    'Batch Size'      : [64],
+    'Loss Weights'    : [[1, 1], [1, 2], [1, 5], [1, 10], [1, 50], [1, 100]],
+    'Learning Rate'   : [0.001, 0.0001],
+    'Batch Size'      : [4],
     'Dataset Size'    : [[0.6, 0.3]],
     'Epochs'          : [10],
 }
