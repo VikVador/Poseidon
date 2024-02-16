@@ -156,9 +156,16 @@ class BlackSea_Dataloader():
         self.x_train, self.x_validation, self.x_test = x[ : training_size - window_inp, :, :, :], x[training_size : training_size + validation_size - window_inp, :, :, :], x[training_size + validation_size:, :, :, :]
         self.y_train, self.y_validation, self.y_test = y[ : training_size - window_inp, :, :, :], y[training_size : training_size + validation_size - window_inp, :, :, :], y[training_size + validation_size:, :, :, :]
 
+        # Stores the number of samples of each datasets
+        self.number_training_samples, self.number_validation_samples, self.number_test_samples = self.x_train.shape[0], self.x_validation.shape[0], self.x_test.shape[0]
+
     def get_normalized_deoxygenation_treshold(self):
         r"""Used to retreive the normalized deoxygenation treshold"""
         return self.normalized_deoxygenation_treshold
+
+    def get_number_of_samples(self, type : str):
+        r"""Returns the number of samples in a given dataset, i.e. training, validation or test"""
+        return getattr(self, f"number_{type}_samples")
 
     def get_number_of_batches(self, type: str, batch_size: int = 64):
         r"""Returns the number of batches in a given dataset, i.e. training, validation or test"""
@@ -201,6 +208,8 @@ class BlackSea_Dataloader():
 
         # Creation of the dataset for dataloader
         dataset = BS_Dataset(x = getattr(self, f"x_{type}"), y = getattr(self, f"y_{type}"), bathy = bathy, mesh = mesh)
+
+        print(len(dataset))
 
         # Creation of the dataloader
         return DataLoader(dataset, batch_size = batch_size)

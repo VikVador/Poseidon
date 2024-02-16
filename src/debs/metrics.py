@@ -53,14 +53,14 @@ def RootMeanSquaredErrorPerPixel(y_pred : np.array = None, y_true : np.array = N
 class BlackSea_Metrics():
     r"""A tool to compute a large variety of metrics (scalar or visual) to assess the quality of a model."""
 
-    def __init__(self, mode: str, mask : np.array, mask_complete : np.array, treshold : float, number_of_batches : int):
+    def __init__(self, mode: str, mask : np.array, mask_complete : np.array, treshold : float, number_of_samples : int):
         r"""Initialization of the metrics computation tool"""
 
         # Storing information
         self.mask = mask
         self.mode = mode
         self.mask_complete = mask_complete
-        self.number_of_batches = number_of_batches
+        self.number_of_samples = number_of_samples
         self.treshold_normalized_oxygen = treshold
 
         # Used to store results and plots
@@ -99,7 +99,7 @@ class BlackSea_Metrics():
         batch_size, days, = y_true.shape[0], y_true.shape[1]
 
         # Stores results for each days, convert to numpy and average over number of batches (everything is summed so at the end, we will have the true average)
-        scores_temporary = np.array([self.compute_metrics_(y_pred[:, i], y_true[:, i]) for i in range(days)]) / self.number_of_batches
+        scores_temporary = np.array([self.compute_metrics_(y_pred[:, i], y_true[:, i]) for i in range(days)]) / self.number_of_samples
 
         # Adding the results to previous one or initialize it
         self.scores = np.sum([self.scores, scores_temporary], axis = 0) if isinstance(self.scores, (np.ndarray, np.generic)) else \

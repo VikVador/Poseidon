@@ -34,15 +34,24 @@ def load_neural_network(architecture : str, data_output : np.array, device : str
     # Extracting information
     inputs          = kwargs['Inputs']
     problem         = kwargs['Problem']
+    windows_inputs  = kwargs['Window (Inputs)']
     windows_outputs = kwargs['Window (Output)']
     architecture    = kwargs['Architecture']
     scaling         = kwargs['Scaling']
     kernel_size     = kwargs['Kernel Size']
     batch_size      = kwargs['Batch Size']
+    nb_inputs       = 0
 
     # Determining the total number of inputs
-    nb_inputs  = len(inputs)
-    nb_inputs += 1 if "mesh" in inputs else 0
+    for i in ["temperature", "salinity", "chlorophyll", "kshort", "klong"]:
+        nb_inputs += 1 if i in inputs else 0
+
+    # Adding the time dimension from the window size
+    nb_inputs *= windows_inputs
+
+    # Adding dimensions for bathymetry and mesh (additional self made inputs)
+    nb_inputs += 1 if "bathymetry" in inputs else 0
+    nb_inputs += 2 if "mesh"       in inputs else 0
 
     # Initialization of neural network and pushing it to device (GPU)
     if architecture == "FCNN":

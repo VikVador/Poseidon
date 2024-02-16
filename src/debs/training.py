@@ -77,7 +77,7 @@ def main(**kwargs):
     # ------- Parameters -------
     #
     # Project name on Weights and Biases
-    project_name = "esa-blacksea-deoxygenation-emulator-one-month"
+    project_name = "esa-blacksea-deoxygenation-emulator-one-month-V2"
 
     # Size of the different datasets
     size_training, size_validation = dataset_size[0], dataset_size[1]
@@ -143,8 +143,8 @@ def main(**kwargs):
     # Normalized oxygen treshold
     norm_oxy = BSD_loader.get_normalized_deoxygenation_treshold()
 
-    # Number of batches in training set (used for averaging metrics over the batches)
-    num_batches_train = BSD_loader.get_number_of_batches(type = "train", batch_size = batch_size)
+    # Number of samples in validation set (used for averaging metrics over the samples)
+    number_samples_validation = BSD_loader.get_number_of_samples(type = "validation")
 
     # ------------------------------------------
     #
@@ -202,7 +202,7 @@ def main(**kwargs):
                                         mask = bs_mask_with_depth,
                                         mask_complete = bs_mask_complete,
                                         treshold = norm_oxy,
-                                        number_of_batches = num_batches_train)
+                                        number_of_samples = number_samples_validation)
 
         # ----- TRAINING -----
         for x, y in dataset_train:
