@@ -77,7 +77,7 @@ def main(**kwargs):
     # ------- Parameters -------
     #
     # Project name on Weights and Biases
-    project_name = "esa-blacksea-deoxygenation-emulator-one-month"
+    project_name = "esa-blacksea-deoxygenation-emulator-two-years"
 
     # Size of the different datasets
     size_training, size_validation = dataset_size[0], dataset_size[1]
@@ -363,26 +363,26 @@ def main(**kwargs):
 # Possibilities
 # -------------
 # Creation of all the inputs combinations (Example : ["temperature"], ["salinity"], ["chlorophyll"], ["kshort"], ["klong"])
-input_list = [["temperature"]]
+input_list = [["temperature", "salinity", "chlorophyll", "kshort", "klong", "mesh", "bathymetry"]]
 
 # Storing all the information
 arguments = {
-    'month_start'     : [7],
-    'month_end'       : [8],
+    'month_start'     : [0],
+    'month_end'       : [12],
     'year_start'      : [0],
-    'year_end'        : [0],
+    'year_end'        : [1],
     'Inputs'          : input_list,
-    'Problem'         : ["regression", "classification"],
+    'Problem'         : ["classification"],
     'Window (Inputs)' : [1],
     'Window (Output)' : [1],
     'Hypoxia Treshold': [63],
     'Depth'           : [200],
-    'Architecture'    : ["AVERAGE"],
+    'Architecture'    : ["FCNN", "UNET"],
     'Scaling'         : [4],
-    'Kernel Size'     : [3],
-    'Loss Weights'    : [[1, 1]],
+    'Kernel Size'     : [3, 5, 7, 9, 11],
+    'Loss Weights'    : [[1, 1], [1, 10], [1, 50], [1, 100]],
     'Learning Rate'   : [0.001],
-    'Batch Size'      : [],
+    'Batch Size'      : [16],
     'Dataset Size'    : [[0.6, 0.3]],
     'Epochs'          : [10],
 }
@@ -396,7 +396,7 @@ param_dicts = [dict(zip(arguments.keys(), combo)) for combo in param_combination
 # ----
 # Jobs
 # ----
-@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '64GB', time = '00:30:00', project = 'bsmfc', partition = "ia", user = 'vmangeleer@uliege.be', type = 'FAIL')
+@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '512GB', time = '03:00:00', project = 'bsmfc', partition = "ia", user = 'vmangeleer@uliege.be', type = 'FAIL')
 def train_model(i: int):
 
     # Launching the main

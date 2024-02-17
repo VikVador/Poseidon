@@ -382,7 +382,7 @@ arguments = {
     'Kernel Size'     : [3],
     'Loss Weights'    : [[1, 1]],
     'Learning Rate'   : [0.001],
-    'Batch Size'      : [],
+    'Batch Size'      : [16],
     'Dataset Size'    : [[0.6, 0.3]],
     'Epochs'          : [10],
 }

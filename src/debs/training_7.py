@@ -77,7 +77,7 @@ def main(**kwargs):
     # ------- Parameters -------
     #
     # Project name on Weights and Biases
-    project_name = "esa-blacksea-deoxygenation-emulator-one-month"
+    project_name = "esa-blacksea-deoxygenation-emulator-ten-years"
 
     # Size of the different datasets
     size_training, size_validation = dataset_size[0], dataset_size[1]
@@ -367,10 +367,10 @@ input_list = [["temperature"]]
 
 # Storing all the information
 arguments = {
-    'month_start'     : [7],
-    'month_end'       : [8],
+    'month_start'     : [0],
+    'month_end'       : [12],
     'year_start'      : [0],
-    'year_end'        : [0],
+    'year_end'        : [9],
     'Inputs'          : input_list,
     'Problem'         : ["regression", "classification"],
     'Window (Inputs)' : [1],
@@ -382,7 +382,7 @@ arguments = {
     'Kernel Size'     : [3],
     'Loss Weights'    : [[1, 1]],
     'Learning Rate'   : [0.001],
-    'Batch Size'      : [],
+    'Batch Size'      : [16],
     'Dataset Size'    : [[0.6, 0.3]],
     'Epochs'          : [10],
 }
@@ -396,7 +396,7 @@ param_dicts = [dict(zip(arguments.keys(), combo)) for combo in param_combination
 # ----
 # Jobs
 # ----
-@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '64GB', time = '00:30:00', project = 'bsmfc', partition = "ia", user = 'vmangeleer@uliege.be', type = 'FAIL')
+@job(array = len(param_dicts), cpus = 1, gpus = 1, ram = '512GB', time = '03:00:00', project = 'bsmfc', partition = "ia", user = 'vmangeleer@uliege.be', type = 'FAIL')
 def train_model(i: int):
 
     # Launching the main

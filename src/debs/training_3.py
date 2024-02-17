@@ -363,7 +363,7 @@ def main(**kwargs):
 # Possibilities
 # -------------
 # Creation of all the inputs combinations (Example : ["temperature"], ["salinity"], ["chlorophyll"], ["kshort"], ["klong"])
-input_list = [["temperature"]]
+input_list = [["temperature", "salinity", "chlorophyll", "kshort", "klong", "mesh", "bathymetry"]]
 
 # Storing all the information
 arguments = {
@@ -372,17 +372,17 @@ arguments = {
     'year_start'      : [0],
     'year_end'        : [0],
     'Inputs'          : input_list,
-    'Problem'         : ["regression", "classification"],
+    'Problem'         : ["classification"],
     'Window (Inputs)' : [1],
     'Window (Output)' : [1],
     'Hypoxia Treshold': [63],
     'Depth'           : [200],
-    'Architecture'    : ["AVERAGE"],
+    'Architecture'    : ["FCNN", "UNET"],
     'Scaling'         : [4],
-    'Kernel Size'     : [3],
-    'Loss Weights'    : [[1, 1]],
+    'Kernel Size'     : [3, 5, 7, 9, 11],
+    'Loss Weights'    : [[1, 1], [1, 10], [1, 50], [1, 100]],
     'Learning Rate'   : [0.001],
-    'Batch Size'      : [],
+    'Batch Size'      : [16],
     'Dataset Size'    : [[0.6, 0.3]],
     'Epochs'          : [10],
 }
