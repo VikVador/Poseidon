@@ -77,7 +77,7 @@ def main(**kwargs):
     # ------- Parameters -------
     #
     # Project name on Weights and Biases
-    project_name = "esa-blacksea-deoxygenation-emulator-one-month-V2"
+    project_name = "esa-blacksea-deoxygenation-emulator-one-month-V3"
 
     # Size of the different datasets
     size_training, size_validation = dataset_size[0], dataset_size[1]

@@ -25,7 +25,7 @@ import torch
 
 # Torch metrics (from Pytorch Lightning)
 from torchmetrics.regression     import MeanSquaredError, PearsonCorrCoef, R2Score
-from torchmetrics.classification import BinaryROC, BinaryAUROC, BinaryAccuracy, BinaryPrecision, BinaryRecall, BinaryMatthewsCorrCoef
+from torchmetrics.classification import BinaryROC, BinaryAUROC, BinaryAccuracy, BinaryPrecision, BinaryRecall, BinaryMatthewsCorrCoef, MulticlassAUROC,BinaryF1Score
 
 
 # ----------------------
@@ -35,11 +35,11 @@ from torchmetrics.classification import BinaryROC, BinaryAUROC, BinaryAccuracy, 
 #
 def PercentageOfBias(y_pred : np.array = None, y_true : np.array = None):
     r"""Used to compute the percentage of bias"""
-    return lambda y_true, y_pred  : np.nanmean((y_true - y_pred) / np.abs(y_true))
+    return lambda y_true, y_pred  : torch.nanmean((y_true - y_pred) / torch.abs(y_true), dim = 0)
 
 def RootMeanSquaredError(y_pred : np.array = None, y_true : np.array = None):
     r"""Used to compute the root mean squared error"""
-    return lambda y_true, y_pred  : np.sqrt(np.nanmean((y_true - y_pred) ** 2))
+    return lambda y_true, y_pred  : torch.sqrt(torch.nanmean((y_true - y_pred) ** 2, dim = 0))
 
 def PercentageOfBiasPerPixel(y_pred : np.array = None, y_true : np.array = None):
     r"""Used to compute the percentage of bias per pixel (used for plots)"""
@@ -66,13 +66,9 @@ class BlackSea_Metrics():
         # Used to store results and plots
         self.scores, self.scores_names, self.plots = None, None, list()
 
-        # Definition of the metrics
-        self.metrics_regression     = [MeanSquaredError(), RootMeanSquaredError(), R2Score(), PearsonCorrCoef(), PercentageOfBias()]
-        self.metrics_classification = [BinaryAccuracy(), BinaryPrecision(), BinaryRecall(), BinaryMatthewsCorrCoef()]
-
         # Definition of the names of each metric
-        self.metrics_regression_names     = ["Mean Squared Error", "Root Mean Squared Error", "R2 Score", "Pearson Correlation Coefficient", "Percentage of Bias"]
-        self.metrics_classification_names = ["Accuracy",  "Precision",  "Recall", "Matthews Correlation Coefficient"]
+        self.metrics_regression_names     = ["Percentage of Bias", "Mean Squared Error", "Root Mean Squared Error", "R2 Score", "Pearson Correlation Coefficient"]
+        self.metrics_classification_names = ["Accuracy",  "Precision",  "Recall", "F1-Score"]
 
     def get_names_metrics(self):
         r"""Retreives the name of all the metrics (scalar)"""
@@ -114,36 +110,62 @@ class BlackSea_Metrics():
         # ------- CLASSIFICATION (ROCAUC) -------
         if self.mode == "classification":
 
+            # Retrieving dimensions (Ease of comprehension)
+            t, c, x, y = y_true_per_day.shape
+
             # Retrieving values in the sea, swapping axis (t, c, x, y) to (c, t, x, y) and flattening (c, t * x * y)
-            y_true_per_day = np.swapaxes(y_true_per_day[:, :, self.mask[:-2, :-2] == 1], 0, 1).reshape(2, -1)
-            y_pred_per_day = np.swapaxes(y_pred_per_day[:, :, self.mask[:-2, :-2] == 1], 0, 1).reshape(2, -1)
+            y_true_per_day = y_true_per_day[:, :, self.mask[:-2, :-2] == 1].reshape(t, c, -1)
+            y_pred_per_day = y_pred_per_day[:, :, self.mask[:-2, :-2] == 1].reshape(t, c, -1)
 
             # Used th compute the area under the curve
-            toolAUC = BinaryAUROC()
-
-            # Computations
-            results += [toolAUC(y_pred_per_day, y_true_per_day).item()]
+            toolAUC = MulticlassAUROC(num_classes = c)
 
             # Transforming the problem to non-probabilistic
-            y_true_per_day = np.argmax(y_true_per_day, axis = 0)
-            y_pred_per_day = np.argmax(y_pred_per_day, axis = 0)
+            y_true_per_day = np.argmax(y_true_per_day, axis = 1)
+
+            # Computations
+            results += [toolAUC(y_pred_per_day, y_true_per_day).item() * self.number_of_samples]
+
+            # Transforming the problem to non-probabilistic
+            y_pred_per_day = np.argmax(y_pred_per_day, axis = 1)
 
         # ------- REGRESSION -------
         if self.mode == "regression":
 
-            # Retrieving values in the sea and flattening (t * x * y)
-            y_true_per_day = y_true_per_day[:, self.mask[:-2, :-2] == 1].reshape(-1)
-            y_pred_per_day = y_pred_per_day[:, self.mask[:-2, :-2] == 1].reshape(-1)
+            # Retrieving dimensions (Ease of comprehension)
+            t, _, _ = y_true_per_day.shape
+
+            # Metrics to perform regression (Computed on each sample, everything is then summed and averaged over the number of samples afterwards)
+            metrics_regression = [PercentageOfBias(),
+                                  MeanSquaredError(num_outputs = t),
+                                  RootMeanSquaredError(),
+                                  R2Score(num_outputs = t, multioutput = 'raw_values'),
+                                  PearsonCorrCoef( num_outputs = t)]
+
+            # Swapping axes (t, x * y) to (x * y, t)
+            y_true_per_day = torch.swapaxes(y_true_per_day[:, self.mask[:-2, :-2] == 1], 0, 1)
+            y_pred_per_day = torch.swapaxes(y_pred_per_day[:, self.mask[:-2, :-2] == 1], 0, 1)
 
             # Computations
-            results += [metric(y_pred_per_day, y_true_per_day).item() for metric in self.metrics_regression]
+            results += [torch.sum(metric(y_pred_per_day, y_true_per_day)).item() for metric in metrics_regression]
 
             # Transforming problem to classification
             y_true_per_day = (y_true_per_day < self.treshold_normalized_oxygen) * 1
             y_pred_per_day = (y_pred_per_day < self.treshold_normalized_oxygen) * 1
 
+            # Swapping axes (x * y, t) to (t, x * y)
+            y_true_per_day = torch.swapaxes(y_true_per_day, 0, 1)
+            y_pred_per_day = torch.swapaxes(y_pred_per_day, 0, 1)
+
         # ------- CLASSIFICATION (ACC, PRE, ...) -------
-        return results + [metric(y_pred_per_day, y_true_per_day).item() for metric in self.metrics_classification]
+        #
+        # Metrics to perform classification (Computed on each sample, everything is then summed and averaged over the number of samples afterwards)
+        metrics_classification = [BinaryAccuracy( multidim_average = 'samplewise'),
+                                  BinaryPrecision(multidim_average = 'samplewise'),
+                                  BinaryRecall(   multidim_average = 'samplewise'),
+                                  BinaryF1Score(  multidim_average = 'samplewise')]
+
+        return results + [torch.sum(metric(y_pred_per_day, y_true_per_day)).item() for metric in metrics_classification]
 
     def make_plots(self, score : np.array, index_day : int, label : str, cmap : str, vminmax : tuple):
         r"""Creates a custom plot for each metric"""
