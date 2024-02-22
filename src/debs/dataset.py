@@ -20,24 +20,22 @@
 import os
 import xarray
 import numpy as np
+import json
 from   tools import get_data_path, get_mesh_path
 
 
 class BlackSea_Dataset():
     r"""A simple tool to load data of Black Sea simulations (NEMO Simulator)."""
 
-    def __init__(self, year_start: int, year_end: int, month_start: int, month_end: int, variable: str, folder:str = "output_HR004"):
+    def __init__(self, year_start: int = 1980, year_end: int = 1980, month_start: int = 1, month_end: int = 1, folder:str = "output_HR001"):
         super().__init__()
 
-        # Security
-        assert year_start  in [i for i in range(10)], f"ERROR (Dataset, init) - Incorrect starting year ({year_start})"
-        assert year_end    in [i for i in range(10)], f"ERROR (Dataset, init) - Incorrect ending year ({year_end})"
-        assert month_start in [i for i in range(13)], f"ERROR (Dataset, init) - Incorrect starting month ({month_start})"
-        assert month_start in [i for i in range(13)], f"ERROR (Dataset, init) - Incorrect ending month ({month_end})"
-        assert year_start <= year_end,                f"ERROR (Dataset, init) - Incorrect years ({year_start} <= {year_end})"
-        assert variable in ["grid_U", "grid_V", "grid_W", "grid_T", "ptrc_T", "btrc_T"], f"ERROR (Dataset, init) - Incorrect variable ({variable})"
-        if year_start == year_end:
-            assert month_start <= month_end, f" ERROR (Dataset, init) - Incorrect months ({month_start} <= {month_end})"
+        # Security (1)
+        assert year_start  in [i for i in range(1980, 2023)], f"ERROR (Dataset, init) - Incorrect starting year ({year_start})"
+        assert year_end    in [i for i in range(1980, 2023)], f"ERROR (Dataset, init) - Incorrect ending year ({year_end})"
+        assert month_start in [i for i in range(1, 13)],      f"ERROR (Dataset, init) - Incorrect starting month ({month_start})"
+        assert month_start in [i for i in range(1, 13)],      f"ERROR (Dataset, init) - Incorrect ending month ({month_end})"
+        assert year_start <= year_end,                        f"ERROR (Dataset, init) - Incorrect years ({year_start} <= {year_end})"
 
         # Stores a list of useless variables, i.e. not usefull for our specific problem (for the sake of efficiency)
         self.useless_variables = ['time_centered',
@@ -54,104 +52,43 @@ class BlackSea_Dataset():
                                   'Nitrogen_UptakeDiatoms2D', 'Carbon_UptakeEmiliana2D','Nitrogen_UptakeEmiliana2D', 'Carbon_UptakeFlagellates2D',
                                   'Nitrogen_UptakeFlagellates2D', 'shearrate', 'sinkingDIA', 'sinkingPOM', 'pH', 'pCO2', 'AirSeaDICFlux', 'TA']
 
-        # Stores all the dataset names and location
-        self.dataset_list = list()
+        # Loading (all) the dictionnaries containing the path to each dataset, i.e. "YEAR-MONTH : PATH(S)"
+        with open('../../paths/data_grid_T.txt', 'r') as file:
+            paths_physics_datasets_all = json.load(file)
 
-        # Retreives the path to the folder containing the data (local or cluster)
-        self.path_general = get_data_path(folder = folder)
+        with open('../../paths/data_ptrc_T.txt', 'r') as file:
+            paths_biogeochemistry_datasets_all = json.load(file)
 
-        # Creation of the paths
+        # Path to the folder containing the datasets
+        self.datasets_folder = f"../../data/{folder}"
+
+        # Stores all the relevant paths datasets
+        self.paths_physics_datasets, self.paths_biogeochemistry_datasets = list(), list()
+
+        # Extraction
         for year in range(year_start, year_end + 1):
-            for month in range(1, 13):
+            for month in range(month_start, month_end + 1):
 
-                # Checking month's validity
-                if year == year_start and month < month_start or year == year_end and month_end < month:
-                    continue
+                # Converting to strings
+                year  = str(year)
+                month = f"0{month}" if month < 10 else str(month)
 
-                # Updating to string for ease of use
-                month_after         = str(month + 1) if 10 <= month + 1 else "0" + str(month + 1)
-                month_after_after   = str(month + 2) if 10 <= month + 2 else "0" + str(month + 2)
-                month_before        = str(month - 1) if 10 <= month - 1 else "0" + str(month - 1)
-                month_before_before = str(month - 2) if 10 <= month - 2 else "0" + str(month - 2)
-                month               = str(month) if 10 <= month else "0" + str(month)
+                # Creation of the key
+                key = f"{year}-{month}"
 
-                # Creating all list of possibilities for simulation name (check folder)
-                years_sim = [f"BS_1d_19{80 + year    }0101_19{80 + year    }1231_",
-                             f"BS_1d_19{80 + year - 1}1231_19{80 + year    }1231_",
-                             f"BS_1d_19{80 + year    }0101_19{80 + year    }1230_",
-                             f"BS_1d_19{80 + year    }0101_19{80 + year + 1}0101_"]
-
-                months_sim = [f"198{year}{month}-198{year}{month    }",
-                              f"198{year}{month}-198{year}{month_after}",
-                              f"198{year}{month}-198{year}{month_after_after}",
-                              f"198{year}{month_before}-198{year}{month}",
-                              f"198{year}{month_before_before}-198{year}{month}"]
-
-                extensions = [".nc4", ".nc"]
-
-                # Used to determine if a path has been found or not
-                path_found = False
-
-                # Testing the possible paths
-                for e in extensions:
-
-                    # Getting out (1)
-                    if path_found:
-                        break
-
-                    for m in months_sim:
-
-                        # Getting out (2)
-                        if path_found:
-                            break
-
-                        for y in years_sim:
-
-                            # Creation of the tested path
-                            current_path = f"{self.path_general}{y}{variable}_{m}{e}"
-
-                            # Check if the path exists
-                            if os.path.exists(current_path):
-                                path_found = True
-                                self.dataset_list.append(current_path)
-
-                            # Getting out (3)
-                            if path_found:
-                                break
-
-                # Something wrong, i.e. the title of the file was not found ! Need to update possibilities or maybe the simulation is not done yet
-                if path_found == False:
-                    print(f"ISSUE (Init) - Path not found for: Year ({year}), Month ({month}), Variable ({variable})")
-
-        # Deleting duplicates (if month is 01_03, we will have it multiples times for months 1, 2, 3)
-        self.dataset_list = list(dict.fromkeys(self.dataset_list))
-
-        # Stores only the first dataset (for the sake of efficiency)
-        self.data = xarray.open_dataset(self.dataset_list[0], engine = "h5netcdf", drop_variables = self.useless_variables)
+                # Retreiving the paths
+                self.paths_physics_datasets         += [self.datasets_folder + p for p in paths_physics_datasets_all[key]]
+                self.paths_biogeochemistry_datasets += [self.datasets_folder + p for p in paths_biogeochemistry_datasets_all[key]]
 
         # Saving other relevant information
-        self.year_start  = year_start
-        self.year_end    = year_end
         self.month_start = month_start
         self.month_end   = month_end
-        self.variable    = variable
+        self.year_end    = year_end
+        self.year_start  = year_start
         self.folder      = folder
 
-    def translate(self, variable : str):
-        r"""Used to translate a variable name to the one used in the dataset produced by NEMO"""
-
-        # Stores all the translations
-        translations = {"temperature" : "votemper",
-                        "salinity"    : "vosaline",
-                        "oxygen"      : "DOX",
-                        "chlorophyll" : "CHL",
-                        "kshort"      : "KBIOS",
-                        "klong"       : "KBIOL"}
-
-        return translations[variable]
-
     def get_mesh(self, x: int, y: int):
-        r"""Creates a mesh with normalized coordinates for the given shape (x, y)"""
+        r"""Used to retrieve a mesh with normalized coordinates for the given shape (x, y)"""
 
         # Creation of the mesh
         x_mesh, y_mesh = np.meshgrid(np.linspace(0, 1, num = x), np.linspace(0, 1, num = y), indexing = 'ij')
@@ -160,7 +97,7 @@ class BlackSea_Dataset():
         return np.stack((x_mesh, y_mesh), axis = 0, dtype = np.float32)
 
     def get_depth(self):
-        r"""Used to retreive the bathymetry information, i.e. the depth in [m] for each region of the sea (2D)"""
+        r"""Used to retrieve the bathymetry information, i.e. the depth in [m] for each region of the sea (2D)"""
 
         # Path to the mesh file location
         path_mesh = get_mesh_path()
@@ -169,7 +106,7 @@ class BlackSea_Dataset():
         return xarray.open_dataset(path_mesh, engine = "h5netcdf").bathy_metry.data.astype('float32')
 
     def get_bathymetry(self):
-        r"""Used to retreive the bathymetry mask, i.e. the index (z-direction) at which we reach the bottom of the sea (2D)"""
+        r"""Used to retrieve the bathymetry mask, i.e. the index at which we reach the bottom of the sea (2D)"""
 
         # Path to the mesh file location
         path_mesh = get_mesh_path()
@@ -201,60 +138,80 @@ class BlackSea_Dataset():
         # Returning the processed mask
         return bs_mask
 
-    def get_bottom(self, data: np.array, depth = None):
-        r"""Used to retreive the data profile (2D) everywhere at the bottom of the Black Sea (None) of for all regions above a given depth"""
-
-        # Security
-        assert len(data.shape) == 4, f"ERROR (get_bottom), Incorrect data shape ({data.shape}), i.e. input dimensions should be (time, depth, y, x)"
-
-        # Retreiving the bathymetry mask b(t, x, y) = z_bottom, i.e. index at which we found bottom of the sea
-        bathy_mask = self.get_bathymetry()
-
-        # Creation of x and y indexes to make manipulation
-        x, y = np.arange(bathy_mask.shape[2]), np.arange(bathy_mask.shape[1])
-        xidx = x.reshape(-1,1).repeat(len(y), axis = 1).T
-        yidx = y.reshape(-1,1).repeat(len(x), axis = 1)
-
-        # Retreiving the data everywhere at the bottom
-        data = data[:, bathy_mask[0] - 1, yidx, xidx]
-
-        # Retreiving for regions above depth treshold (product with 0, 1 mask applies the mask instantly) if needed
-        return data if depth == None else data[:] * self.get_mask(depth = depth)
-
-    def get_data(self, variable : str, type : str = "all", depth : int = None):
-        r"""Used to retreive the data for a given variable and type (surface (2D), bottom (2D) or all (3D))"""
+    def get_data(self, variable: str, level: int = None, region : str = None, depth: int = None):
+        r"""Used to retreive the data for a given variable at a specific level or a specific region"""
 
         # Security (1)
         assert variable in ["temperature", "salinity", "oxygen", "chlorophyll", "kshort", "klong"], f"ERROR (get_data), Incorrect variable ({variable})"
-        assert type in     ["surface", "bottom", "all"],                                            f"ERROR (get_data), Incorrect type ({type})"
+        assert level  == None or (0 <= level and level < 59),                                       f"ERROR (get_data), Incorrect level (0 < {level} < 59)"
+        assert region == None or region in ["surface", "bottom", "all"],                            f"ERROR (get_data), Incorrect region ({region})"
 
-        # Security (2)
-        if variable in ["temperature", "salinity"]:
-            assert self.variable == "grid_T", f"ERROR (get_data), Dataset is not grid_T ({self.variable})"
-        else:
-            assert self.variable == "ptrc_T", f"ERROR (get_data), Dataset is not ptrc_T ({self.variable})"
+        # Security (2) - Choosing between level or region
+        assert not (level == None and region == None), f"ERROR (get_data), You must specify either a level or a region"
+        assert not (level != None and region != None), f"ERROR (get_data), You must specify either a level or a region, not both"
 
-        # Security (3)
-        if not depth == None:
-            assert type in ["surface", "bottom"], f"ERROR (get_data), Incorrect type ({type}) if depth is given"
+        def translate(variable: str):
+            r"""Used to translate a variable into its name in the dataset, retrieve the type of dataset and the useless variables (the other ones)"""
 
-        # Translating the variable name
-        variable = self.translate(variable)
+            # Stores the translations for all the EO variables and oxygen
+            translations = {"temperature" : ["votemper", "physics"],
+                            "salinity"    : ["vosaline", "physics"],
+                            "oxygen"      : ["DOX",      "biogeochemistry"],
+                            "chlorophyll" : ["CHL",      "biogeochemistry"],
+                            "kshort"      : ["KBIOS",    "biogeochemistry"],
+                            "klong"       : ["KBIOL",    "biogeochemistry"]}
 
-        # Retreives the data for each day of the month at the surface
-        dataset = self.data[variable][:, 0, :, :].data if type == "surface" else self.data[variable][:, :, :, :].data
+            # Retrieving translation
+            v, v_type = translations[variable]
 
-        # Retreives the data in the other datasets and concatenates
-        for d in range(1, len(self.dataset_list)):
+            # Returns also the useless variables
+            return v, v_type, [values[0] for key, values in translations.items() if key != variable]
 
-            # Loading the new dataset
-            data = xarray.open_dataset(self.dataset_list[d], engine = "h5netcdf", drop_variables = self.useless_variables)
+        def get_bottom(data: np.array, depth = None):
+            r"""Used to retreive the data profile (2D) everywhere at the bottom of the Black Sea (None) of for all regions above a given depth"""
 
-            # Loading the field
-            data = data[variable][:, 0, :, :].data if type == "surface" else data[variable][:, :, :, :].data
+            # Security
+            assert len(data.shape) == 4, f"ERROR (get_bottom), Incorrect data shape ({data.shape}), i.e. input dimensions should be (time, depth, y, x)"
 
-            # Concatenation of datasets along the time dimension
-            dataset = np.concatenate((dataset, data), axis = 0)
+            # Retreiving the bathymetry mask b(t, x, y) = z_bottom, i.e. index at which we found bottom of the sea
+            bathy_mask = self.get_bathymetry()
 
-        # Returns only the bottom values if needed
-        return self.get_bottom(data = dataset, depth = depth) if type == "bottom" else dataset
+            # Creation of x and y indexes to make manipulation
+            x, y = np.arange(bathy_mask.shape[2]), np.arange(bathy_mask.shape[1])
+            xidx = x.reshape(-1,1).repeat(len(y), axis = 1).T
+            yidx = y.reshape(-1,1).repeat(len(x), axis = 1)
+
+            # Retreiving the data everywhere at the bottom
+            data = data[:, bathy_mask[0] - 1, yidx, xidx]
+
+            # Hiding the regions below the given depth
+            if not depth == None:
+                data[:, self.get_mask(depth = depth) == 0] = np.nan
+
+            return data
+
+        # Translation
+        variable, variable_type, other_useless_variables = translate(variable)
+
+        # Loading the data (3D field)
+        data = xarray.open_mfdataset(self.paths_physics_datasets if variable_type == "physics" else self.paths_biogeochemistry_datasets,
+                                     engine         = "h5netcdf",
+                                     parallel       = True,
+                                     drop_variables = self.useless_variables + other_useless_variables)
+
+        # Level, i.e. selecting a specific depth by its index
+        if not level == None:
+            return data[variable][:, level, :, :].data.compute()
+
+        # All (3D)
+        if region == "all":
+            return data[variable][:, :, :, :].data.compute()
+
+        # Surface (2D)
+        if region == "surface":
+            return data[variable][:, 0, :, :].data.compute()
+
+        # Bottom (2D)
+        if region == "bottom":
+            return get_bottom(data[variable].data.compute(), depth = depth)
+
