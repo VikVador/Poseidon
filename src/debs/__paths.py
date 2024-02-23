@@ -118,8 +118,8 @@ if __name__ == "__main__":
     paths_bio = process_dictionary(paths_bio)
 
     # Saving them as helper files for loading data
-    with open('../../data/data_paths_grid_T.txt', 'w') as file:
+    with open('../../information/grid_T.txt', 'w') as file:
         json.dump(paths_phy, file)
 
-    with open('../../data/data_paths_ptrc_T.txt', 'w') as file:
+    with open('../../information/ptrc_T.txt', 'w') as file:
         json.dump(paths_bio, file)

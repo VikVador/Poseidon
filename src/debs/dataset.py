@@ -18,16 +18,20 @@
 # A tool to load raw Black Sea datasets coming from the NEMO simulator.
 #
 import os
+import json
 import xarray
 import numpy as np
-import json
-from   tools import get_data_path, get_mesh_path
+from tools import *
 
 
 class BlackSea_Dataset():
-    r"""A simple tool to load data of Black Sea simulations (NEMO Simulator)."""
+    r"""A simple tool to load data of Black Sea simulations (NEMO Simulator) from 1980 to 2023."""
 
-    def __init__(self, year_start: int = 1980, year_end: int = 1980, month_start: int = 1, month_end: int = 1, folder:str = "output_HR001"):
+    def __init__(self, year_start: int = 1980,
+                         year_end: int = 1980,
+                      month_start: int = 1,
+                        month_end: int = 1,
+                           folder: str = "output_HR001"):
         super().__init__()
 
         # Security (1)
@@ -37,30 +41,23 @@ class BlackSea_Dataset():
         assert month_start in [i for i in range(1, 13)],      f"ERROR (Dataset, init) - Incorrect ending month ({month_end})"
         assert year_start <= year_end,                        f"ERROR (Dataset, init) - Incorrect years ({year_start} <= {year_end})"
 
-        # Stores a list of useless variables, i.e. not usefull for our specific problem (for the sake of efficiency)
-        self.useless_variables = ['time_centered',
-                                  'deptht_bounds',
-                                  'time_centered_bounds',
-                                  'time_counter_bounds',
-                                  'time_instant_bounds',
-                                  'ssh', 'mldkz5', 'mldr10_1', 'mld_bs', 'rho', 'CCC', 'wfo',
-                                  'qsr', 'qns', 'qt', 'sfx', 'taum', 'windsp', 'precip', 'bosp_Qout',
-                                  'bosp_Qin', 'mmean_S_total', 'bosp_S_in', 'CFL', 'NFL', 'CEM', 'NEM',
-                                  'CDI', 'NDI', 'MIC', 'MES', 'BAC', 'DCL', 'DNL', 'DCS', 'DNS', 'NOS',
-                                  'NHS', 'SIO', 'DIC', 'ODU', 'POC', 'PON', 'SID', 'AGG', 'GEL', 'NOC',
-                                  'PHO', 'SMI', 'CHA', 'CHD', 'CHE', 'CHF', 'PAR', 'NPP', 'NPPint', 'Carbon_UptakeDiatoms2D',
-                                  'Nitrogen_UptakeDiatoms2D', 'Carbon_UptakeEmiliana2D','Nitrogen_UptakeEmiliana2D', 'Carbon_UptakeFlagellates2D',
-                                  'Nitrogen_UptakeFlagellates2D', 'shearrate', 'sinkingDIA', 'sinkingPOM', 'pH', 'pCO2', 'AirSeaDICFlux', 'TA']
+        # Loading the name of all the useless variables, i.e. not usefull for our specific problem (for the sake of efficiency)
+        with open('../../information/useless.txt', 'r') as file:
+            self.useless_variables = json.load(file)
 
         # Loading (all) the dictionnaries containing the path to each dataset, i.e. "YEAR-MONTH : PATH(S)"
-        with open('../../paths/data_grid_T.txt', 'r') as file:
+        with open('../../information/grid_T.txt', 'r') as file:
             paths_physics_datasets_all = json.load(file)
 
-        with open('../../paths/data_ptrc_T.txt', 'r') as file:
+        with open('../../information/ptrc_T.txt', 'r') as file:
             paths_biogeochemistry_datasets_all = json.load(file)
 
-        # Path to the folder containing the datasets
-        self.datasets_folder = f"../../data/{folder}"
+        # Retrieving possible path to the folder containing the datasets
+        data_path_cluster, data_path_local = get_data_info()
+
+        # Path to the folder containing the data
+        self.datasets_folder = data_path_cluster + f"{folder}/" if os.path.exists(data_path_cluster) else \
+                               data_path_local   + f"{folder}/"
 
         # Stores all the relevant paths datasets
         self.paths_physics_datasets, self.paths_biogeochemistry_datasets = list(), list()
@@ -96,32 +93,29 @@ class BlackSea_Dataset():
         # Concatenation of the mesh (np.float32 is the type needed for torch when converted afterforwards)
         return np.stack((x_mesh, y_mesh), axis = 0, dtype = np.float32)
 
-    def get_depth(self):
-        r"""Used to retrieve the bathymetry information, i.e. the depth in [m] for each region of the sea (2D)"""
+    def get_depth(self, unit: str):
+        """Used to retrieve the maximum depths position (indexes in 3D data) or the maximum depths values (in meters)"""
+
+        # Security
+        assert unit in ["index", "meter"], f"ERROR (get_depths), Incorrect type ({unit})"
 
         # Path to the mesh file location
         path_mesh = get_mesh_path()
 
-        # Loading the dataset containing information about the Black Sea mesh
-        return xarray.open_dataset(path_mesh, engine = "h5netcdf").bathy_metry.data.astype('float32')
-
-    def get_bathymetry(self):
-        r"""Used to retrieve the bathymetry mask, i.e. the index at which we reach the bottom of the sea (2D)"""
-
-        # Path to the mesh file location
-        path_mesh = get_mesh_path()
-
-        # Loading the dataset containing information about the Black Sea mesh
-        return xarray.open_dataset(path_mesh, engine = "h5netcdf").mbathy.data
+        # Loading the information in the correct shape
+        return xarray.open_dataset(path_mesh, engine = "h5netcdf").bathy_metry.data.astype('float32') if unit == "meter" else \
+               xarray.open_dataset(path_mesh, engine = "h5netcdf").mbathy.data
 
     def get_mask(self, depth: int = None):
         r"""Used to retreive a mask of the Black Sea, i.e. 0 if land, 1 if the Black Sea. If depth is given, it will also set to 0 all regions below that depth"""
 
-        # Path to the mesh file location
-        path_mesh = get_mesh_path()
+        # Retrieving possible path to the data
+        mask_path_cluster, mask_path_local, mask_name = get_mask_info()
 
         # Loading the dataset containing information about the Black Sea mesh
-        mesh_data = xarray.open_dataset(path_mesh, engine = "h5netcdf")
+        mesh_data = xarray.open_dataset(mask_path_cluster + mask_name if os.path.exists(mask_path_cluster) else \
+                                        mask_path_local   + mask_name,
+                                        engine = "h5netcdf")
 
         # Loading the complete Black sea mask
         bs_mask = mesh_data.tmask[0, 0].data
@@ -138,7 +132,10 @@ class BlackSea_Dataset():
         # Returning the processed mask
         return bs_mask
 
-    def get_data(self, variable: str, level: int = None, region : str = None, depth: int = None):
+    def get_data(self, variable: str,
+                          level: int = None,
+                         region: str = None,
+                          depth: int = None):
         r"""Used to retreive the data for a given variable at a specific level or a specific region"""
 
         # Security (1)
@@ -214,4 +211,3 @@ class BlackSea_Dataset():
         # Bottom (2D)
         if region == "bottom":
             return get_bottom(data[variable].data.compute(), depth = depth)
-

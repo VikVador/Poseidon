@@ -19,36 +19,34 @@
 #
 import os
 import cv2
+import json
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.patches as mpatches
 
-# ------------- Data ----------------
 
-def get_mesh_path():
-    r"""Checks which path to use to get the mesh, i.e. if the folder is in the local version or the scratch version"""
+def get_mask_info():
+    """Used to retrieve the mask information, i.e. possible paths (Cluster or local) and the mask name"""
 
-    # Cluster OR local
-    if os.path.exists("../../../../../../../projects/acad/bsmfc/nemo4.2.0/BSFS/"):
-        return f"../../../../../../../projects/acad/bsmfc/nemo4.2.0/BSFS/mesh_mask.nc_new59_CMCC_noAzov"
-    if os.path.exists("../../data/"):
-        return f"../../data/mesh_mask.nc_new59_CMCC_noAzov"
+    # Loading the mask information
+    with open("../../information/mask.txt", "r") as f:
+        mask_info = json.load(f)
 
-    print("ERROR (get_mesh_path) - No path found")
-    exit()
+    # Extracting the information
+    return mask_info["cluster"], mask_info["local"], mask_info["mask"]
 
-def get_data_path(folder:str):
-    r"""Checks which path to use to get the data, i.e. if the folder is in the local version or the scratch version"""
-    # Cluster OR local
-    if os.path.exists("../../../../../../../projects/acad/bsmfc/nemo4.2.0/BSFS_BIO/"):
-        return f"../../../../../../../projects/acad/bsmfc/nemo4.2.0/BSFS_BIO/{folder}/"
-    if os.path.exists("../../data/"):
-        return f"../../data/{folder}/"
+def get_data_info():
+    """Used to retrieve the data information, i.e. possible paths (Cluster or local)"""
 
-    print("ERROR (get_data_path) - No path found")
-    exit()
+    # Loading the data information
+    with open("../../information/data.txt", "r") as f:
+        data_info = json.load(f)
+
+    # Extracting the information
+    return data_info["cluster"], data_info["local"]
+
 
 def get_complete_mask(data: np.array, bs_mask_with_depth: np.array):
     r"""Used to retrieve a mask highliting the land, oxygenated, hypoxia and switching zones"""
