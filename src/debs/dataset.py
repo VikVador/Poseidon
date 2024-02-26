@@ -20,8 +20,10 @@
 import os
 import json
 import xarray
+import calendar
 import numpy as np
-from tools import *
+
+from tools import get_data_info, get_mask_info
 
 
 class BlackSea_Dataset():
@@ -35,11 +37,12 @@ class BlackSea_Dataset():
         super().__init__()
 
         # Security (1)
-        assert year_start  in [i for i in range(1980, 2023)], f"ERROR (Dataset, init) - Incorrect starting year ({year_start})"
-        assert year_end    in [i for i in range(1980, 2023)], f"ERROR (Dataset, init) - Incorrect ending year ({year_end})"
-        assert month_start in [i for i in range(1, 13)],      f"ERROR (Dataset, init) - Incorrect starting month ({month_start})"
-        assert month_start in [i for i in range(1, 13)],      f"ERROR (Dataset, init) - Incorrect ending month ({month_end})"
-        assert year_start <= year_end,                        f"ERROR (Dataset, init) - Incorrect years ({year_start} <= {year_end})"
+        assert year_start  in [i for i in range(1980, 2023)], f"ERROR (Dataset, init) - Incorrect starting year (1980 <= {year_start} <= 2022)"
+        assert year_end    in [i for i in range(1980, 2023)], f"ERROR (Dataset, init) - Incorrect ending year (1980 <= {year_end} <= 2022)"
+        assert month_start in [i for i in range(1, 13)],      f"ERROR (Dataset, init) - Incorrect starting month (1 <= {month_start} <= 12)"
+        assert month_end   in [i for i in range(1, 13)],      f"ERROR (Dataset, init) - Incorrect ending month (1 <= {month_end} <= 12)"
+        assert  year_start <= year_end,                       f"ERROR (Dataset, init) - Incorrect years ({year_start} <= {year_end})"
+        assert month_start <= month_end,                      f"ERROR (Dataset, init) - Incorrect months ({month_start} <= {month_end})"
 
         # Loading the name of all the useless variables, i.e. not usefull for our specific problem (for the sake of efficiency)
         with open('../../information/useless.txt', 'r') as file:
@@ -99,17 +102,20 @@ class BlackSea_Dataset():
         # Security
         assert unit in ["index", "meter"], f"ERROR (get_depths), Incorrect type ({unit})"
 
-        # Path to the mesh file location
-        path_mesh = get_mesh_path()
+        # Retrieving possible path to the mask and its name
+        mask_path_cluster, mask_path_local, mask_name = get_mask_info()
 
-        # Loading the information in the correct shape
-        return xarray.open_dataset(path_mesh, engine = "h5netcdf").bathy_metry.data.astype('float32') if unit == "meter" else \
-               xarray.open_dataset(path_mesh, engine = "h5netcdf").mbathy.data
+        # Determining the correct path
+        mask_path_complete = mask_path_cluster + mask_name if os.path.exists(mask_path_cluster) else mask_path_local + mask_name
+
+        # Loading the information in the correct unit
+        return xarray.open_dataset(mask_path_complete, engine = "h5netcdf").bathy_metry.data.astype('float32') if unit == "meter" else \
+               xarray.open_dataset(mask_path_complete, engine = "h5netcdf").mbathy.data
 
     def get_mask(self, depth: int = None):
         r"""Used to retreive a mask of the Black Sea, i.e. 0 if land, 1 if the Black Sea. If depth is given, it will also set to 0 all regions below that depth"""
 
-        # Retrieving possible path to the data
+        # Retrieving possible path to the mask and its name
         mask_path_cluster, mask_path_local, mask_name = get_mask_info()
 
         # Loading the dataset containing information about the Black Sea mesh
@@ -131,6 +137,45 @@ class BlackSea_Dataset():
 
         # Returning the processed mask
         return bs_mask
+
+    def get_days(self):
+        """Used to get the IDs of days for a given time period, i.e. for each sample we have its day ID (1 to 365, repeated if multiple years are given)"""
+
+        def is_leap_year(year):
+            """Used to check if a given year is a leap year"""
+            return (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
+
+        # Stores the day IDs
+        day_ids = []
+
+        # Looping over the years
+        for year in range(self.year_start, self.year_end + 1):
+
+            # Handling the starting and ending months
+            start_month = self.month_start if year == self.year_start else 1
+            end_month   = self.month_end   if year == self.year_end   else 12
+
+            # Used to keep track of IDs
+            current_day_id = 1
+
+            # Looping over the months
+            for month in range(1, end_month + 1):
+
+                # Determine the number of days
+                _, num_days = calendar.monthrange(year, month)
+
+                # Append day IDs for the current month
+                day_ids.extend(range(current_day_id, current_day_id + num_days)) if start_month <= month else None
+
+                # Increment current day ID
+                current_day_id += num_days
+
+                # Correction for leaping years
+                if month == 2:
+                    if not is_leap_year(year):
+                        current_day_id += 1
+
+        return np.array(day_ids, dtype = np.float32)
 
     def get_data(self, variable: str,
                           level: int = None,
@@ -171,7 +216,7 @@ class BlackSea_Dataset():
             assert len(data.shape) == 4, f"ERROR (get_bottom), Incorrect data shape ({data.shape}), i.e. input dimensions should be (time, depth, y, x)"
 
             # Retreiving the bathymetry mask b(t, x, y) = z_bottom, i.e. index at which we found bottom of the sea
-            bathy_mask = self.get_bathymetry()
+            bathy_mask = self.get_depth(unit = "index")
 
             # Creation of x and y indexes to make manipulation
             x, y = np.arange(bathy_mask.shape[2]), np.arange(bathy_mask.shape[1])
