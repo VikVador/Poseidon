@@ -1,0 +1,54 @@
+# -------------------------------------------------------
+#
+#        |
+#       / \
+#      / _ \                  ESA - PROJECT
+#     |.o '.|
+#     |'._.'|          BLACK SEA DEOXYGENATION EMULATOR
+#     |     |
+#   ,'|  |  |`.             BY VICTOR MANGELEER
+#  /  |  |  |  \
+#  |,-'--|--'-.|                2023-2024
+#
+#
+# -------------------------------------------------------
+#
+# Documentation
+# -------------
+# A configuration file to be given to the main training script (__training.py)
+#
+config:
+
+  # WandB
+  "Project"                 : "ESA - Black Sea Deoxygenation Emulator"
+
+  # Data
+  "Month (Starting)"        : 1
+  "Month (Ending)"          : 1
+  "Year (Starting)"         : 1980
+  "Year (Ending)"           : 1980
+  "Problem"                 : "regression"
+  "Hypoxia Treshold"        : 63
+  "Depth"                   : 200
+  "Inputs"                  : ["temperature"]
+  "Window (Inputs)"         : 1
+  "Window (Output)"         : 1
+  "Window (Transformation)" : 1
+
+  # Model & Training
+  "Architecture"            : "AVERAGE"
+  "Scaling"                 : 4
+  "Kernel Size"             : 3
+  "Datasets Size"           : [0.6, 0.3]
+  "Loss Weights"            : [1, 1]
+  "Learning Rate"           : 0.001
+  "Batch Size"              : 64
+  "Epochs"                  : 10
+
+cluster:
+  "Dawgz"    : False
+  "CPUS"     : 1
+  "GPUS"     : 1
+  "RAM"      : "64GB"
+  "TIME"     : "00:30:00"
+  "PARTITION": "ia"

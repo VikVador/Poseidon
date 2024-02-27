@@ -80,8 +80,6 @@ class BlackSea_Dataloader():
         def spatialize(data: np.array, mesh: np.array, bathymetry: np.array):
             """Used to add spatial information to the data, i.e. bathymetry and mesh"""
 
-            import sys
-
             # Retrieiving the dimensions
             timesteps, days, metrics, variables, x_res, y_res = data.shape
 
@@ -93,8 +91,6 @@ class BlackSea_Dataloader():
             for i, axe in zip(range(3), [timesteps, days, metrics]):
                 mesh       = np.repeat(mesh,       repeats = axe, axis = i)
                 bathymetry = np.repeat(bathymetry, repeats = axe, axis = i)
-
-            print(sys.getsizeof(mesh))
 
             # Concatenating everything to the original data
             return np.concatenate([data, mesh, bathymetry], axis = 3)
@@ -236,7 +232,7 @@ class BlackSea_Dataloader():
         x[:, :, :, :, mask == 0] = -1
 
         # Adding spatial information, i.e. bathymetry and mesh
-        x = spatialize(data = x, mesh = mesh, bathymetry = bathy)
+        x = spatialize(data = x, mesh = mesh, bathymetry = bathymetry)
 
         # Formulating the problem, i.e. classification or regression by transforming the output
         y = formulate(mode = mode,
