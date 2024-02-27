@@ -30,8 +30,10 @@ class BlackSea_Dataloader():
     def __init__(self, x: list,
                        y: np.array,
                        t: np.array,
+                    mesh: np.array,
                     mask: np.array,
          mask_with_depth: np.array,
+              bathymetry: np.array,
               window_inp: int   = 1,
               window_out: int   = 1,
           window_transfo: int   = 1,
@@ -74,6 +76,28 @@ class BlackSea_Dataloader():
 
             # If a value is given, rescale it
             return normalized_data, (value - min_value)/(max_value - min_value) if value is not None else None
+
+        def spatialize(data: np.array, mesh: np.array, bathymetry: np.array):
+            """Used to add spatial information to the data, i.e. bathymetry and mesh"""
+
+            import sys
+
+            # Retrieiving the dimensions
+            timesteps, days, metrics, variables, x_res, y_res = data.shape
+
+            # Adding the missing dimensions
+            mesh       = np.expand_dims(mesh,       axis = (0, 1, 2))
+            bathymetry = np.expand_dims(bathymetry, axis = (0, 1, 2))
+
+            # Replicating the mesh and bathymetry to match each dimension
+            for i, axe in zip(range(3), [timesteps, days, metrics]):
+                mesh       = np.repeat(mesh,       repeats = axe, axis = i)
+                bathymetry = np.repeat(bathymetry, repeats = axe, axis = i)
+
+            print(sys.getsizeof(mesh))
+
+            # Concatenating everything to the original data
+            return np.concatenate([data, mesh, bathymetry], axis = 3)
 
         def formulate(mode: str, data: np.array, mask: np.array, treshold: float):
             """Used to formulate the problem, i.e. classification or regression by transforming the output"""
@@ -211,6 +235,9 @@ class BlackSea_Dataloader():
         # Hidding the land and the regions of no interest
         x[:, :, :, :, mask == 0] = -1
 
+        # Adding spatial information, i.e. bathymetry and mesh
+        x = spatialize(data = x, mesh = mesh, bathymetry = bathy)
+
         # Formulating the problem, i.e. classification or regression by transforming the output
         y = formulate(mode = mode,
                       data = y,
@@ -248,7 +275,7 @@ class BlackSea_Dataloader():
         class BS_Dataset(Dataset):
             r"""Pytorch dataloader"""
 
-            def __init__(self, x: np.array, y: np.array, t: np.array):
+            def __init__(self, x: np.array, t: np.array, y: np.array):
                 self.x = x
                 self.t = t
                 self.y = y
@@ -261,8 +288,8 @@ class BlackSea_Dataloader():
 
         # Creation of the dataset for dataloader
         dataset = BS_Dataset(x = getattr(self, f"x_{type}"),
-                             y = getattr(self, f"y_{type}"),
-                             t = getattr(self, f"t_{type}"))
+                             t = getattr(self, f"t_{type}"),
+                             y = getattr(self, f"y_{type}"))
 
         # Creation of the dataloader
         return DataLoader(dataset, batch_size = batch_size)

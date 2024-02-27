@@ -47,7 +47,6 @@ def get_data_info():
     # Extracting the information
     return data_info["cluster"], data_info["local"]
 
-
 def get_complete_mask(data: np.array, bs_mask_with_depth: np.array):
     r"""Used to retrieve a mask highliting the land, oxygenated, hypoxia and switching zones"""
 
