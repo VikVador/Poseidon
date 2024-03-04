@@ -25,18 +25,23 @@ import torch.optim as optim
 def compute_loss(y_pred : torch.Tensor, y_true : torch.Tensor, problem : str, device : str, kwargs : dict):
     r"""Process data and computes the loss"""
 
-    # Regression (predicting mean and variance, a Gaussian Mixture Model)
-    if problem == "mixture":
-        pass
-
     # Regression (only predicting mean)
     if problem == "regression":
 
         # Retrieves indices of the observed region
-        indices = torch.where(y_true != -1)
+        indices = torch.where(y_true[:, 0] != -1)
 
-        # Computing the loss
-        return nn.MSELoss()(y_pred[indices], y_true[indices])
+        # Determine number of samples
+        nb_samples = y_pred.shape[0] *  y_pred.shape[2] *  y_pred.shape[3]
+
+        # Retrieving the variance
+        y_pred[:, 1] = torch.exp(y_pred[:, 1])
+
+        # Computing loss per pixel
+        error = ((y_true[:, 0] - y_pred[:, 0]) ** 2)/(2 * y_pred[:, 1]) + torch.log(torch.sqrt(y_pred[:, 1]))
+
+        # Summing the loss
+        return torch.sum(error[indices])/nb_samples
 
     # Classification
     if problem == "classification":
@@ -57,13 +62,9 @@ def compute_loss(y_pred : torch.Tensor, y_true : torch.Tensor, problem : str, de
         # Reshaping the data (batch * forecasted_days because we compute the loss across all forecasted days for simplicity)
         pred = pred.reshape(batch * forecasted_days, classes, -1)
         y    =    y.reshape(batch * forecasted_days, classes, -1)
-        
+
         # Metric tools
         loss = torch.nn.BCEWithLogitsLoss(pos_weight = weights)
-        
+
         # Computing the weighted binary entropy loss function
         return loss(pred, y)
-
-
-
-

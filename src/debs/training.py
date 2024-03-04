@@ -17,10 +17,12 @@
 # -------------
 # A (main) function used to train a neural network to forecast the oxygen concentration in the Black Sea.
 #
+import wandb
 import time
 
 # Pytorch
 import torch
+import torch.nn as nn
 import torch.optim as optim
 
 # Custom libraries
@@ -87,11 +89,23 @@ def training(**kwargs):
     # Loading the different masks
     bs_mask             = BS_dataset.get_mask(depth = None)
     bs_mask_with_depth  = BS_dataset.get_mask(depth = depth)
+    bs_mask_complete    = get_complete_mask(data_oxygen, bs_mask_with_depth)
 
     # -------------—---------
     #     Preprocessing
     # -------------—---------
     #
+    # Cropping dimensions to be a multiple of 2
+    for i, v in enumerate(input_datasets):
+        input_datasets[i] = crop(v, factor = 2)
+
+    data_oxygen        = crop(data_oxygen,        factor = 2)
+    mesh               = crop(mesh,               factor = 2)
+    bathy              = crop(bathy,              factor = 2)
+    bs_mask            = crop(bs_mask,            factor = 2)
+    bs_mask_with_depth = crop(bs_mask_with_depth, factor = 2)
+    bs_mask_complete   = crop(bs_mask_complete,   factor = 2)
+
     # Creating the dataloader
     BS_loader = BlackSea_Dataloader(x = input_datasets,
                                     y = data_oxygen,
@@ -118,6 +132,9 @@ def training(**kwargs):
     # Extracting the number of samples in the validation set
     number_samples_validation = BS_loader.get_number_of_samples(type = "validation")
 
+    # Retrieves the ratios of the different classes (Used to get insights about the data)
+    ratio_oxygenated, ratio_switching, ratio_hypoxia = get_ratios(bs_mask_complete)
+
     # -------------—---------
     #        Settings
     # -------------—---------
@@ -126,16 +143,16 @@ def training(**kwargs):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Loading the neural network
-    # neural_net = load_neural_network(architecture = architecture,
-    #                                  data_output = data_oxygen,
-    #                                       device = device,
-    #                                       kwargs = kwargs)
+    neural_net = load_neural_network(architecture = architecture,
+                                      data_output = data_oxygen,
+                                           device = device,
+                                           kwargs = kwargs)
 
     # Pushing the neural network to the correct device
-    # neural_net.to(device)
+    neural_net.to(device)
 
     # Loading the optimizer
-    # optimizer  = optim.Adam(neural_net.parameters(), lr = learning_rate)
+    optimizer  = optim.Adam(neural_net.parameters(), lr = learning_rate)
 
     # Loading the loss information
     loss_type = "MSE" if problem == "regression" else "BCE"
@@ -147,16 +164,16 @@ def training(**kwargs):
     project_title(kwargs)
 
     # WandB (1) - Initialization
-    # wandb.init(project = project, config = kwargs)
+    wandb.init(project = project, config = kwargs)
 
     # WandB (2) - Sending information about the datasets
-    # wandb.log({"Dataset & Architecture/Dataset (Visualisation, Image, Regions)" : wandb.Image(get_complete_mask_plot(bs_mask_complete)),
-    #            "Dataset & Architecture/Dataset (Visualisation, Image, Ratios)"  : wandb.Image(get_ratios_plot(data_oxygen, bs_mask_with_depth)),
-    #            "Dataset & Architecture/Dataset (Visualisation, Video, Oxygen)"  : wandb.Video(get_video(data = data_oxygen), fps = 1),
-    #            "Dataset & Architecture/Ratio Oxygenated"                        : ratio_oxygenated,
-    #            "Dataset & Architecture/Ratio Switching"                         : ratio_switching,
-    #            "Dataset & Architecture/Ratio Hypoxia"                           : ratio_hypoxia,
-    #            "Dataset & Architecture/Trainable Parameters"                    : neural_net.count_parameters()})
+    wandb.log({"Dataset & Architecture/Dataset (Visualisation, Image, Regions)" : wandb.Image(get_complete_mask_plot(bs_mask_complete)),
+                "Dataset & Architecture/Dataset (Visualisation, Image, Ratios)" : wandb.Image(get_ratios_plot(data_oxygen, bs_mask_with_depth)),
+                "Dataset & Architecture/Dataset (Visualisation, Video, Oxygen)" : wandb.Video(get_video(data = data_oxygen), fps = 1),
+                "Dataset & Architecture/Ratio Oxygenated"                       : ratio_oxygenated,
+                "Dataset & Architecture/Ratio Switching"                        : ratio_switching,
+                "Dataset & Architecture/Ratio Hypoxia"                          : ratio_hypoxia,
+                "Dataset & Architecture/Trainable Parameters"                   : neural_net.count_parameters()})
 
     # -------------—---------
     #        Training
@@ -184,55 +201,54 @@ def training(**kwargs):
             x, t, y = x.to(device), t.to(device), y.to(device)
 
             # Prediction of the neural network
-            # prediction = neural_net.forward(x, t)
+            prediction = neural_net.forward(x, t)
 
             # Computing the loss
-            # loss_training = compute_loss(y_pred = prediction,
-            #                              y_true = y,
-            #                             problem = problem,
-            #                              device = device,
-            #                              kwargs = kwargs)
+            loss_training = compute_loss(y_pred = prediction,
+                                         y_true = y,
+                                        problem = problem,
+                                         device = device,
+                                         kwargs = kwargs)
 
             # Information over terminal (2)
-            # progression(epoch = epoch,
-            #      number_epoch = nb_epochs,
-            #     loss_training = loss_training.detach().item(),
-            #   loss_validation = 0,
-            # loss_training_aob = 0,
-           #loss_validation_aob = 0)
+            progression(epoch = epoch,
+                 number_epoch = nb_epochs,
+                loss_training = loss_training.detach().item(),
+              loss_validation = 0,
+            loss_training_aob = 0,
+          loss_validation_aob = 0)
 
             # WandB (3) - Sending information about the training loss
-            # wandb.log({f"Training/Loss ({loss_type}, T)": loss_t.detach().item()})
+            wandb.log({f"Training/Loss ({loss_type}, T)": loss_training.detach().item()})
 
             # Accumulating the loss and updating the number of steps
-            # training_loss        += loss_training.detach().item()
-            # training_batch_steps += 1
+            training_loss        += loss_training.detach().item()
+            training_batch_steps += 1
 
             # AverageNet - No optimization needed !
             if architecture == "AVERAGE": continue
 
             # Reseting the gradients
-            # optimizer.zero_grad()
+            optimizer.zero_grad()
 
             # Backward pass
-            # loss_training.backward()
+            loss_training.backward()
 
             # Optimizing the parameters
-            # optimizer.step()
+            optimizer.step()
 
-            # NEED TO BE REMOVED
             break
 
         # Information over terminal (3)
-        # progression(epoch = epoch,
-        #            number_epoch        = nb_epochs,
-        #            loss_training       = loss_t.detach().item(),
-        #            loss_training_aob   = training_loss / training_batch_steps,
-        #            loss_validation     = 0,
-        #            loss_validation_aob = 0)
+        progression(epoch = epoch,
+             number_epoch = nb_epochs,
+            loss_training = loss_training.detach().item(),
+        loss_training_aob = training_loss / training_batch_steps,
+          loss_validation = 0,
+      loss_validation_aob = 0)
 
         # WandB (4) - Sending information about the training loss
-        # wandb.log({f"Training/Loss ({loss_type}, Training): ": training_loss / training_batch_steps})
+        wandb.log({f"Training/Loss ({loss_type}, Training): ": training_loss / training_batch_steps})
 
         with torch.no_grad():
 
@@ -246,84 +262,85 @@ def training(**kwargs):
                 x, t, y = x.to(device), t.to(device), y.to(device)
 
                 # Prediction of the neural network
-                # prediction = neural_net.forward(x, t)
+                prediction = neural_net.forward(x, t)
 
                 # Computing the loss
-                # loss_validation = compute_loss(y_pred = prediction,
-                #                                y_true = y,
-                #                               problem = problem,
-                #                                device = device,
-                #                                kwargs = kwargs)
+                loss_validation = compute_loss(y_pred = prediction,
+                                               y_true = y,
+                                              problem = problem,
+                                               device = device,
+                                               kwargs = kwargs)
 
                 # Information over terminal (4)
-                # progression(epoch = epoch,
-                #             number_epoch        = nb_epochs,
-                #             loss_training       = loss_training.detach().item(),
-                #             loss_training_aob   = training_loss / training_batch_steps,
-                #             loss_validation     = loss_v.detach().item(),
-                #             loss_validation_aob = 0)
+                progression(epoch = epoch,
+                     number_epoch = nb_epochs,
+                    loss_training = loss_training.detach().item(),
+                loss_training_aob = training_loss / training_batch_steps,
+                  loss_validation = loss_validation.detach().item(),
+              loss_validation_aob = 0)
 
                 # WandB (4) - Sending information about the validation loss
-                # wandb.log({f"Training/Loss ({loss_type}, V)": loss_validation.detach().item()})
+                wandb.log({f"Training/Loss ({loss_type}, V)": loss_validation.detach().item()})
 
                 # Accumulating the loss and updating the number of steps
-                # validation_loss        += loss_validation.detach().item()
-                # validation_batch_steps += 1
+                validation_loss        += loss_validation.detach().item()
+                validation_batch_steps += 1
 
                 # Transforming to probabilities (not done in forward pass because BCEWithLogitsLoss does it for us)
-                # x = nn.Softmax(dim = 2)(prediction) if problem == "classification" else pred
+                x = nn.Softmax(dim = 2)(prediction) if problem == "classification" else prediction
 
                 # Pushing the data to te CPU (needed to compute metrics)
-                # prediction, y = prediction.to("cpu"), y.to("cpu")
+                prediction, y = prediction.to("cpu"), y.to("cpu")
 
                 # Used to compute the metrics
-                # metrics_tool.compute_metrics(y_pred = prediction, y_true = y)
-                # metrics_tool.compute_plots(  y_pred = prediction, y_true = y) if validation_batch_steps == 0 else None
+                metrics_tool.compute_metrics(y_pred = torch.unsqueeze(prediction[:, 0], dim = 1), y_true = y)
+                metrics_tool.compute_plots(  y_pred = torch.unsqueeze(prediction[:, 0], dim = 1), y_true = y) if validation_batch_steps == 1 else None
 
                 # WandB (5) - Sending visual information about the validation
-                # wandb.log({f"Visualization/Prediction VS Ground Truth": wandb.Image(metrics_tool.compute_plots_comparison(y_pred = pred, y_true = y))}) if validation_batch_steps == 0 else None
+                if problem == "regression":
+                  wandb.log({f"Visualization/Prediction VS Ground Truth (Regression)": wandb.Image(metrics_tool.compute_plots_comparison_regression(y_pred = prediction, y_true = y))}) if validation_batch_steps == 1 else None
+                else:
+                  wandb.log({f"Visualization/Prediction VS Ground Truth (Classification)": wandb.Image(metrics_tool.compute_plots_comparison_classification(y_pred = prediction, y_true = y))}) if validation_batch_steps == 1 else None
 
-                # NEEDS TO BE REMOVED
-                print(x.shape, t.shape, y.shape)
                 break
 
             # Information over terminal (5)
-            # progression(epoch = epoch,
-            #             number_epoch        = nb_epochs,
-            #             loss_training       = loss_training.detach().item(),
-            #             loss_training_aob   = training_loss / training_batch_steps,
-            #             loss_validation     = loss_validation.detach().item(),
-            #             loss_validation_aob = validation_loss / validation_batch_steps)
+            progression(epoch = epoch,
+                 number_epoch = nb_epochs,
+                loss_training = loss_training.detach().item(),
+            loss_training_aob = training_loss / training_batch_steps,
+              loss_validation = loss_validation.detach().item(),
+          loss_validation_aob = validation_loss / validation_batch_steps)
 
             # Updating timing
             epoch_time = time.time() - start
 
             # Getting results of each metric (averaged over each batch)
-            # results, results_name = metrics_tool.get_results()
+            results, results_name = metrics_tool.get_results()
 
             # Getting the plots of each metric
-            # plots, plots_name = metrics_tool.get_plots()
+            plots, plots_name = metrics_tool.get_plots()
 
             # WandB (6) - Sending information about the validation loss
-            # wandb.log({f"Training/Loss ({loss_type}, Validation)": validation_loss / validation_batch_steps,
-            #             "Training/Epochs"                        : nb_epochs - epoch,
-            #             "Training/Time Left"                     : (nb_epochs - epoch) * epoch_time})
+            wandb.log({f"Training/Loss ({loss_type}, Validation)": validation_loss / validation_batch_steps,
+                        "Training/Epochs"                        : nb_epochs - epoch,
+                        "Training/Time Left"                     : (nb_epochs - epoch) * epoch_time})
 
             # WandB (7) - Sending metrics scores
-            # for d, day_results in enumerate(results):
-            #     for i, result in enumerate(day_results):
-            #
-            #         # Metric with corresponding forecasted day (Only if more than 1 day is forecasted)
-            #         m_name = results_name[i] + " D(" + str(d) + ")" if windows_outputs > 1 else results_name[i]
-            #
-            #         # Logging
-            #         wandb.log({f"Metrics/{m_name}" : result})
+            for d, day_results in enumerate(results):
+                for i, result in enumerate(day_results):
+
+                  # Metric with corresponding forecasted day (Only if more than 1 day is forecasted)
+                  m_name = results_name[i] + " D(" + str(d) + ")" if windows_outputs > 1 else results_name[i]
+
+                  # Logging
+                  wandb.log({f"Metrics/{m_name}" : result})
 
             # WandB (8) - Sending visual information
-            # for plot, name in zip(plots, plots_name):
-            #
-            #    # Logging
-            #    wandb.log({f"Visualization/{name}" : wandb.Image(plot)})
+            for plot, name in zip(plots, plots_name):
+
+              # Logging
+              wandb.log({f"Visualization/{name}" : wandb.Image(plot)})
 
     # Finishing the Weight and Biases run
-    # wandb.finish()
+    wandb.finish()

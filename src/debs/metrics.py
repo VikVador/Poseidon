@@ -114,8 +114,8 @@ class BlackSea_Metrics():
             t, c, x, y = y_true_per_day.shape
 
             # Retrieving values in the sea, swapping axis (t, c, x, y) to (c, t, x, y) and flattening (c, t * x * y)
-            y_true_per_day = y_true_per_day[:, :, self.mask[:-2, :-2] == 1].reshape(t, c, -1)
-            y_pred_per_day = y_pred_per_day[:, :, self.mask[:-2, :-2] == 1].reshape(t, c, -1)
+            y_true_per_day = y_true_per_day[:, :, self.mask[:, :] == 1].reshape(t, c, -1)
+            y_pred_per_day = y_pred_per_day[:, :, self.mask[:, :] == 1].reshape(t, c, -1)
 
             # Used th compute the area under the curve
             toolAUC = MulticlassAUROC(num_classes = c)
@@ -143,8 +143,8 @@ class BlackSea_Metrics():
                                   PearsonCorrCoef( num_outputs = t)]
 
             # Swapping axes (t, x * y) to (x * y, t)
-            y_true_per_day = torch.swapaxes(y_true_per_day[:, self.mask[:-2, :-2] == 1], 0, 1)
-            y_pred_per_day = torch.swapaxes(y_pred_per_day[:, self.mask[:-2, :-2] == 1], 0, 1)
+            y_true_per_day = torch.swapaxes(y_true_per_day[:, self.mask[:, :] == 1], 0, 1)
+            y_pred_per_day = torch.swapaxes(y_pred_per_day[:, self.mask[:, :] == 1], 0, 1)
 
             # Computations
             results += [torch.sum(metric(y_pred_per_day, y_true_per_day)).item() for metric in metrics_regression]
@@ -172,7 +172,7 @@ class BlackSea_Metrics():
 
         # Hides all the regions that are not relevant for this metric
         if "Precision" in label or "Recall" in label:
-            score[self.mask_complete[:-2, :-2] == 0] = np.nan
+            score[self.mask_complete[:, :] == 0] = np.nan
 
         # Flipping vertically to show correctly Black Sea (for you my loving oceanographer <3)
         score = np.flipud(score)
@@ -260,7 +260,7 @@ class BlackSea_Metrics():
             if self.mode == "classification":
 
                 # Drawing plot
-                self.plots += self.compute_plots_classification_ROCAUC(y_pred_per_day[:, :, self.mask[:-2, :-2] == 1], y_true_per_day[:, :, self.mask[:-2, :-2] == 1], i)
+                self.plots += self.compute_plots_classification_ROCAUC(y_pred_per_day[:, :, self.mask[:, :] == 1], y_true_per_day[:, :, self.mask[:, :] == 1], i)
 
                 # Transforming problem to non-probabilistic
                 y_true_per_day = np.argmax(y_true_per_day, axis = 1)
@@ -313,7 +313,7 @@ class BlackSea_Metrics():
             score = metric(y_pred, y_true).reshape(x, y)
 
             # Masking the land and non-observed region, i.e. NaNs are white when plotted so thats the best !
-            score[self.mask[:-2, :-2] == 0] = np.nan
+            score[self.mask[:, :] == 0] = np.nan
 
             # Adding results, i.e. fig and name (multipliy by 100 for percentage)
             plots.append(self.make_plots(score * limits[1], index_day, name, color, limits))
@@ -351,7 +351,7 @@ class BlackSea_Metrics():
             score = metric(y_pred, y_true).reshape(x, y)
 
             # Masking the land and non-observed region, i.e. NaNs are white when plotted so thats the best !
-            score[self.mask[:-2, :-2] == 0] = np.nan
+            score[self.mask[:, :] == 0] = np.nan
 
             # Adding results, i.e. fig and name
             scores.append(self.make_plots(score * 100, index_day, name, "Spectral", limits))
@@ -397,7 +397,7 @@ class BlackSea_Metrics():
 
         return [fig]
 
-    def compute_plots_comparison(self, y_pred : torch.tensor, y_true : torch.tensor):
+    def compute_plots_comparison_classification(self, y_pred : torch.tensor, y_true : torch.tensor):
         """Plot and compare two tensors"""
 
         def convert_prob_to_classification(tensor : torch.tensor):
@@ -423,6 +423,8 @@ class BlackSea_Metrics():
         y_pred[:, :, mask_true == 1] = np.nan if prob_type == 4 else -1
         y_true[:, :, mask_true == 1] = np.nan if prob_type == 4 else -1
 
+        print(y_pred[0, 0, :10, :10])
+
         # Flipping vertically (ease of comprehension)
         y_pred = torch.flip(y_pred, dims = (2,))
         y_true = torch.flip(y_true, dims = (2,))
@@ -431,7 +433,7 @@ class BlackSea_Metrics():
         fig, axes = plt.subplots(2, 1, figsize = (20, 10))
 
         # Plot Prediction
-        im1 = axes[0].imshow(y_pred[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1, vmax=1)  # Set vmin and vmax
+        im1 = axes[0].imshow(y_pred[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1, vmax = 1)  # Set vmin and vmax
         axes[0].set_ylabel('Prediction')
         axes[0].set_xticks([])
         axes[0].set_yticks([])
@@ -440,7 +442,7 @@ class BlackSea_Metrics():
         cbar1 = fig.colorbar(im1, ax=axes[0], fraction = 0.025, pad = 0.04)
 
         # Plot Ground Truth
-        im2 = axes[1].imshow(y_true[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1, vmax=1)  # Set vmin and vmax
+        im2 = axes[1].imshow(y_true[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1, vmax = 1)  # Set vmin and vmax
         axes[1].set_ylabel('Ground Truth')
         axes[1].set_xticks([])
         axes[1].set_yticks([])
@@ -453,3 +455,72 @@ class BlackSea_Metrics():
         plt.show()
 
         return fig
+
+    def compute_plots_comparison_regression(self, y_pred : torch.tensor, y_true : torch.tensor):
+            """Plot and compare two tensors"""
+
+            def convert_prob_to_classification(tensor : torch.tensor):
+                """Convert probabilities to classification"""
+                if len(tensor.shape) == 5:
+                    mask = tensor[0, 0, 0] == -1
+                    tensor = torch.argmax(tensor, dim=2)
+                else:
+                    mask = (tensor[0, 0] == -1) * 1
+                return tensor, mask
+
+            # Determining the type of problem
+            prob_type = len(y_pred.shape)
+
+            # Defining color map
+            cmap = "viridis" if prob_type == 4 else "viridis"
+
+            # Convert probabilities to classification
+            y_pred_mean, _    = convert_prob_to_classification(torch.unsqueeze(y_pred[:, 0], dim = 1))
+            y_pred_std, _     = convert_prob_to_classification(torch.sqrt(torch.exp(torch.unsqueeze(y_pred[:, 1], dim = 1))))
+            y_true, mask_true = convert_prob_to_classification(y_true)
+
+            # Hiding the land
+            y_pred_mean[:, :, mask_true == 1] = np.nan if prob_type == 4 else -1
+            y_pred_std[ :, :, mask_true == 1] = np.nan if prob_type == 4 else -1
+            y_true[     :, :, mask_true == 1] = np.nan if prob_type == 4 else -1
+
+            # Flipping vertically (ease of comprehension)
+            y_pred_mean = torch.flip(y_pred_mean, dims = (2,))
+            y_pred_std  = torch.flip(y_pred_std,  dims = (2,))
+            y_true      = torch.flip(y_true,      dims = (2,))
+
+            # Plotting the results
+            fig, axes = plt.subplots(3, 1, figsize = (20, 10))
+
+            # Plot Mean Prediction
+            im1 = axes[0].imshow(y_pred_std[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1, vmax = 1)  # Set vmin and vmax
+            axes[0].set_ylabel('Prediction (Standard Deviation)')
+            axes[0].set_xticks([])
+            axes[0].set_yticks([])
+
+            # Add colorbar to the right of the Prediction plot
+            cbar1 = fig.colorbar(im1, ax=axes[0], fraction = 0.025, pad = 0.04)
+
+            # Plot Var Prediction
+            im2 = axes[1].imshow(y_pred_mean[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1, vmax = 1)  # Set vmin and vmax
+            axes[1].set_ylabel('Prediction (Mean)')
+            axes[1].set_xticks([])
+            axes[1].set_yticks([])
+
+            # Add colorbar to the right of the Prediction plot
+            cbar2 = fig.colorbar(im2, ax=axes[1], fraction = 0.025, pad = 0.04)
+
+            # Plot Ground Truth
+            im3 = axes[2].imshow(y_true[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1, vmax = 1)  # Set vmin and vmax
+            axes[2].set_ylabel('Ground Truth')
+            axes[2].set_xticks([])
+            axes[2].set_yticks([])
+
+            # Add colorbar to the right of the Ground Truth plot
+            cbar3 = fig.colorbar(im3, ax=axes[2], fraction=0.025, pad=0.04)
+
+            # Adjust layout
+            plt.tight_layout()
+            plt.show()
+
+            return fig

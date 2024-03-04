@@ -20,11 +20,12 @@
 # Pytorch
 import torch.nn as nn
 
-class Encoder(nn.Sequential):
+
+class ENCODER(nn.Sequential):
     r"""A neural network used to encode the temporal information of the data and return weights for the input data"""
 
     def __init__(self, input_size : int):
-        super(Encoder, self).__init__()
+        super(ENCODER, self).__init__()
 
         # Defining the layers
         self.linear_in       = nn.Linear(input_size, 256)
@@ -38,7 +39,7 @@ class Encoder(nn.Sequential):
         self.activation = nn.GELU()
 
         # Defining the softmax function, i.e. (t, values, day) to (t, values, 1) then (t, weights, 1)
-        self.softmax = nn.Softmax(dim = 1)
+        self.softmax = nn.Softmax(dim = 0)
 
     def forward(self, x):
 

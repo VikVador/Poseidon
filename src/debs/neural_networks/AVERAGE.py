@@ -49,14 +49,18 @@ class AVERAGE(nn.Sequential):
             min_value = np.nanmin(data_output)
             max_value = np.nanmax(data_output)
 
-            # Rescale the data to ensure non-negative values
-            average_output = data_output + np.abs(min_value) if min_value < 0 else data_output
+            # Determining the minimum and maximum values
+            min_value = np.nanmin(data_output)
+            max_value = np.nanmax(data_output)
 
-            # Normalizing the data
-            average_output = (average_output - min_value) / (max_value - min_value)
+            # Shift the data to ensure minimum value is 0
+            shifted_data = data_output - min_value
+
+            # Normaliinge the data
+            normalized_data = shifted_data / (max_value - min_value)
 
             # Average concentration
-            average_output = torch.mean(torch.from_numpy(average_output[: train_samples, :-2, :-2]), dim = 0)
+            average_output = torch.mean(torch.from_numpy(normalized_data[: train_samples, :-2, :-2]), dim = 0)
 
         # ----- Classification ------
         else:
@@ -79,7 +83,7 @@ class AVERAGE(nn.Sequential):
         # Dummy feature (It plays no role whatsoever, it is just a placeholder to make the model work with the trainer)
         self.layer = nn.Conv2d(1, 1, 1)
 
-    def forward(self, x):
+    def forward(self, x, t):
         return to_device(self.average[:x.shape[0]], self.device)
 
     def process(self, x : torch.Tensor):

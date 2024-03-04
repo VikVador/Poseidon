@@ -32,12 +32,8 @@ from itertools import product
 
 if __name__ == "__main__":
 
-    # Definition of the help message that will be shown on the terminal
-    usage = """
-    USAGE:      python script_training.py --config <X>
-    """
     # Initialization of the parser
-    parser = argparse.ArgumentParser(usage)
+    parser = argparse.ArgumentParser()
 
     # Adding the arguments
     parser.add_argument(

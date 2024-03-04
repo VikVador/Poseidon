@@ -267,3 +267,12 @@ def generateFakeDataset(number_of_variables: int = 5, number_of_samples: int = 1
 
     # Creates a list of numpy arrays
     return [np.array(s) for s in list_fake_samples]
+
+def crop(data: np.array, factor: int = 2):
+    """Used to remove the borders of the data"""
+
+    # Retrieving dimensions
+    data_shape = data.shape
+
+    # Croping the data
+    return data[:-factor, :-factor] if len(data_shape) == 2 else data[:, :-factor, :-factor]

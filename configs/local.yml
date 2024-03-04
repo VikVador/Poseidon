@@ -20,7 +20,7 @@
 config:
 
   # WandB
-  "Project"                 : "ESA - Black Sea Deoxygenation Emulator"
+  "Project"                 : "ESA - Black Sea Deoxygenation Emulator - Test"
 
   # Data
   "Month (Starting)"        : 1
@@ -31,13 +31,13 @@ config:
   "Hypoxia Treshold"        : 63
   "Depth"                   : 200
   "Inputs"                  : ["temperature"]
-  "Window (Inputs)"         : 1
+  "Window (Inputs)"         : 4
   "Window (Output)"         : 1
-  "Window (Transformation)" : 1
+  "Window (Transformation)" : 2
 
   # Model & Training
-  "Architecture"            : "AVERAGE"
-  "Scaling"                 : 4
+  "Architecture"            : "UNET"
+  "Scaling"                 : 1
   "Kernel Size"             : 3
   "Datasets Size"           : [0.6, 0.3]
   "Loss Weights"            : [1, 1]

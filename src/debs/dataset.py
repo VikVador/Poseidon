@@ -108,9 +108,12 @@ class BlackSea_Dataset():
         # Determining the correct path
         mask_path_complete = mask_path_cluster + mask_name if os.path.exists(mask_path_cluster) else mask_path_local + mask_name
 
-        # Loading the information in the correct unit
-        return xarray.open_dataset(mask_path_complete, engine = "h5netcdf").bathy_metry.data.astype('float32') if unit == "meter" else \
-               xarray.open_dataset(mask_path_complete, engine = "h5netcdf").mbathy.data
+        # Opening the dataset
+        data_depth = xarray.open_dataset(mask_path_complete, engine = "h5netcdf").bathy_metry.data.astype('float32') if unit == "meter" else \
+                     xarray.open_dataset(mask_path_complete, engine = "h5netcdf").mbathy.data
+
+        # Normalization
+        return data_depth / np.max(data_depth) if unit == "meter" else data_depth
 
     def get_mask(self, depth: int = None):
         r"""Used to retreive a mask of the Black Sea, i.e. 0 if land, 1 if the Black Sea. If depth is given, it will also set to 0 all regions below that depth"""
