@@ -22,7 +22,7 @@ import torch
 import torch.nn as nn
 
 # Custom libraries
-from neural_networks.ENCODER import ENCODER
+from neural_networks.encoder import ENCODER
 
 
 class UNET(nn.Module):
@@ -125,19 +125,11 @@ class UNET(nn.Module):
 
         # ----- Reshaping -----
         #
-        # Reshaping the output, i.e. (b, c, x, y) -> (b, c/2, 2, x, y) for classification
-        if self.problem == "classification":
+        # Retrieiving dimensions (Ease of comprehension)
+        b, c, x_res, y_res = x.shape
 
-            # Retrieiving dimensions (Ease of comprehension)
-            b, c, x_res, y_res = x.shape
-
-            # Reshaping
-            x = x.reshape(b, self.n_out // 2, 2, x_res, y_res)
-
-            # Note: The BCELosswithdigits applies a sigmoid function
-            #       on the output thus we do not need to apply it ourselves.
-
-        return x
+        # Reshaping the output, i.e. (samples, days, values, x, y)
+        return x.reshape(b, self.n_out // 2, 2, x_res, y_res)
 
     def count_parameters(self,):
         r"""Determines the number of trainable parameters in the model"""

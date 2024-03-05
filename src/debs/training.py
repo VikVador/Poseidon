@@ -193,6 +193,8 @@ def training(**kwargs):
                                     treshold = norm_oxy,
                            number_of_samples = number_samples_validation)
 
+        # Clearing all plots to save memory
+        plt.close()
 
         # Training the neural network
         for x, t, y in dataset_train:
@@ -226,7 +228,8 @@ def training(**kwargs):
             training_batch_steps += 1
 
             # AverageNet - No optimization needed !
-            if architecture == "AVERAGE": continue
+            if architecture == "AVERAGE":
+               continue
 
             # Reseting the gradients
             optimizer.zero_grad()
@@ -236,8 +239,6 @@ def training(**kwargs):
 
             # Optimizing the parameters
             optimizer.step()
-
-            break
 
         # Information over terminal (3)
         progression(epoch = epoch,
@@ -292,17 +293,15 @@ def training(**kwargs):
                 # Pushing the data to te CPU (needed to compute metrics)
                 prediction, y = prediction.to("cpu"), y.to("cpu")
 
-                # Used to compute the metrics
-                metrics_tool.compute_metrics(y_pred = torch.unsqueeze(prediction[:, 0], dim = 1), y_true = y)
-                metrics_tool.compute_plots(  y_pred = torch.unsqueeze(prediction[:, 0], dim = 1), y_true = y) if validation_batch_steps == 1 else None
+                # Used to compute the metrics, extract all the samples for all the days but only the mean value
+                metrics_tool.compute_metrics(y_pred = torch.unsqueeze(prediction[:, :, 0], dim = 1), y_true = y)
+                metrics_tool.compute_plots(  y_pred = torch.unsqueeze(prediction[:, :, 0], dim = 1), y_true = y) if validation_batch_steps == 1 else None
 
                 # WandB (5) - Sending visual information about the validation
                 if problem == "regression":
                   wandb.log({f"Visualization/Prediction VS Ground Truth (Regression)": wandb.Image(metrics_tool.compute_plots_comparison_regression(y_pred = prediction, y_true = y))}) if validation_batch_steps == 1 else None
                 else:
                   wandb.log({f"Visualization/Prediction VS Ground Truth (Classification)": wandb.Image(metrics_tool.compute_plots_comparison_classification(y_pred = prediction, y_true = y))}) if validation_batch_steps == 1 else None
-
-                break
 
             # Information over terminal (5)
             progression(epoch = epoch,
@@ -341,6 +340,9 @@ def training(**kwargs):
 
               # Logging
               wandb.log({f"Visualization/{name}" : wandb.Image(plot)})
+
+              # Clearing all plots to save memory
+              plt.close()
 
     # Finishing the Weight and Biases run
     wandb.finish()

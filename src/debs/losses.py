@@ -25,8 +25,12 @@ import torch.optim as optim
 def compute_loss(y_pred : torch.Tensor, y_true : torch.Tensor, problem : str, device : str, kwargs : dict):
     r"""Process data and computes the loss"""
 
-    # Regression (only predicting mean)
+    # Regression (ONLY WORKS FOR ONE DAY ! MUST BE MODIFIED)
     if problem == "regression":
+
+        # Removing the days, i.e. (samples, days, values, x, y) to (samples, values, x, y)
+        y_pred = y_pred[:, 0]
+        y_true = y_true[:, 0]
 
         # Retrieves indices of the observed region
         indices = torch.where(y_true[:, 0] != -1)
@@ -40,8 +44,11 @@ def compute_loss(y_pred : torch.Tensor, y_true : torch.Tensor, problem : str, de
         # Computing loss per pixel
         error = ((y_true[:, 0] - y_pred[:, 0]) ** 2)/(2 * y_pred[:, 1]) + torch.log(torch.sqrt(y_pred[:, 1]))
 
+        # Extracting errors in the observed region
+        error = error[indices]
+
         # Summing the loss
-        return torch.sum(error[indices])/nb_samples
+        return torch.sum(error)/torch.numel(error)
 
     # Classification
     if problem == "classification":

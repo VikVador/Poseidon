@@ -32,7 +32,7 @@ class AVERAGE(nn.Sequential):
         super(AVERAGE, self).__init__()
 
         # Extracting information
-        dataset_size     = kwargs['Dataset Size']
+        dataset_size     = kwargs['Datasets Size']
         problem          = kwargs['Problem']
         hypoxia_treshold = kwargs['Hypoxia Treshold']
 
@@ -60,13 +60,17 @@ class AVERAGE(nn.Sequential):
             normalized_data = shifted_data / (max_value - min_value)
 
             # Average concentration
-            average_output = torch.mean(torch.from_numpy(normalized_data[: train_samples, :-2, :-2]), dim = 0)
+            average_output = torch.mean(torch.from_numpy(normalized_data[: train_samples, :, :]), dim = 0)
+            std_output     = torch.std(torch.from_numpy(normalized_data[: train_samples, :, :]), dim = 0)
+
+            # Stacking
+            average_output = torch.stack([average_output, std_output])
 
         # ----- Classification ------
         else:
 
             # Converting to classification
-            average_output = torch.from_numpy((data_output[: train_samples, :-2, :-2] < hypoxia_treshold) * 1)
+            average_output = torch.from_numpy((data_output[: train_samples, :, :] < hypoxia_treshold) * 1)
 
             # Summing over time, i.e. if total number of hypoxic days is greater than 50% of the time, then it is hypoxic
             average_output = (torch.sum(average_output, dim = 0) > train_samples // 2) * 1

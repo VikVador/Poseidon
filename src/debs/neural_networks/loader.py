@@ -20,9 +20,9 @@
 import numpy as np
 
 # Custom libraries
-from neural_networks.FCNN     import FCNN
-from neural_networks.UNET     import UNET
-from neural_networks.AVERAGE  import AVERAGE
+from neural_networks.fcnn     import FCNN
+from neural_networks.unet     import UNET
+from neural_networks.average  import AVERAGE
 
 
 def load_neural_network(architecture : str, data_output : np.array, device : str, kwargs : dict):

@@ -94,6 +94,11 @@ class BlackSea_Metrics():
         # Retrieving dimensions for ease of comprehension
         batch_size, days, = y_true.shape[0], y_true.shape[1]
 
+        # Removing useless dimensions and selecting the mean
+        if self.mode == "regression":
+            y_pred = y_pred[:, :, 0]
+            y_true = y_true[:, :, 0]
+
         # Stores results for each days, convert to numpy and average over number of batches (everything is summed so at the end, we will have the true average)
         scores_temporary = np.array([self.compute_metrics_(y_pred[:, i], y_true[:, i]) for i in range(days)]) / self.number_of_samples
 
@@ -268,6 +273,10 @@ class BlackSea_Metrics():
 
             # ------- REGRESSION -------
             if self.mode == "regression":
+
+                # Removing useless dimensions
+                y_pred_per_day = y_pred_per_day[:, 0]
+                y_true_per_day = y_true_per_day[:, 0]
 
                 # Drawing plots
                 self.plots += self.compute_plots_regression(y_pred_per_day, y_true_per_day, i)
@@ -474,10 +483,10 @@ class BlackSea_Metrics():
             # Defining color map
             cmap = "viridis" if prob_type == 4 else "viridis"
 
-            # Convert probabilities to classification
-            y_pred_mean, _    = convert_prob_to_classification(torch.unsqueeze(y_pred[:, 0], dim = 1))
-            y_pred_std, _     = convert_prob_to_classification(torch.sqrt(torch.exp(torch.unsqueeze(y_pred[:, 1], dim = 1))))
-            y_true, mask_true = convert_prob_to_classification(y_true)
+            # Convert probabilities to classification (ONLY FOR THE FIRST DAY)
+            y_pred_mean, _    = convert_prob_to_classification(torch.unsqueeze(y_pred[:, 0, 0], dim = 1))
+            y_pred_std, _     = convert_prob_to_classification(torch.sqrt(torch.exp(torch.unsqueeze(y_pred[:, 0, 1], dim = 1))))
+            y_true, mask_true = convert_prob_to_classification(y_true[:, 0])
 
             # Hiding the land
             y_pred_mean[:, :, mask_true == 1] = np.nan if prob_type == 4 else -1
@@ -490,10 +499,10 @@ class BlackSea_Metrics():
             y_true      = torch.flip(y_true,      dims = (2,))
 
             # Plotting the results
-            fig, axes = plt.subplots(3, 1, figsize = (20, 10))
+            fig, axes = plt.subplots(3, 1, figsize = (10, 10))
 
             # Plot Mean Prediction
-            im1 = axes[0].imshow(y_pred_std[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1, vmax = 1)  # Set vmin and vmax
+            im1 = axes[0].imshow(y_pred_std[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1)  # Set vmin and vmax
             axes[0].set_ylabel('Prediction (Standard Deviation)')
             axes[0].set_xticks([])
             axes[0].set_yticks([])

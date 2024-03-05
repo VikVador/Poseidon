@@ -135,6 +135,10 @@ class BlackSea_Dataloader():
                 # Masking the land
                 data[:, :, mask == 0] = -1
 
+                # Adding new axis for the concentration valu
+                data = np.expand_dims(data, axis = 2)
+
+
             # Returning the formulated data
             return data
 

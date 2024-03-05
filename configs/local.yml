@@ -20,7 +20,7 @@
 config:
 
   # WandB
-  "Project"                 : "ESA - Black Sea Deoxygenation Emulator - Test"
+  "Project"                 : "ESA - Black Sea Deoxygenation Emulator - Fixing"
 
   # Data
   "Month (Starting)"        : 1
@@ -36,9 +36,9 @@ config:
   "Window (Transformation)" : 2
 
   # Model & Training
-  "Architecture"            : "UNET"
+  "Architecture"            : "FCNN"
   "Scaling"                 : 1
-  "Kernel Size"             : 3
+  "Kernel Size"             : 1
   "Datasets Size"           : [0.6, 0.3]
   "Loss Weights"            : [1, 1]
   "Learning Rate"           : 0.001
