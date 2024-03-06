@@ -297,6 +297,18 @@ def training(**kwargs):
                 metrics_tool.compute_metrics(y_pred = torch.unsqueeze(prediction[:, :, 0], dim = 1), y_true = y)
                 metrics_tool.compute_plots(  y_pred = torch.unsqueeze(prediction[:, :, 0], dim = 1), y_true = y) if validation_batch_steps == 1 else None
 
+                # Computing the ROCAUC
+                if validation_batch_steps == 1 and problem == "regression":
+
+                  # Computing global ROCAUC
+                  auc, auc_plot  = metrics_tool.compute_plot_ROCAUC_global(y_pred = torch.unsqueeze(prediction[:, :, 0], dim = 1), y_true = y, normalized_threshold = norm_oxy)
+                  auc_plot_local = metrics_tool.compute_plot_ROCAUC_local( y_pred = torch.unsqueeze(prediction[:, :, 0], dim = 1), y_true = y, normalized_threshold = norm_oxy)
+
+                  # Sending to WandB
+                  wandb.log({f"Metrics/Area Under The Curve (Global)"       : auc,
+                             f"Visualization/Area Under The Curve (Global)" : wandb.Image(auc_plot),
+                             f"Visualization/Area Under The Curve (Local)"  : wandb.Image(auc_plot_local)})
+
                 # WandB (5) - Sending visual information about the validation
                 if problem == "regression":
                   wandb.log({f"Visualization/Prediction VS Ground Truth (Regression)": wandb.Image(metrics_tool.compute_plots_comparison_regression(y_pred = prediction, y_true = y))}) if validation_batch_steps == 1 else None

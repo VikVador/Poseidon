@@ -533,3 +533,135 @@ class BlackSea_Metrics():
             plt.show()
 
             return fig
+
+    def compute_plot_ROCAUC_global(self, y_pred: torch.tensor, y_true: torch.tensor, normalized_threshold: float):
+        """Used to plot the ROC curve for different values of the threshold"""
+
+        # Removing the days dimension (only working on the first day)
+        y_pred = y_pred[:, 0]
+        y_true = y_true[:, 0]
+
+        # Extracting the mask
+        indices = y_true != -1
+
+        # Removing the masked values
+        y_pred = y_pred[:, :, indices[0, 0]]
+        y_true = y_true[:, :, indices[0, 0]]
+
+        # Retrieving dimensions (Ease of comprehension)
+        samples, values, xy = y_pred.shape
+
+        # Flatenning everything
+        y_pred = y_pred.view(samples, -1)
+        y_true = y_true.view(samples, -1)
+
+        # Retrieving the threshold for the predicted values, i.e. all the values possible
+        threshold = torch.unique(y_pred)
+
+        # Sampling random values for the threshold
+        threshold = threshold[torch.randint(0, len(threshold), (500,))]
+
+        # Stores the ROC curve for each threshold
+        false_positive, true_positive = list(), list()
+
+        # Looping over all the possible tresholds
+        for t in threshold:
+
+            # Conversion to binary classification
+            y_pred_t = (y_pred < t)                    * 1.
+            y_true_t = (y_true < normalized_threshold) * 1
+
+            # Initialize ROC metric from torchmetrics for binary classification task
+            ROC_tool = BinaryROC(thresholds = [0.5])
+
+            # Compute ROC curve
+            fp, tp, _  = ROC_tool(y_pred_t, y_true_t)
+
+            # Appending the results
+            false_positive.append(fp), true_positive.append(tp)
+
+        # Conversion to tensors
+        false_positive = torch.as_tensor(false_positive)
+        true_positive  = torch.as_tensor(true_positive)
+
+        # Sort the false positive in ascending order and sort the true positive accordingly
+        sorted_indices = torch.argsort(false_positive)
+        false_positive = false_positive[sorted_indices]
+        true_positive  = true_positive[sorted_indices]
+
+        # Computing the AREA under the curve
+        area = torch.trapz(true_positive, false_positive)
+
+        # Plotting the results
+        fig = plt.figure(figsize = (10, 10))
+        plt.plot(false_positive, true_positive, color='darkorange', lw=2, label = f'Area = {area:.2f}')
+        plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver Operating Characteristic (ROC)')
+        plt.legend(loc='lower right')
+        plt.grid(alpha = 0.5)
+        plt.show()
+
+        # Returning
+        return area, fig
+
+    def compute_plot_ROCAUC_local(self, y_pred: torch.tensor, y_true: torch.tensor, normalized_threshold: float):
+        """Computes and plots the ROC curve for different values of the threshold"""
+
+        # Extract relevant data
+        y_pred = y_pred[:, 0]  # Considering only the first channel
+        y_true = y_true[:, 0]
+        indices = y_true != -1  # Mask indicating valid data points
+        x, y = y_pred.shape[-2:]
+
+        # Sampling random thresholds
+        threshold = torch.unique(y_pred)
+
+        # Sorting and subsampling the thresholds
+        threshold = torch.sort(threshold)[0]  # Sort the thresholds
+        threshold = threshold[::int(len(threshold) / 3)]  # Take a subset every 5%
+
+        # Remove the -1 value (if present)
+        threshold = threshold[threshold != -1]
+
+        # Reshaping the data for easier computation
+        y_pred = y_pred.permute(2, 3, 1, 0).reshape(-1, y_pred.size(0))
+        y_true = y_true.permute(2, 3, 1, 0).reshape(-1, y_true.size(0))
+
+        # Initialize ROC metric from torchmetrics for binary classification task
+        ROC_tool = BinaryROC(thresholds=[0.5])
+
+        # Compute ROC curve for each threshold
+        auc = []
+        for i in range(y_pred.size(0)):
+            false_positive_current, true_positive_current = [], []
+            for t in threshold:
+
+                # Convert to binary classification based on threshold
+                y_pred_t = (y_pred[i] < t) * 1.
+                y_true_t = (y_true[i] < normalized_threshold) * 1
+
+                # Compute ROC curve using torchmetrics
+                fp, tp, _ = ROC_tool(y_pred_t, y_true_t)
+                false_positive_current.append(fp)
+                true_positive_current.append(tp)
+
+            # Convert lists to tensors
+            false_positive_current = torch.as_tensor(false_positive_current)
+            true_positive_current = torch.as_tensor(true_positive_current)
+
+            # Compute area under the curve (AUC)
+            auc.append(torch.trapz(true_positive_current, false_positive_current))
+
+        # Reshape AUC values to match the original data dimensions
+        auc = torch.as_tensor(auc).reshape(x, y)
+        auc[~indices[0, 0]] = np.nan  # Mask the land values
+
+        # Plot the results
+        fig = plt.figure(figsize=(20, 10))
+        plt.imshow(auc, cmap="viridis", vmin=0, vmax=1)
+        plt.colorbar()
+
+        # Return the figure
+        return fig

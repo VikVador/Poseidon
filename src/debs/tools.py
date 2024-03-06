@@ -26,6 +26,24 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.patches as mpatches
 
+import torchmetrics
+
+def compute_roc_auc_sample(i, y_pred, y_true, normalized_threshold, threshold_values):
+    false_positive_current, true_positive_current = [], []
+
+    ROC_tool = torchmetrics.BinaryROC(thresholds=[0.5])
+
+    for t in threshold_values:
+        y_pred_t = (y_pred < t).float()
+        y_true_t = (y_true < normalized_threshold).float()
+
+        fp, tp, _ = ROC_tool(y_pred_t[i], y_true_t[i])
+        false_positive_current.append(fp)
+        true_positive_current.append(tp)
+
+    return torch.as_tensor(false_positive_current), torch.as_tensor(true_positive_current)
+
+
 
 def get_mask_info():
     """Used to retrieve the mask information, i.e. possible paths (Cluster or local) and the mask name"""
