@@ -91,13 +91,13 @@ class BlackSea_Metrics():
     def compute_metrics(self, y_pred: np.array, y_true: np.array):
         r"""Computes each metric (scalar) for each individual forecasted day, i.e. returns a tensor of shape [forecasted days, metrics]"""
 
-        # Retrieving dimensions for ease of comprehension
-        batch_size, days, = y_true.shape[0], y_true.shape[1]
-
-        # Removing useless dimensions and selecting the mean
+        # Selecting the mean, i.e. metrics are computed with the mean value predicted
         if self.mode == "regression":
             y_pred = y_pred[:, :, 0]
             y_true = y_true[:, :, 0]
+
+        # Retrieving dimensions for ease of comprehension
+        batch_size, days, = y_true.shape[0], y_true.shape[1]
 
         # Stores results for each days, convert to numpy and average over number of batches (everything is summed so at the end, we will have the true average)
         scores_temporary = np.array([self.compute_metrics_(y_pred[:, i], y_true[:, i]) for i in range(days)]) / self.number_of_samples
@@ -138,7 +138,7 @@ class BlackSea_Metrics():
         if self.mode == "regression":
 
             # Retrieving dimensions (Ease of comprehension)
-            t, _, _ = y_true_per_day.shape
+            t = y_true_per_day.shape[0]
 
             # Metrics to perform regression (Computed on each sample, everything is then summed and averaged over the number of samples afterwards)
             metrics_regression = [PercentageOfBias(),
@@ -146,6 +146,10 @@ class BlackSea_Metrics():
                                   RootMeanSquaredError(),
                                   R2Score(num_outputs = t, multioutput = 'raw_values'),
                                   PearsonCorrCoef( num_outputs = t)]
+
+            # Dataset for precision and recall (only computed on region where hypoxia can occur)
+            y_true_per_day_hyp = torch.swapaxes(y_true_per_day[:, self.mask_complete[:, :] >= 1], 0, 1)
+            y_pred_per_day_hyp = torch.swapaxes(y_pred_per_day[:, self.mask_complete[:, :] >= 1], 0, 1)
 
             # Swapping axes (t, x * y) to (x * y, t)
             y_true_per_day = torch.swapaxes(y_true_per_day[:, self.mask[:, :] == 1], 0, 1)
@@ -158,32 +162,51 @@ class BlackSea_Metrics():
             y_true_per_day = (y_true_per_day < self.treshold_normalized_oxygen) * 1
             y_pred_per_day = (y_pred_per_day < self.treshold_normalized_oxygen) * 1
 
+            y_true_per_day_hyp = (y_true_per_day_hyp < self.treshold_normalized_oxygen) * 1
+            y_pred_per_day_hyp = (y_pred_per_day_hyp < self.treshold_normalized_oxygen) * 1
+
             # Swapping axes (x * y, t) to (t, x * y)
             y_true_per_day = torch.swapaxes(y_true_per_day, 0, 1)
             y_pred_per_day = torch.swapaxes(y_pred_per_day, 0, 1)
 
+            y_true_per_day_hyp = torch.swapaxes(y_true_per_day_hyp, 0, 1)
+            y_pred_per_day_hyp = torch.swapaxes(y_pred_per_day_hyp, 0, 1)
+
         # ------- CLASSIFICATION (ACC, PRE, ...) -------
         #
-        # Metrics to perform classification (Computed on each sample, everything is then summed and averaged over the number of samples afterwards)
-        metrics_classification = [BinaryAccuracy( multidim_average = 'samplewise'),
-                                  BinaryPrecision(multidim_average = 'samplewise'),
-                                  BinaryRecall(   multidim_average = 'samplewise'),
-                                  BinaryF1Score(  multidim_average = 'samplewise')]
+        # Defining metrics
+        acc = BinaryAccuracy( multidim_average = 'samplewise')
+        pre = BinaryPrecision(multidim_average = 'samplewise')
+        rec = BinaryRecall(   multidim_average = 'samplewise')
+        f1  = BinaryF1Score(  multidim_average = 'samplewise')
 
-        return results + [torch.sum(metric(y_pred_per_day, y_true_per_day)).item() for metric in metrics_classification]
+        # Metrics to perform classification (Computed on each sample, everything is then summed and averaged over the number of samples afterwards)
+        results = results + [torch.sum(acc(y_pred_per_day,     y_true_per_day)).item()]
+        results = results + [torch.sum(pre(y_pred_per_day_hyp, y_true_per_day_hyp)).item()]
+        results = results + [torch.sum(rec(y_pred_per_day_hyp, y_true_per_day_hyp)).item()]
+        results = results + [torch.sum( f1(y_pred_per_day,     y_true_per_day)).item()]
+
+        return results
 
     def make_plots(self, score : np.array, index_day : int, label : str, cmap : str, vminmax : tuple):
         r"""Creates a custom plot for each metric"""
+
+        # Flipping vertically to show correctly Black Sea (for you my loving oceanographer <3)
+        score = score.numpy() if isinstance(score, torch.Tensor) else score
+
+        # Working (self.mask does not work)
+        mask_current             = ~(self.mask_complete[:, :] >= 0)
+        score[mask_current == 1] = np.nan
 
         # Hides all the regions that are not relevant for this metric
         if "Precision" in label or "Recall" in label:
             score[self.mask_complete[:, :] == 0] = np.nan
 
-        # Flipping vertically to show correctly Black Sea (for you my loving oceanographer <3)
+        # Fplipping vertically
         score = np.flipud(score)
 
         # Removing first lines (its just empty sea)
-        score = score[20:, :]
+        #score = score[20:, :]
 
         # Creating the figure
         fig = plt.figure(figsize = (15, 10))
@@ -274,7 +297,7 @@ class BlackSea_Metrics():
             # ------- REGRESSION -------
             if self.mode == "regression":
 
-                # Removing useless dimensions
+                # Extracting the mean value
                 y_pred_per_day = y_pred_per_day[:, 0]
                 y_true_per_day = y_true_per_day[:, 0]
 
@@ -321,9 +344,6 @@ class BlackSea_Metrics():
             # Computing score
             score = metric(y_pred, y_true).reshape(x, y)
 
-            # Masking the land and non-observed region, i.e. NaNs are white when plotted so thats the best !
-            score[self.mask[:, :] == 0] = np.nan
-
             # Adding results, i.e. fig and name (multipliy by 100 for percentage)
             plots.append(self.make_plots(score * limits[1], index_day, name, color, limits))
 
@@ -358,9 +378,6 @@ class BlackSea_Metrics():
 
             # Computing score
             score = metric(y_pred, y_true).reshape(x, y)
-
-            # Masking the land and non-observed region, i.e. NaNs are white when plotted so thats the best !
-            score[self.mask[:, :] == 0] = np.nan
 
             # Adding results, i.e. fig and name
             scores.append(self.make_plots(score * 100, index_day, name, "Spectral", limits))
@@ -432,8 +449,6 @@ class BlackSea_Metrics():
         y_pred[:, :, mask_true == 1] = np.nan if prob_type == 4 else -1
         y_true[:, :, mask_true == 1] = np.nan if prob_type == 4 else -1
 
-        print(y_pred[0, 0, :10, :10])
-
         # Flipping vertically (ease of comprehension)
         y_pred = torch.flip(y_pred, dims = (2,))
         y_true = torch.flip(y_true, dims = (2,))
@@ -468,41 +483,33 @@ class BlackSea_Metrics():
     def compute_plots_comparison_regression(self, y_pred : torch.tensor, y_true : torch.tensor):
             """Plot and compare two tensors"""
 
-            def convert_prob_to_classification(tensor : torch.tensor):
-                """Convert probabilities to classification"""
-                if len(tensor.shape) == 5:
-                    mask = tensor[0, 0, 0] == -1
-                    tensor = torch.argmax(tensor, dim=2)
-                else:
-                    mask = (tensor[0, 0] == -1) * 1
-                return tensor, mask
-
-            # Determining the type of problem
-            prob_type = len(y_pred.shape)
-
             # Defining color map
-            cmap = "viridis" if prob_type == 4 else "viridis"
+            cmap = "viridis"
 
-            # Convert probabilities to classification (ONLY FOR THE FIRST DAY)
-            y_pred_mean, _    = convert_prob_to_classification(torch.unsqueeze(y_pred[:, 0, 0], dim = 1))
-            y_pred_std, _     = convert_prob_to_classification(torch.sqrt(torch.exp(torch.unsqueeze(y_pred[:, 0, 1], dim = 1))))
-            y_true, mask_true = convert_prob_to_classification(y_true[:, 0])
+            # Extracting only the first day
+            y_pred = y_pred[:, 0]
+            y_true = y_true[:, 0]
+
+            # Extracting the mean and standard deviation
+            y_pred_mean = y_pred[:, 0]
+            y_pred_std  = torch.sqrt(torch.exp(y_pred[:, 1]))
+            y_true      = y_true[:, 0]
 
             # Hiding the land
-            y_pred_mean[:, :, mask_true == 1] = np.nan if prob_type == 4 else -1
-            y_pred_std[ :, :, mask_true == 1] = np.nan if prob_type == 4 else -1
-            y_true[     :, :, mask_true == 1] = np.nan if prob_type == 4 else -1
+            y_pred_mean[:, self.mask == 0] = np.nan
+            y_pred_std[ :, self.mask == 0] = np.nan
+            y_true[     :, self.mask == 0] = np.nan
 
             # Flipping vertically (ease of comprehension)
-            y_pred_mean = torch.flip(y_pred_mean, dims = (2,))
-            y_pred_std  = torch.flip(y_pred_std,  dims = (2,))
-            y_true      = torch.flip(y_true,      dims = (2,))
+            y_pred_mean = torch.flipud(y_pred_mean[0])
+            y_pred_std  = torch.flipud(y_pred_std[0])
+            y_true      = torch.flipud(y_true[0])
 
             # Plotting the results
             fig, axes = plt.subplots(3, 1, figsize = (10, 10))
 
-            # Plot Mean Prediction
-            im1 = axes[0].imshow(y_pred_std[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1)  # Set vmin and vmax
+            # Plot STD Prediction
+            im1 = axes[0].imshow(y_pred_std, cmap=cmap, vmin = 0, vmax = 1)  # Set vmin and vmax
             axes[0].set_ylabel('Prediction (Standard Deviation)')
             axes[0].set_xticks([])
             axes[0].set_yticks([])
@@ -510,8 +517,8 @@ class BlackSea_Metrics():
             # Add colorbar to the right of the Prediction plot
             cbar1 = fig.colorbar(im1, ax=axes[0], fraction = 0.025, pad = 0.04)
 
-            # Plot Var Prediction
-            im2 = axes[1].imshow(y_pred_mean[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1, vmax = 1)  # Set vmin and vmax
+            # Plot Mean Prediction
+            im2 = axes[1].imshow(y_pred_mean, cmap=cmap, vmin = 0, vmax = 1)  # Set vmin and vmax
             axes[1].set_ylabel('Prediction (Mean)')
             axes[1].set_xticks([])
             axes[1].set_yticks([])
@@ -520,7 +527,7 @@ class BlackSea_Metrics():
             cbar2 = fig.colorbar(im2, ax=axes[1], fraction = 0.025, pad = 0.04)
 
             # Plot Ground Truth
-            im3 = axes[2].imshow(y_true[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1, vmax = 1)  # Set vmin and vmax
+            im3 = axes[2].imshow(y_true, cmap=cmap, vmin = 0, vmax = 1)  # Set vmin and vmax
             axes[2].set_ylabel('Ground Truth')
             axes[2].set_xticks([])
             axes[2].set_yticks([])
@@ -537,29 +544,27 @@ class BlackSea_Metrics():
     def compute_plot_ROCAUC_global(self, y_pred: torch.tensor, y_true: torch.tensor, normalized_threshold: float):
         """Used to plot the ROC curve for different values of the threshold"""
 
-        # Removing the days dimension (only working on the first day)
+        # Exctrating the first day
         y_pred = y_pred[:, 0]
         y_true = y_true[:, 0]
 
-        # Extracting the mask
-        indices = y_true != -1
+        # Extracting the mean
+        y_pred = y_pred[:, 0]
+        y_true = y_true[:, 0]
 
-        # Removing the masked values
-        y_pred = y_pred[:, :, indices[0, 0]]
-        y_true = y_true[:, :, indices[0, 0]]
+        # Extracting only the observed region
+        y_pred = y_pred[:, self.mask == 1]
+        y_true = y_true[:, self.mask == 1]
 
         # Retrieving dimensions (Ease of comprehension)
-        samples, values, xy = y_pred.shape
+        samples, xy = y_pred.shape
 
         # Flatenning everything
         y_pred = y_pred.view(samples, -1)
         y_true = y_true.view(samples, -1)
 
-        # Retrieving the threshold for the predicted values, i.e. all the values possible
-        threshold = torch.unique(y_pred)
-
-        # Sampling random values for the threshold
-        threshold = threshold[torch.randint(0, len(threshold), (500,))]
+        # Simple linspace between 0 and 1
+        threshold = torch.linspace(0, 1, 50)
 
         # Stores the ROC curve for each threshold
         false_positive, true_positive = list(), list()
@@ -604,37 +609,35 @@ class BlackSea_Metrics():
         plt.show()
 
         # Returning
-        return area, fig
+        return false_positive, true_positive, area, fig
 
     def compute_plot_ROCAUC_local(self, y_pred: torch.tensor, y_true: torch.tensor, normalized_threshold: float):
         """Computes and plots the ROC curve for different values of the threshold"""
 
-        # Extract relevant data
-        y_pred = y_pred[:, 0]  # Considering only the first channel
+        # Extracting the current day
+        y_pred = y_pred[:, 0]
         y_true = y_true[:, 0]
-        indices = y_true != -1  # Mask indicating valid data points
-        x, y = y_pred.shape[-2:]
 
-        # Sampling random thresholds
-        threshold = torch.unique(y_pred)
+        # Extracting the mean
+        y_pred = y_pred[:, 0]
+        y_true = y_true[:, 0]
 
-        # Sorting and subsampling the thresholds
-        threshold = torch.sort(threshold)[0]  # Sort the thresholds
-        threshold = threshold[::int(len(threshold) / 3)]  # Take a subset every 5%
+        # Extracting shape informaiton
+        t, x, y    = y_pred.shape
 
-        # Remove the -1 value (if present)
-        threshold = threshold[threshold != -1]
+        # Simple linspace between 0 and 1
+        threshold = torch.linspace(0, 1, 10)
 
         # Reshaping the data for easier computation
-        y_pred = y_pred.permute(2, 3, 1, 0).reshape(-1, y_pred.size(0))
-        y_true = y_true.permute(2, 3, 1, 0).reshape(-1, y_true.size(0))
+        y_pred = y_pred.reshape(t, x * y).permute(1, 0)
+        y_true = y_true.reshape(t, x * y).permute(1, 0)
 
         # Initialize ROC metric from torchmetrics for binary classification task
         ROC_tool = BinaryROC(thresholds=[0.5])
 
         # Compute ROC curve for each threshold
         auc = []
-        for i in range(y_pred.size(0)):
+        for i in range(x * y):
             false_positive_current, true_positive_current = [], []
             for t in threshold:
 
@@ -656,12 +659,21 @@ class BlackSea_Metrics():
 
         # Reshape AUC values to match the original data dimensions
         auc = torch.as_tensor(auc).reshape(x, y)
-        auc[~indices[0, 0]] = np.nan  # Mask the land values
+
+        # Conversion to numpy
+        auc = auc.numpy()
+        # Masking the land
+        mask_current             = ~(self.mask_complete[:, :] >= 0)
+        auc[mask_current == 1] = np.nan
+
+        # Flipping vertically
+        auc = np.flipud(auc)
 
         # Plot the results
-        fig = plt.figure(figsize=(20, 10))
-        plt.imshow(auc, cmap="viridis", vmin=0, vmax=1)
+        fig = plt.figure(figsize=(8, 8))
+        plt.imshow(auc, cmap="viridis")
         plt.colorbar()
+        plt.show()
 
         # Return the figure
         return fig

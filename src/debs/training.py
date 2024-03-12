@@ -97,6 +97,18 @@ def training(**kwargs):
     #
     # Cropping dimensions to be a multiple of 2
     for i, v in enumerate(input_datasets):
+        input_datasets[i] = crop_debug(v, factor = 2)
+
+    data_oxygen        = crop_debug(data_oxygen,        factor = 2)
+    mesh               = crop_debug(mesh,               factor = 2)
+    bathy              = crop_debug(bathy,              factor = 2)
+    bs_mask            = crop_debug(bs_mask,            factor = 2)
+    bs_mask_with_depth = crop_debug(bs_mask_with_depth, factor = 2)
+    bs_mask_complete   = crop_debug(bs_mask_complete,   factor = 2)
+
+    """
+    # Cropping dimensions to be a multiple of 2
+    for i, v in enumerate(input_datasets):
         input_datasets[i] = crop(v, factor = 2)
 
     data_oxygen        = crop(data_oxygen,        factor = 2)
@@ -105,6 +117,7 @@ def training(**kwargs):
     bs_mask            = crop(bs_mask,            factor = 2)
     bs_mask_with_depth = crop(bs_mask_with_depth, factor = 2)
     bs_mask_complete   = crop(bs_mask_complete,   factor = 2)
+    """
 
     # Creating the dataloader
     BS_loader = BlackSea_Dataloader(x = input_datasets,
@@ -164,9 +177,10 @@ def training(**kwargs):
     project_title(kwargs)
 
     # WandB (1) - Initialization
-    wandb.init(project = project, config = kwargs)
+    # wandb.init(project = project, config = kwargs)
 
     # WandB (2) - Sending information about the datasets
+    """
     wandb.log({"Dataset & Architecture/Dataset (Visualisation, Image, Regions)" : wandb.Image(get_complete_mask_plot(bs_mask_complete)),
                 "Dataset & Architecture/Dataset (Visualisation, Image, Ratios)" : wandb.Image(get_ratios_plot(data_oxygen, bs_mask_with_depth)),
                 "Dataset & Architecture/Dataset (Visualisation, Video, Oxygen)" : wandb.Video(get_video(data = data_oxygen), fps = 1),
@@ -174,6 +188,7 @@ def training(**kwargs):
                 "Dataset & Architecture/Ratio Switching"                        : ratio_switching,
                 "Dataset & Architecture/Ratio Hypoxia"                          : ratio_hypoxia,
                 "Dataset & Architecture/Trainable Parameters"                   : neural_net.count_parameters()})
+    """
 
     # -------------—---------
     #        Training
@@ -221,7 +236,7 @@ def training(**kwargs):
           loss_validation_aob = 0)
 
             # WandB (3) - Sending information about the training loss
-            wandb.log({f"Training/Loss ({loss_type}, T)": loss_training.detach().item()})
+            # wandb.log({f"Training/Loss ({loss_type}, T)": loss_training.detach().item()})
 
             # Accumulating the loss and updating the number of steps
             training_loss        += loss_training.detach().item()
@@ -249,7 +264,7 @@ def training(**kwargs):
       loss_validation_aob = 0)
 
         # WandB (4) - Sending information about the training loss
-        wandb.log({f"Training/Loss ({loss_type}, Training): ": training_loss / training_batch_steps})
+        # wandb.log({f"Training/Loss ({loss_type}, Training): ": training_loss / training_batch_steps})
 
         with torch.no_grad():
 
@@ -281,7 +296,7 @@ def training(**kwargs):
               loss_validation_aob = 0)
 
                 # WandB (4) - Sending information about the validation loss
-                wandb.log({f"Training/Loss ({loss_type}, V)": loss_validation.detach().item()})
+                # wandb.log({f"Training/Loss ({loss_type}, V)": loss_validation.detach().item()})
 
                 # Accumulating the loss and updating the number of steps
                 validation_loss        += loss_validation.detach().item()
@@ -294,26 +309,27 @@ def training(**kwargs):
                 prediction, y = prediction.to("cpu"), y.to("cpu")
 
                 # Used to compute the metrics, extract all the samples for all the days but only the mean value
-                metrics_tool.compute_metrics(y_pred = torch.unsqueeze(prediction[:, :, 0], dim = 1), y_true = y)
-                metrics_tool.compute_plots(  y_pred = torch.unsqueeze(prediction[:, :, 0], dim = 1), y_true = y) if validation_batch_steps == 1 else None
+                metrics_tool.compute_metrics(y_pred = prediction, y_true = y)
+                metrics_tool.compute_plots(  y_pred = prediction, y_true = y) if validation_batch_steps == 1 else None
 
                 # Computing the ROCAUC
                 if validation_batch_steps == 1 and problem == "regression":
 
                   # Computing global ROCAUC
-                  auc, auc_plot  = metrics_tool.compute_plot_ROCAUC_global(y_pred = torch.unsqueeze(prediction[:, :, 0], dim = 1), y_true = y, normalized_threshold = norm_oxy)
+                  fp, tp, auc, auc_plot  = metrics_tool.compute_plot_ROCAUC_global(y_pred = prediction, y_true = y, normalized_threshold = norm_oxy)
                   auc_plot_local = metrics_tool.compute_plot_ROCAUC_local( y_pred = torch.unsqueeze(prediction[:, :, 0], dim = 1), y_true = y, normalized_threshold = norm_oxy)
 
                   # Sending to WandB
+                  """
                   wandb.log({f"Metrics/Area Under The Curve (Global)"       : auc,
                              f"Visualization/Area Under The Curve (Global)" : wandb.Image(auc_plot),
                              f"Visualization/Area Under The Curve (Local)"  : wandb.Image(auc_plot_local)})
 
+                  """
+
                 # WandB (5) - Sending visual information about the validation
-                if problem == "regression":
-                  wandb.log({f"Visualization/Prediction VS Ground Truth (Regression)": wandb.Image(metrics_tool.compute_plots_comparison_regression(y_pred = prediction, y_true = y))}) if validation_batch_steps == 1 else None
-                else:
-                  wandb.log({f"Visualization/Prediction VS Ground Truth (Classification)": wandb.Image(metrics_tool.compute_plots_comparison_classification(y_pred = prediction, y_true = y))}) if validation_batch_steps == 1 else None
+                if problem == "regression" and validation_batch_steps == 1:
+                  wandb.log({f"Visualization/Prediction VS Ground Truth (Regression)": wandb.Image(metrics_tool.compute_plots_comparison_regression(y_pred = prediction, y_true = y))})
 
             # Information over terminal (5)
             progression(epoch = epoch,
@@ -332,6 +348,7 @@ def training(**kwargs):
             # Getting the plots of each metric
             plots, plots_name = metrics_tool.get_plots()
 
+            """
             # WandB (6) - Sending information about the validation loss
             wandb.log({f"Training/Loss ({loss_type}, Validation)": validation_loss / validation_batch_steps,
                         "Training/Epochs"                        : nb_epochs - epoch,
@@ -358,3 +375,5 @@ def training(**kwargs):
 
     # Finishing the Weight and Biases run
     wandb.finish()
+
+    """
