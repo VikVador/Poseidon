@@ -63,6 +63,9 @@ class BlackSea_Metrics():
         self.number_of_samples = number_of_samples
         self.treshold_normalized_oxygen = treshold
 
+        # Creation of a mask for plots
+        self.mask_plots = np.flipud(self.mask == 1)
+
         # Used to store results and plots
         self.scores, self.scores_names, self.plots = None, None, list()
 
@@ -206,7 +209,7 @@ class BlackSea_Metrics():
         score = np.flipud(score)
 
         # Removing first lines (its just empty sea)
-        #score = score[20:, :]
+        score = score[20:, :]
 
         # Creating the figure
         fig = plt.figure(figsize = (15, 10))
@@ -221,6 +224,8 @@ class BlackSea_Metrics():
                                  vmin   = vminmax[0],
                                  vmax   = vminmax[1],
                                  aspect = '0.83')
+        ax_top_plot.imshow(self.mask_plots[20:, :], cmap = "grey", alpha = 0.1, aspect = '0.83')
+
 
         # Add min and max values to the top right corner
         min_val = np.nanmin(score)
@@ -238,7 +243,8 @@ class BlackSea_Metrics():
                                       cmap   = cmap,
                                       vmin   = vminmax[0],
                                       vmax   = vminmax[1],
-                                      aspect = '0.43')
+                                      aspect = '0.55')
+        ax_bottom_plot_1.imshow(self.mask_plots[40:110, 175:275], cmap = "grey", alpha = 0.1, aspect = '0.55')
 
         # Plotting (3) - Focusing on top bottom region
         ax_bottom_plot_2 = fig.add_subplot(gs[1, 1])
@@ -246,7 +252,9 @@ class BlackSea_Metrics():
                                       cmap   = cmap,
                                       vmin   = vminmax[0],
                                       vmax   = vminmax[1],
-                                      aspect = '2.2')
+                                      aspect = '4.5')
+        ax_bottom_plot_2.imshow(self.mask_plots[82:100, 250:470], cmap = "grey", alpha = 0.1, aspect = '4.5')
+
 
         # Plotting (4) - Focusing on bottom region
         ax_bottom_plot_3 = fig.add_subplot(gs[2, :-1])
@@ -254,7 +262,8 @@ class BlackSea_Metrics():
                                       cmap   = cmap,
                                       vmin   = vminmax[0],
                                       vmax   = vminmax[1],
-                                      aspect = '2.35')
+                                      aspect = '3')
+        ax_bottom_plot_3.imshow(self.mask_plots[220:, :500], cmap = "grey", alpha = 0.1, aspect = '3')
 
         # Plotting (5) - Colorbar
         ax_colorbar = fig.add_subplot(gs[:, -1])
@@ -486,14 +495,10 @@ class BlackSea_Metrics():
             # Defining color map
             cmap = "viridis"
 
-            # Extracting only the first day
-            y_pred = y_pred[:, 0]
-            y_true = y_true[:, 0]
-
             # Extracting the mean and standard deviation
-            y_pred_mean = y_pred[:, 0]
-            y_pred_std  = torch.sqrt(torch.exp(y_pred[:, 1]))
-            y_true      = y_true[:, 0]
+            y_true      =           y_true[:, 0, 0]
+            y_pred_mean =           y_pred[:, 0, 0]
+            y_pred_std  = torch.exp(y_pred[:, 0, 1]/2)
 
             # Hiding the land
             y_pred_mean[:, self.mask == 0] = np.nan
@@ -503,31 +508,30 @@ class BlackSea_Metrics():
             # Flipping vertically (ease of comprehension)
             y_pred_mean = torch.flipud(y_pred_mean[0])
             y_pred_std  = torch.flipud(y_pred_std[0])
-            y_true      = torch.flipud(y_true[0])
+            y_true      = torch.flipud(y_true[0]) if isinstance(y_true, torch.Tensor) else np.flipud(y_true[0])
 
             # Plotting the results
-            fig, axes = plt.subplots(3, 1, figsize = (10, 10))
+            fig, axes = plt.subplots(3, 1, figsize = (12, 12))
 
-            # Plot STD Prediction
-            im1 = axes[0].imshow(y_pred_std, cmap=cmap, vmin = 0, vmax = 1)  # Set vmin and vmax
-            axes[0].set_ylabel('Prediction (Standard Deviation)')
+            # Plot Standard Devaition
+            im1 = axes[0].imshow(y_pred_std, cmap=cmap, vmin = 0, vmax = 1)
+            axes[0].imshow(self.mask_plots, cmap = "grey", alpha=0.1)
+            axes[0].set_ylabel('Uncertainty (STD)')
             axes[0].set_xticks([])
             axes[0].set_yticks([])
-
-            # Add colorbar to the right of the Prediction plot
             cbar1 = fig.colorbar(im1, ax=axes[0], fraction = 0.025, pad = 0.04)
 
             # Plot Mean Prediction
-            im2 = axes[1].imshow(y_pred_mean, cmap=cmap, vmin = 0, vmax = 1)  # Set vmin and vmax
-            axes[1].set_ylabel('Prediction (Mean)')
+            im2 = axes[1].imshow(y_pred_mean, cmap=cmap, vmin = 0, vmax = 1)
+            axes[1].imshow(self.mask_plots, cmap = "grey", alpha=0.1)
+            axes[1].set_ylabel('Prediction (M)')
             axes[1].set_xticks([])
             axes[1].set_yticks([])
-
-            # Add colorbar to the right of the Prediction plot
             cbar2 = fig.colorbar(im2, ax=axes[1], fraction = 0.025, pad = 0.04)
 
             # Plot Ground Truth
-            im3 = axes[2].imshow(y_true, cmap=cmap, vmin = 0, vmax = 1)  # Set vmin and vmax
+            im3 = axes[2].imshow(y_true, cmap=cmap, vmin = 0, vmax = 1)
+            axes[2].imshow(self.mask_plots, cmap = "grey", alpha=0.1)
             axes[2].set_ylabel('Ground Truth')
             axes[2].set_xticks([])
             axes[2].set_yticks([])
@@ -564,7 +568,7 @@ class BlackSea_Metrics():
         y_true = y_true.view(samples, -1)
 
         # Simple linspace between 0 and 1
-        threshold = torch.linspace(0, 1, 50)
+        threshold = torch.linspace(0, 1, 100)
 
         # Stores the ROC curve for each threshold
         false_positive, true_positive = list(), list()
@@ -626,7 +630,7 @@ class BlackSea_Metrics():
         t, x, y    = y_pred.shape
 
         # Simple linspace between 0 and 1
-        threshold = torch.linspace(0, 1, 10)
+        threshold = torch.linspace(0, 1, 1)
 
         # Reshaping the data for easier computation
         y_pred = y_pred.reshape(t, x * y).permute(1, 0)
@@ -662,6 +666,7 @@ class BlackSea_Metrics():
 
         # Conversion to numpy
         auc = auc.numpy()
+
         # Masking the land
         mask_current             = ~(self.mask_complete[:, :] >= 0)
         auc[mask_current == 1] = np.nan

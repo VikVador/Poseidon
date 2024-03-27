@@ -238,24 +238,30 @@ class BlackSea_Dataset():
         # Translation
         variable, variable_type, other_useless_variables = translate(variable)
 
+        # Stores the datasets loaded individually
+        datasets = []
+
+        # Current paths
+        curr_p = self.paths_physics_datasets if variable_type == "physics" else self.paths_biogeochemistry_datasets
+
         # Loading the data (3D field)
-        data = xarray.open_mfdataset(self.paths_physics_datasets if variable_type == "physics" else self.paths_biogeochemistry_datasets,
-                                     engine         = "h5netcdf",
-                                     parallel       = True,
-                                     drop_variables = self.useless_variables + other_useless_variables)
+        for p in curr_p:
+            datasets.append(xarray.open_dataset(p, drop_variables = self.useless_variables + other_useless_variables))
+
+        # Needed to do this stupidly because xarrays cannot handle two same files (needed to fix missing days)
+        data = xarray.concat(datasets, dim = "time_counter")
 
         # Level, i.e. selecting a specific depth by its index
         if not level == None:
-            return data[variable][:, level, :, :].data.compute()
-
+            return data[variable][:, level, :, :].data
         # All (3D)
         if region == "all":
-            return data[variable][:, :, :, :].data.compute()
+            return data[variable][:, :, :, :].data
 
         # Surface (2D)
         if region == "surface":
-            return data[variable][:, 0, :, :].data.compute()
+            return data[variable][:, 0, :, :].data
 
         # Bottom (2D)
         if region == "bottom":
-            return get_bottom(data[variable].data.compute(), depth = depth)
+            return get_bottom(data[variable].data, depth = depth)

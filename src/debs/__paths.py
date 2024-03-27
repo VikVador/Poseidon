@@ -69,6 +69,12 @@ def create_dictionary(smart_dict: dict, files: list, folder : str, separator: st
                     # Add the file to the list
                     file_names.append(folder + file_name)
 
+                # Check if the indicator is in the file name
+                if indicator in file_processed and file_name.endswith(".nc"):
+
+                    # Add the file to the list
+                    file_names.append(folder + file_name)
+
             # Add the month to the dictionary if files are found
             if file_names:
                 smart_dict[key] = file_names

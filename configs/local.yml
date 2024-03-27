@@ -20,30 +20,30 @@
 config:
 
   # WandB
-  "Project"                 : "ESA - Black Sea Deoxygenation Emulator - Local"
+  "Project"                 : "ESA - Black Sea Deoxygenation Emulator - Test (Local)"
 
   # Data
-  "Month (Starting)"        : 1
-  "Month (Ending)"          : 1
+  "Month (Starting)"        : 6
+  "Month (Ending)"          : 8
   "Year (Starting)"         : 1980
   "Year (Ending)"           : 1980
   "Problem"                 : "regression"
   "Hypoxia Treshold"        : 63
-  "Depth"                   : 200
+  "Depth"                   : 150
   "Inputs"                  : ["temperature"]
-  "Window (Inputs)"         : 4
+  "Window (Inputs)"         : 7
   "Window (Output)"         : 1
-  "Window (Transformation)" : 2
+  "Window (Transformation)" : 1
 
   # Model & Training
   "Architecture"            : "AVERAGE"
-  "Scaling"                 : 1
-  "Kernel Size"             : 1
+  "Scaling"                 : 8
+  "Kernel Size"             : 5
   "Datasets Size"           : [0.6, 0.3]
   "Loss Weights"            : [1, 1]
   "Learning Rate"           : 0.001
-  "Batch Size"              : 8
-  "Epochs"                  : 1
+  "Batch Size"              : 16
+  "Epochs"                  : 10
 
 cluster:
   "Dawgz"    : False

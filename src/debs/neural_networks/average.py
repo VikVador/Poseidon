@@ -56,12 +56,12 @@ class AVERAGE(nn.Sequential):
             # Shift the data to ensure minimum value is 0
             shifted_data = data_output - min_value
 
-            # Normaliinge the data
+            # Normalizing the data
             normalized_data = shifted_data / (max_value - min_value)
 
-            # Average concentration
+            # Predicting the average and log of variance
             average_output = torch.mean(torch.from_numpy(normalized_data[: train_samples, :, :]), dim = 0)
-            std_output     = torch.std(torch.from_numpy(normalized_data[: train_samples, :, :]), dim = 0)
+            std_output     = torch.log(torch.var(torch.from_numpy(normalized_data[: train_samples, :, :]), dim = 0))
 
             # Stacking
             average_output = torch.stack([average_output, std_output])
