@@ -46,11 +46,11 @@ def get_data_info():
     # Extracting the information
     return data_info["cluster"], data_info["local"]
 
-def get_complete_mask(data: np.array, bs_mask_with_depth: np.array):
+def get_complete_mask(data: np.array, treshold: float, bs_mask_with_depth: np.array):
     r"""Used to retrieve a mask highliting the land, oxygenated, hypoxia and switching zones"""
 
     # Converting to classification
-    oxygen = (data < 63) * 1
+    oxygen = (data < treshold) * 1
 
     # Averaging, i.e. if = 1, always in hypoxia, if = 0, never in hypoxia and value in between means there is a switch
     oxygen = np.nanmean(oxygen, axis = 0)
@@ -71,9 +71,6 @@ def get_complete_mask(data: np.array, bs_mask_with_depth: np.array):
 
 def get_complete_mask_plot(mask: np.array):
     r"""Used to plot the complete mask of the black sea."""
-
-    # Flipping vertically to show correctly Black Sea (for you my loving oceanographer <3)
-    mask = np.flipud(mask)
 
     # Labels for each of the classes
     labels = ['Not Observed', 'Oxygenated', 'Switching', 'Hypoxia']
@@ -122,14 +119,14 @@ def get_ratios(mask: np.array):
 
     return oxygenated, switching, hypoxia
 
-def get_ratios_plot(data: np.array, bs_mask_with_depth: np.array):
+def get_ratios_plot(data: np.array, treshold: float, bs_mask_with_depth: np.array):
     r"""Used to plot a ratios, i.e. it shows the tendency of a given region to be more oxygenated or in hypoxia."""
 
     # Retrieving dimensions (Ease of comprehension)
     t, x, y = data.shape
 
     # Converting to classification
-    oxygen = (data < 63) * 1
+    oxygen = (data < treshold) * 1
 
     # Counting the number of ones, i.e. number of times Hypoxia has occured
     oxygen_hypoxia = np.sum(oxygen, axis=0)
@@ -139,9 +136,6 @@ def get_ratios_plot(data: np.array, bs_mask_with_depth: np.array):
 
     # Hiding unobserved regions
     oxygen_hypoxia[bs_mask_with_depth == 0] = np.nan
-
-    # Flipping vertically to show correctly Black Sea (for you my loving oceanographer <3)
-    oxygen_hypoxia = np.flipud(oxygen_hypoxia)
 
     # Define a custom colormap where np.nan values are mapped to grey
     cmap = plt.cm.RdBu

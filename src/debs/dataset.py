@@ -42,45 +42,38 @@ class BlackSea_Dataset():
         assert month_start in [i for i in range(1, 13)],      f"ERROR (Dataset, init) - Incorrect starting month (1 <= {month_start} <= 12)"
         assert month_end   in [i for i in range(1, 13)],      f"ERROR (Dataset, init) - Incorrect ending month (1 <= {month_end} <= 12)"
         assert  year_start <= year_end,                       f"ERROR (Dataset, init) - Incorrect years ({year_start} <= {year_end})"
-        assert month_start <= month_end,                      f"ERROR (Dataset, init) - Incorrect months ({month_start} <= {month_end})"
 
         # Loading the name of all the useless variables, i.e. not usefull for our specific problem (for the sake of efficiency)
         with open('../../information/useless.txt', 'r') as file:
             self.useless_variables = json.load(file)
 
-        # Loading (all) the dictionnaries containing the path to each dataset, i.e. "YEAR-MONTH : PATH(S)"
-        with open('../../information/grid_T.txt', 'r') as file:
-            paths_physics_datasets_all = json.load(file)
-
-        with open('../../information/ptrc_T.txt', 'r') as file:
-            paths_biogeochemistry_datasets_all = json.load(file)
-
         # Retrieving possible path to the folder containing the datasets
         data_path_cluster, data_path_local = get_data_info()
 
         # Path to the folder containing the data
-        self.datasets_folder = data_path_cluster + f"{folder}/" if os.path.exists(data_path_cluster) else \
-                               data_path_local   + f"{folder}/"
+        self.datasets_folder = data_path_cluster if os.path.exists(data_path_cluster) else \
+                               data_path_local
 
         # Stores all the relevant paths datasets
-        self.paths_physics_datasets, self.paths_biogeochemistry_datasets = list(), list()
+        paths = list()
 
         # Extraction
         for year in range(year_start, year_end + 1):
-            for month in range(month_start, month_end + 1):
+            for month in range(1, 13):
 
-                # Converting to strings
-                year  = str(year)
-                month = f"0{month}" if month < 10 else str(month)
+                # Security (Start and ending years)
+                if year == year_start:
+                    if month < month_start:
+                        continue
+                if year == year_end:
+                    if month_end < month:
+                        break
 
-                # Creation of the key
-                key = f"{year}-{month}"
-
-                # Retreiving the paths
-                self.paths_physics_datasets         += [self.datasets_folder + p for p in paths_physics_datasets_all[key]]
-                self.paths_biogeochemistry_datasets += [self.datasets_folder + p for p in paths_biogeochemistry_datasets_all[key]]
+                # Adding the paths
+                paths = paths + [self.datasets_folder + f"BlackSea-DeepLearning_V2_{year}_{month}.nc"]
 
         # Saving other relevant information
+        self.paths       = paths
         self.month_start = month_start
         self.month_end   = month_end
         self.year_end    = year_end
@@ -100,46 +93,22 @@ class BlackSea_Dataset():
         """Used to retrieve the maximum depths position (indexes in 3D data) or the maximum depths values (in meters)"""
 
         # Security
-        assert unit in ["index", "meter"], f"ERROR (get_depths), Incorrect type ({unit})"
+        assert unit in ["index", "meter"], f"ERROR (get_depth), Incorrect unit ({unit})"
 
-        # Retrieving possible path to the mask and its name
-        mask_path_cluster, mask_path_local, mask_name = get_mask_info()
+        # Loading the data
+        data = xarray.open_dataset(self.paths[0])
 
-        # Determining the correct path
-        mask_path_complete = mask_path_cluster + mask_name if os.path.exists(mask_path_cluster) else mask_path_local + mask_name
+        # Returning the corresponding mask
+        return data["BATHYM"].data if unit == "meter" else data["BATHYI"].data
 
-        # Opening the dataset
-        data_depth = xarray.open_dataset(mask_path_complete, engine = "h5netcdf").bathy_metry.data.astype('float32') if unit == "meter" else \
-                     xarray.open_dataset(mask_path_complete, engine = "h5netcdf").mbathy.data
-
-        # Normalization
-        return data_depth / np.max(data_depth) if unit == "meter" else data_depth
-
-    def get_mask(self, depth: int = None):
+    def get_mask(self, continental_shelf: bool = False):
         r"""Used to retreive a mask of the Black Sea, i.e. 0 if land, 1 if the Black Sea. If depth is given, it will also set to 0 all regions below that depth"""
 
-        # Retrieving possible path to the mask and its name
-        mask_path_cluster, mask_path_local, mask_name = get_mask_info()
+        # Loading the data
+        data = xarray.open_dataset(self.paths[0])
 
-        # Loading the dataset containing information about the Black Sea mesh
-        mesh_data = xarray.open_dataset(mask_path_cluster + mask_name if os.path.exists(mask_path_cluster) else \
-                                        mask_path_local   + mask_name,
-                                        engine = "h5netcdf")
-
-        # Loading the complete Black sea mask
-        bs_mask = mesh_data.tmask[0, 0].data
-
-        # Checks if we want to hide regions below a given depth
-        if not depth == None:
-
-            # Retreives the bottom depth in [m] for each pixel
-            depth_values = mesh_data.bathy_metry.data[0]
-
-            # Remove all information for regions located below the given depth
-            bs_mask[depth <= depth_values] = 0
-
-        # Returning the processed mask
-        return bs_mask
+        # Returning the corresponding mask
+        return data["MASK"].data if continental_shelf == False else data["MASKCS"].data
 
     def get_days(self):
         """Used to get the IDs of days for a given time period, i.e. for each sample we have its day ID (1 to 365, repeated if multiple years are given)"""
@@ -180,88 +149,32 @@ class BlackSea_Dataset():
 
         return np.array(day_ids, dtype = np.float32)
 
-    def get_data(self, variable: str,
-                          level: int = None,
-                         region: str = None,
-                          depth: int = None):
-        r"""Used to retreive the data for a given variable at a specific level or a specific region"""
+    def get_data(self, variable: str):
+        r"""Used to retreive the data for a given variable"""
 
         # Security (1)
         assert variable in ["temperature", "salinity", "oxygen", "chlorophyll", "kshort", "klong"], f"ERROR (get_data), Incorrect variable ({variable})"
-        assert level  == None or (0 <= level and level < 59),                                       f"ERROR (get_data), Incorrect level (0 < {level} < 59)"
-        assert region == None or region in ["surface", "bottom", "all"],                            f"ERROR (get_data), Incorrect region ({region})"
-
-        # Security (2) - Choosing between level or region
-        assert not (level == None and region == None), f"ERROR (get_data), You must specify either a level or a region"
-        assert not (level != None and region != None), f"ERROR (get_data), You must specify either a level or a region, not both"
 
         def translate(variable: str):
             r"""Used to translate a variable into its name in the dataset, retrieve the type of dataset and the useless variables (the other ones)"""
 
             # Stores the translations for all the EO variables and oxygen
-            translations = {"temperature" : ["votemper", "physics"],
-                            "salinity"    : ["vosaline", "physics"],
-                            "oxygen"      : ["DOX",      "biogeochemistry"],
-                            "chlorophyll" : ["CHL",      "biogeochemistry"],
-                            "kshort"      : ["KBIOS",    "biogeochemistry"],
-                            "klong"       : ["KBIOL",    "biogeochemistry"]}
+            translations = {"temperature" : "TEMP",
+                            "salinity"    : "SAL",
+                            "oxygen"      : "OXYCS",
+                            "oxygenall"   : "OXY",
+                            "chlorophyll" : "CHL",
+                            "kshort"      : "KSHORT",
+                            "klong"       : "KLONG"}
 
             # Retrieving translation
-            v, v_type = translations[variable]
-
-            # Returns also the useless variables
-            return v, v_type, [values[0] for key, values in translations.items() if key != variable]
-
-        def get_bottom(data: np.array, depth = None):
-            r"""Used to retreive the data profile (2D) everywhere at the bottom of the Black Sea (None) of for all regions above a given depth"""
-
-            # Security
-            assert len(data.shape) == 4, f"ERROR (get_bottom), Incorrect data shape ({data.shape}), i.e. input dimensions should be (time, depth, y, x)"
-
-            # Retreiving the bathymetry mask b(t, x, y) = z_bottom, i.e. index at which we found bottom of the sea
-            bathy_mask = self.get_depth(unit = "index")
-
-            # Creation of x and y indexes to make manipulation
-            x, y = np.arange(bathy_mask.shape[2]), np.arange(bathy_mask.shape[1])
-            xidx = x.reshape(-1,1).repeat(len(y), axis = 1).T
-            yidx = y.reshape(-1,1).repeat(len(x), axis = 1)
-
-            # Retreiving the data everywhere at the bottom
-            data = data[:, bathy_mask[0] - 1, yidx, xidx]
-
-            # Hiding the regions below the given depth
-            if not depth == None:
-                data[:, self.get_mask(depth = depth) == 0] = np.nan
-
-            return data
+            return translations[variable]
 
         # Translation
-        variable, variable_type, other_useless_variables = translate(variable)
+        variable = translate(variable)
 
-        # Stores the datasets loaded individually
-        datasets = []
+        # Opening all the datasets
+        data = xarray.open_mfdataset(self.paths, combine='nested', concat_dim = "time")
 
-        # Current paths
-        curr_p = self.paths_physics_datasets if variable_type == "physics" else self.paths_biogeochemistry_datasets
-
-        # Loading the data (3D field)
-        for p in curr_p:
-            datasets.append(xarray.open_dataset(p, drop_variables = self.useless_variables + other_useless_variables))
-
-        # Needed to do this stupidly because xarrays cannot handle two same files (needed to fix missing days)
-        data = xarray.concat(datasets, dim = "time_counter")
-
-        # Level, i.e. selecting a specific depth by its index
-        if not level == None:
-            return data[variable][:, level, :, :].data
-        # All (3D)
-        if region == "all":
-            return data[variable][:, :, :, :].data
-
-        # Surface (2D)
-        if region == "surface":
-            return data[variable][:, 0, :, :].data
-
-        # Bottom (2D)
-        if region == "bottom":
-            return get_bottom(data[variable].data, depth = depth)
+        # Returns the corresponding data
+        return np.array(data[variable].data)

@@ -23,20 +23,21 @@
 # --------------
 #SBATCH --account=bsmfc
 #SBATCH --job-name=GENERATE_DATA
-#SBATCH --time=4:00:00
-#SBATCH --ntasks=1
+#SBATCH --time=08:00:00
+#SBATCH --ntasks=8
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus=0
 #SBATCH --mem-per-cpu=240G
-#SBATCH --partition=batch
+#SBATCH --partition=medium
 #SBATCH --output=../logs/generate_data.log
+#SBATCH --error=../logs/generate_data_error.log
 #SBATCH --mail-user=vmangeleer@uliege.be
 #SBATCH --mail-type=FAIL
 #
 # ---------------
 # Loading modules
 # ---------------
-module purge
+#module purge
 
 # ----
 # Main
@@ -44,4 +45,5 @@ module purge
 cd ../src/debs/
 
 # Running the script
-python generate.py
+echo "Running the script"
+python -u generate.py

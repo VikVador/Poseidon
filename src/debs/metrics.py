@@ -64,7 +64,7 @@ class BlackSea_Metrics():
         self.treshold_normalized_oxygen = treshold
 
         # Creation of a mask for plots
-        self.mask_plots = np.flipud(self.mask == 1)
+        self.mask_plots = self.mask == 1
 
         # Used to store results and plots
         self.scores, self.scores_names, self.plots = None, None, list()
@@ -203,13 +203,7 @@ class BlackSea_Metrics():
 
         # Hides all the regions that are not relevant for this metric
         if "Precision" in label or "Recall" in label:
-            score[self.mask_complete[:, :] == 0] = np.nan
-
-        # Fplipping vertically
-        score = np.flipud(score)
-
-        # Removing first lines (its just empty sea)
-        score = score[20:, :]
+            score[self.mask_complete == 0] = np.nan
 
         # Creating the figure
         fig = plt.figure(figsize = (15, 10))
@@ -224,7 +218,7 @@ class BlackSea_Metrics():
                                  vmin   = vminmax[0],
                                  vmax   = vminmax[1],
                                  aspect = '0.83')
-        ax_top_plot.imshow(self.mask_plots[20:, :], cmap = "grey", alpha = 0.1, aspect = '0.83')
+        ax_top_plot.imshow(self.mask_plots, cmap = "grey", alpha = 0.1, aspect = '0.83')
 
 
         # Add min and max values to the top right corner
@@ -239,21 +233,21 @@ class BlackSea_Metrics():
 
         # Plotting (2) - Focusing on top left region
         ax_bottom_plot_1 = fig.add_subplot(gs[1, 0])
-        im2 = ax_bottom_plot_1.imshow(score[20:110, 175:275],
+        im2 = ax_bottom_plot_1.imshow(score[40:130, 175:275],
                                       cmap   = cmap,
                                       vmin   = vminmax[0],
                                       vmax   = vminmax[1],
                                       aspect = '0.55')
-        ax_bottom_plot_1.imshow(self.mask_plots[40:110, 175:275], cmap = "grey", alpha = 0.1, aspect = '0.55')
+        ax_bottom_plot_1.imshow(self.mask_plots[40:130, 175:275], cmap = "grey", alpha = 0.1, aspect = '0.52')
 
         # Plotting (3) - Focusing on top bottom region
         ax_bottom_plot_2 = fig.add_subplot(gs[1, 1])
-        im3 = ax_bottom_plot_2.imshow(score[62:100, 250:470],
+        im3 = ax_bottom_plot_2.imshow(score[80:120, 250:470],
                                       cmap   = cmap,
                                       vmin   = vminmax[0],
                                       vmax   = vminmax[1],
                                       aspect = '4.5')
-        ax_bottom_plot_2.imshow(self.mask_plots[82:100, 250:470], cmap = "grey", alpha = 0.1, aspect = '4.5')
+        ax_bottom_plot_2.imshow(self.mask_plots[80:120, 250:470], cmap = "grey", alpha = 0.1, aspect = '2.5')
 
 
         # Plotting (4) - Focusing on bottom region
@@ -263,7 +257,7 @@ class BlackSea_Metrics():
                                       vmin   = vminmax[0],
                                       vmax   = vminmax[1],
                                       aspect = '3')
-        ax_bottom_plot_3.imshow(self.mask_plots[220:, :500], cmap = "grey", alpha = 0.1, aspect = '3')
+        ax_bottom_plot_3.imshow(self.mask_plots[200:, :500], cmap = "grey", alpha = 0.1, aspect = '1.65')
 
         # Plotting (5) - Colorbar
         ax_colorbar = fig.add_subplot(gs[:, -1])
@@ -458,9 +452,6 @@ class BlackSea_Metrics():
         y_pred[:, :, mask_true == 1] = np.nan if prob_type == 4 else -1
         y_true[:, :, mask_true == 1] = np.nan if prob_type == 4 else -1
 
-        # Flipping vertically (ease of comprehension)
-        y_pred = torch.flip(y_pred, dims = (2,))
-        y_true = torch.flip(y_true, dims = (2,))
 
         # Plotting the results
         fig, axes = plt.subplots(2, 1, figsize = (20, 10))
@@ -506,9 +497,9 @@ class BlackSea_Metrics():
             y_true[     :, self.mask == 0] = np.nan
 
             # Flipping vertically (ease of comprehension)
-            y_pred_mean = torch.flipud(y_pred_mean[0])
-            y_pred_std  = torch.flipud(y_pred_std[0])
-            y_true      = torch.flipud(y_true[0]) if isinstance(y_true, torch.Tensor) else np.flipud(y_true[0])
+            y_pred_mean = y_pred_mean[0]
+            y_pred_std  = y_pred_std[0]
+            y_true      = y_true[0]
 
             # Plotting the results
             fig, axes = plt.subplots(3, 1, figsize = (12, 12))
@@ -670,9 +661,6 @@ class BlackSea_Metrics():
         # Masking the land
         mask_current             = ~(self.mask_complete[:, :] >= 0)
         auc[mask_current == 1] = np.nan
-
-        # Flipping vertically
-        auc = np.flipud(auc)
 
         # Plot the results
         fig = plt.figure(figsize=(8, 8))

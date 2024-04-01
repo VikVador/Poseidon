@@ -61,22 +61,6 @@ class BlackSea_Dataloader():
             # Splitting the dataset into training, validation and test sets while not taking overlapping timeseries
             return data[0 : training_size - window_input], data[training_size : training_size + validation_size - window_input], data[training_size + validation_size:]
 
-        def rescaling(data: np.array, value : float = None):
-            r"""Used to rescale a tensor between [0,1] and, if needed, a given value is also rescaled (useful for oxygen concentration treshold)"""
-
-            # Determining the minimum and maximum values
-            min_value = np.nanmin(data)
-            max_value = np.nanmax(data)
-
-            # Shift the data to ensure minimum value is 0
-            shifted_data = data - min_value
-
-            # Normaliinge the data
-            normalized_data = shifted_data / (max_value - min_value)
-
-            # If a value is given, rescale it
-            return normalized_data, (value - min_value)/(max_value - min_value) if value is not None else None
-
         def spatialize(data: np.array, mesh: np.array, bathymetry: np.array):
             """Used to add spatial information to the data, i.e. bathymetry and mesh"""
 
@@ -85,7 +69,7 @@ class BlackSea_Dataloader():
 
             # Adding the missing dimensions
             mesh       = np.expand_dims(mesh,       axis = (0, 1, 2))
-            bathymetry = np.expand_dims(bathymetry, axis = (0, 1, 2))
+            bathymetry = np.expand_dims(bathymetry, axis = (0, 1, 2, 3))
 
             # Replicating the mesh and bathymetry to match each dimension
             for i, axe in zip(range(3), [timesteps, days, metrics]):
@@ -210,16 +194,8 @@ class BlackSea_Dataloader():
             # Finalizing the transformations
             return np.stack(transformed_data, axis = 1), np.stack(transformed_time, axis = 1)
 
-        # ------------------------------------------------
-        #                  PREPROCESSING
-        # ------------------------------------------------
-        #
-        # Rescaling the outpout and storing the normalized concentration treshold
-        y, self.normalized_deoxygenation_treshold = rescaling(y, hypoxia_treshold)
-
-        # Rescaling the input(s)
-        for v in range(variables):
-            x[:, v, :, :], _ = rescaling(x[:, v, :, :])
+        # Storing the normalized deoxygenation treshold
+        self.normalized_deoxygenation_treshold = hypoxia_treshold
 
         # Total number of time series input/output pairs
         n_samples = timesteps - window_inp - window_out
@@ -253,6 +229,8 @@ class BlackSea_Dataloader():
         self.number_training_samples   = self.x_train.shape[0]
         self.number_validation_samples = self.x_validation.shape[0]
         self.number_test_samples       = self.x_test.shape[0]
+
+        print("Hypoxia Treshold:", self.normalized_deoxygenation_treshold)
 
     def get_number_of_samples(self, type : str):
         r"""Returns the number of samples in a given dataset, i.e. training, validation or test"""

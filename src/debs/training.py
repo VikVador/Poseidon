@@ -19,6 +19,7 @@
 #
 import wandb
 import time
+import xarray
 
 # Pytorch
 import torch
@@ -71,10 +72,10 @@ def training(**kwargs):
                                 month_end   = end_month)
 
   # Loading the inputs
-  input_datasets = [BS_dataset.get_data(variable = v, region = "surface") for v in inputs]
+  input_datasets = [BS_dataset.get_data(variable = v) for v in inputs]
 
   # Loading the output
-  data_oxygen = BS_dataset.get_data(variable = "oxygen", region = "bottom", depth = depth)
+  data_oxygen = BS_dataset.get_data(variable = "oxygen")
 
   # Retrieving dimensions of the data
   timesteps, x_res, y_res = data_oxygen.shape
@@ -86,54 +87,35 @@ def training(**kwargs):
   bathy = BS_dataset.get_depth(unit = "meter")
   mesh  = BS_dataset.get_mesh(x = x_res, y = y_res)
 
+  # Hypoxia treshold
+  hypox_tresh = xarray.open_dataset(BS_dataset.paths[0])["HYPON"].data.item()
+
   # Loading the different masks
-  bs_mask             = BS_dataset.get_mask(depth = None)
-  bs_mask_with_depth  = BS_dataset.get_mask(depth = depth)
-  bs_mask_complete    = get_complete_mask(data_oxygen, bs_mask_with_depth)
+  bs_mask             = BS_dataset.get_mask(continental_shelf = False)
+  bs_mask_with_depth  = BS_dataset.get_mask(continental_shelf = True)
+  bs_mask_complete    = get_complete_mask(data_oxygen, hypox_tresh, bs_mask_with_depth)
+
+  # Hypoxia treshold
+  hypox_tresh = xarray.open_dataset(BS_dataset.paths[0])["HYPON"].data.item()
 
   # -------------—---------
   #     Preprocessing
   # -------------—---------
   #
-  # Cropping dimensions to be a multiple of 2
-  """
-  for i, v in enumerate(input_datasets):
-      input_datasets[i] = crop_debug(v, factor = 2)
-
-  data_oxygen        = crop_debug(data_oxygen,        factor = 2)
-  mesh               = crop_debug(mesh,               factor = 2)
-  bathy              = crop_debug(bathy,              factor = 2)
-  bs_mask            = crop_debug(bs_mask,            factor = 2)
-  bs_mask_with_depth = crop_debug(bs_mask_with_depth, factor = 2)
-  bs_mask_complete   = crop_debug(bs_mask_complete,   factor = 2)
-  """
-
-  # Cropping dimensions to be a multiple of 2
-  for i, v in enumerate(input_datasets):
-      input_datasets[i] = crop(v, factor = 2)
-
-  data_oxygen        = crop(data_oxygen,        factor = 2)
-  mesh               = crop(mesh,               factor = 2)
-  bathy              = crop(bathy,              factor = 2)
-  bs_mask            = crop(bs_mask,            factor = 2)
-  bs_mask_with_depth = crop(bs_mask_with_depth, factor = 2)
-  bs_mask_complete   = crop(bs_mask_complete,   factor = 2)
-
-
   # Creating the dataloader
-  BS_loader = BlackSea_Dataloader(x = input_datasets,
-                                  y = data_oxygen,
-                                  t = days_ID,
+  BS_loader = BlackSea_Dataloader( x = input_datasets,
+                                   y = data_oxygen,
+                                   t = days_ID,
                                 mesh = mesh,
                                 mask = bs_mask,
-                    mask_with_depth = bs_mask_with_depth,
+                     mask_with_depth = bs_mask_with_depth,
                           bathymetry = bathy,
                           window_inp = windows_inputs,
                           window_out = windows_outputs,
                       window_transfo = windows_transfo,
                                 mode = problem,
-                    hypoxia_treshold = hypoxia_treshold,
-                      datasets_size = datasets_size)
+                    hypoxia_treshold = hypox_tresh,
+                       datasets_size = datasets_size)
 
   # Preprocessing the data
   dataset_train      = BS_loader.get_dataloader(type = "train",      batch_size = batch_size)
@@ -185,7 +167,7 @@ def training(**kwargs):
 
   # WandB (2) - Sending information about the datasets
   wandb.log({"Dataset & Architecture/Dataset (Visualisation, Image, Regions)" : wandb.Image(get_complete_mask_plot(bs_mask_complete)),
-              "Dataset & Architecture/Dataset (Visualisation, Image, Ratios)" : wandb.Image(get_ratios_plot(data_oxygen, bs_mask_with_depth)),
+              "Dataset & Architecture/Dataset (Visualisation, Image, Ratios)" : wandb.Image(get_ratios_plot(data_oxygen, hypox_tresh, bs_mask_with_depth)),
               "Dataset & Architecture/Dataset (Visualisation, Video, Oxygen)" : wandb.Video(get_video(data = data_oxygen), fps = 1),
               "Dataset & Architecture/Ratio Oxygenated"                       : ratio_oxygenated,
               "Dataset & Architecture/Ratio Switching"                        : ratio_switching,
@@ -348,7 +330,6 @@ def training(**kwargs):
                                                                 y_true = y,
                                                   normalized_threshold = norm_oxy)
         """
-
 
         # WandB (5) - Sending visual information
         wandb.log({f"Metrics/Area Under The Curve (Global)"                 : auc,
