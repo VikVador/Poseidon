@@ -153,7 +153,7 @@ class BlackSea_Dataset():
         r"""Used to retreive the data for a given variable"""
 
         # Security (1)
-        assert variable in ["temperature", "salinity", "oxygen", "chlorophyll", "kshort", "klong"], f"ERROR (get_data), Incorrect variable ({variable})"
+        assert variable in ["temperature", "salinity", "oxygen", "oxygenall", "chlorophyll", "kshort", "klong"], f"ERROR (get_data), Incorrect variable ({variable})"
 
         def translate(variable: str):
             r"""Used to translate a variable into its name in the dataset, retrieve the type of dataset and the useless variables (the other ones)"""

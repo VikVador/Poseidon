@@ -42,12 +42,12 @@ config:
   "Datasets Size"           : [[0.6, 0.3]]
   "Loss Weights"            : [[1, 1]]
   "Learning Rate"           : [0.001]
-  "Batch Size"              : [16]
+  "Batch Size"              : [8]
   "Epochs"                  : [10]
 
 cluster:
   "Dawgz"    : True
-  "CPUS"     : 1
+  "CPUS"     : 4
   "GPUS"     : 1
   "RAM"      : "64GB"
   "TIME"     : "00:15:00"

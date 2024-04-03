@@ -20,6 +20,7 @@
 import wandb
 import time
 import xarray
+import numpy as np
 
 # Pytorch
 import torch
@@ -162,17 +163,22 @@ def training(**kwargs):
   # Validation set in torch format (used for metrics)
   validation_torch = torch.from_numpy(BS_loader.y_validation)
 
+  # Fixing random seed for reproducibility
+  np.random.seed(0)
+
+  # Generate random samplex indexes for the regression plot comparison
+  random_samples_index = np.random.randint(0, number_samples_validation - 1, 5)
+
   # WandB (1) - Initialization
   wandb.init(project = project, config = kwargs)
 
   # WandB (2) - Sending information about the datasets
   wandb.log({"Dataset & Architecture/Dataset (Visualisation, Image, Regions)" : wandb.Image(get_complete_mask_plot(bs_mask_complete)),
-              "Dataset & Architecture/Dataset (Visualisation, Image, Ratios)" : wandb.Image(get_ratios_plot(data_oxygen, hypox_tresh, bs_mask_with_depth)),
-              "Dataset & Architecture/Dataset (Visualisation, Video, Oxygen)" : wandb.Video(get_video(data = data_oxygen), fps = 1),
-              "Dataset & Architecture/Ratio Oxygenated"                       : ratio_oxygenated,
-              "Dataset & Architecture/Ratio Switching"                        : ratio_switching,
-              "Dataset & Architecture/Ratio Hypoxia"                          : ratio_hypoxia,
-              "Dataset & Architecture/Trainable Parameters"                   : neural_net.count_parameters()})
+             "Dataset & Architecture/Dataset (Visualisation, Image, Ratios)"  : wandb.Image(get_ratios_plot(data_oxygen, hypox_tresh, bs_mask_with_depth)),
+             "Dataset & Architecture/Ratio Oxygenated"                        : ratio_oxygenated,
+             "Dataset & Architecture/Ratio Switching"                         : ratio_switching,
+             "Dataset & Architecture/Ratio Hypoxia"                           : ratio_hypoxia,
+             "Dataset & Architecture/Trainable Parameters"                    : neural_net.count_parameters()})
 
   # -------------—---------
   #        Training
@@ -313,8 +319,9 @@ def training(**kwargs):
                                      y_true = validation_torch)
 
         # Visualization - Comparaison plot
-        cmp_plot = metrics_tool.compute_plots_comparison_regression(y_pred = prediction_all,
-                                                                    y_true = validation_torch)
+        cmp_plots = [metrics_tool.compute_plots_comparison_regression(y_pred = prediction_all,
+                                                                      y_true = validation_torch,
+                                                                      index  = i) for i in random_samples_index]
 
         # Visualization - Pixelwise metrics
         metrics_tool.compute_plots(y_pred = prediction_all,
@@ -325,16 +332,13 @@ def training(**kwargs):
                                                                         y_true = validation_torch,
                                                           normalized_threshold = norm_oxy)
 
-        """
-        auc_plot_local = metrics_tool.compute_plot_ROCAUC_local(y_pred = prediction,
-                                                                y_true = y,
-                                                  normalized_threshold = norm_oxy)
-        """
-
         # WandB (5) - Sending visual information
         wandb.log({f"Metrics/Area Under The Curve (Global)"                 : auc,
-                   f"Visualization/Area Under The Curve (Global)"           : wandb.Image(auc_plot),
-                    "Visualization/Prediction VS Ground Truth (Regression)" : wandb.Image(cmp_plot)})
+                   f"Visualization/Area Under The Curve (Global)"           : wandb.Image(auc_plot)})
+
+        # WandB (6) - Sending visual information
+        for i, p in enumerate(cmp_plots):
+            wandb.log({f"Visualization/Prediction VS Ground Truth - Sample {i})" : wandb.Image(p)})
 
         # Information over terminal (5)
         progression(epoch = epoch,

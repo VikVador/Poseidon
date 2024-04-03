@@ -25,8 +25,8 @@ config:
   # Data
   "Month (Starting)"        : 3
   "Month (Ending)"          : 9
-  "Year (Starting)"         : 1980
-  "Year (Ending)"           : 1980
+  "Year (Starting)"         : 2000
+  "Year (Ending)"           : 2000
   "Problem"                 : "regression"
   "Hypoxia Treshold"        : 63
   "Depth"                   : 150
@@ -36,18 +36,18 @@ config:
   "Window (Transformation)" : 1
 
   # Model & Training
-  "Architecture"            : "FCNN"
+  "Architecture"            : "UNET"
   "Scaling"                 : 1
   "Kernel Size"             : 5
   "Datasets Size"           : [0.6, 0.3]
   "Loss Weights"            : [1, 1]
   "Learning Rate"           : 0.001
   "Batch Size"              : 16
-  "Epochs"                  : 5
+  "Epochs"                  : 1
 
 cluster:
   "Dawgz"    : False
-  "CPUS"     : 1
+  "CPUS"     : 4
   "GPUS"     : 1
   "RAM"      : "64GB"
   "TIME"     : "00:30:00"

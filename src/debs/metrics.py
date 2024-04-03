@@ -480,7 +480,7 @@ class BlackSea_Metrics():
 
         return fig
 
-    def compute_plots_comparison_regression(self, y_pred : torch.tensor, y_true : torch.tensor):
+    def compute_plots_comparison_regression(self, y_pred : torch.tensor, y_true : torch.tensor, index : int):
             """Plot and compare two tensors"""
 
             # Defining color map
@@ -496,10 +496,11 @@ class BlackSea_Metrics():
             y_pred_std[ :, self.mask == 0] = np.nan
             y_true[     :, self.mask == 0] = np.nan
 
+            print(index)
             # Flipping vertically (ease of comprehension)
-            y_pred_mean = y_pred_mean[0]
-            y_pred_std  = y_pred_std[0]
-            y_true      = y_true[0]
+            y_pred_mean = y_pred_mean[index]
+            y_pred_std  = y_pred_std[index]
+            y_true      = y_true[index]
 
             # Plotting the results
             fig, axes = plt.subplots(3, 1, figsize = (12, 12))
