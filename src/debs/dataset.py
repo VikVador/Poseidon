@@ -15,7 +15,7 @@
 #
 # Documentation
 # -------------
-# A tool to load raw Black Sea datasets coming from the NEMO simulator.
+# A tool to load preprocessed (normalized and standardized) Black Sea datasets coming from the NEMO simulator.
 #
 import os
 import json
@@ -25,7 +25,6 @@ import numpy as np
 
 from tools import get_data_info, get_mask_info
 
-
 class BlackSea_Dataset():
     r"""A simple tool to load data of Black Sea simulations (NEMO Simulator) from 1980 to 2023."""
 
@@ -33,7 +32,7 @@ class BlackSea_Dataset():
                          year_end: int = 1980,
                       month_start: int = 1,
                         month_end: int = 1,
-                           folder: str = "output_HR001"):
+                        data_type: str = "standardized"):
         super().__init__()
 
         # Security (1)
@@ -42,13 +41,14 @@ class BlackSea_Dataset():
         assert month_start in [i for i in range(1, 13)],      f"ERROR (Dataset, init) - Incorrect starting month (1 <= {month_start} <= 12)"
         assert month_end   in [i for i in range(1, 13)],      f"ERROR (Dataset, init) - Incorrect ending month (1 <= {month_end} <= 12)"
         assert  year_start <= year_end,                       f"ERROR (Dataset, init) - Incorrect years ({year_start} <= {year_end})"
+        assert data_type in ["standardized", "normalized"],   f"ERROR (Dataset, init) - Incorrect data type ({data_type})"
 
         # Loading the name of all the useless variables, i.e. not usefull for our specific problem (for the sake of efficiency)
         with open('../../information/useless.txt', 'r') as file:
             self.useless_variables = json.load(file)
 
         # Retrieving possible path to the folder containing the datasets
-        data_path_cluster, data_path_local = get_data_info()
+        data_path_cluster, _, data_path_local = get_data_info()
 
         # Path to the folder containing the data
         self.datasets_folder = data_path_cluster if os.path.exists(data_path_cluster) else \
@@ -70,7 +70,8 @@ class BlackSea_Dataset():
                         break
 
                 # Adding the paths
-                paths = paths + [self.datasets_folder + f"BlackSea-DeepLearning_V2_{year}_{month}.nc"]
+                paths = paths + [self.datasets_folder + f"normalized/BlackSea-DeepLearning_V2_{year}_{month}.nc"] if data_type == "normalized" else \
+                        paths + [self.datasets_folder + f"standardized/BlackSea-DeepLearning_Standardized_{year}_{month}.nc"]
 
         # Saving other relevant information
         self.paths       = paths
@@ -78,7 +79,7 @@ class BlackSea_Dataset():
         self.month_end   = month_end
         self.year_end    = year_end
         self.year_start  = year_start
-        self.folder      = folder
+        self.data_type   = data_type
 
     def get_mesh(self, x: int, y: int):
         r"""Used to retrieve a mesh with normalized coordinates for the given shape (x, y)"""
@@ -174,7 +175,7 @@ class BlackSea_Dataset():
         variable = translate(variable)
 
         # Opening all the datasets
-        data = xarray.open_mfdataset(self.paths, combine='nested', concat_dim = "time")
+        data = xarray.open_mfdataset(self.paths, combine = 'nested', concat_dim = "time")
 
         # Returns the corresponding data
         return np.array(data[variable].data)

@@ -15,9 +15,7 @@
 #
 # Documentation
 # -------------
-# A script to extract the path of all files and save it as a .txt files. Since there
-# is such an heterogeneity in the ways data files are saved, it is important to make
-# sure everything is loaded perfectly.
+# A script to extract and save the path to all data files
 #
 import os
 import json

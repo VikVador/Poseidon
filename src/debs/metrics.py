@@ -53,14 +53,13 @@ def RootMeanSquaredErrorPerPixel(y_pred : np.array = None, y_true : np.array = N
 class BlackSea_Metrics():
     r"""A tool to compute a large variety of metrics (scalar or visual) to assess the quality of a model."""
 
-    def __init__(self, mode: str, mask : np.array, mask_complete : np.array, treshold : float, number_of_samples : int):
+    def __init__(self, mask : np.array, mask_complete : np.array, treshold : float, number_of_samples : int):
         r"""Initialization of the metrics computation tool"""
 
         # Storing information
-        self.mask = mask
-        self.mode = mode
-        self.mask_complete = mask_complete
-        self.number_of_samples = number_of_samples
+        self.mask                       = mask
+        self.mask_complete              = mask_complete
+        self.number_of_samples          = number_of_samples
         self.treshold_normalized_oxygen = treshold
 
         # Creation of a mask for plots
@@ -75,13 +74,11 @@ class BlackSea_Metrics():
 
     def get_names_metrics(self):
         r"""Retreives the name of all the metrics (scalar)"""
-        return      ["Area Under The Curve"] + self.metrics_classification_names if self.mode == "classification" else \
-               self.metrics_regression_names + self.metrics_classification_names
+        return self.metrics_regression_names + self.metrics_classification_names
 
     def get_names_plots(self):
         r"""Retreives the name of all the metrics (visual)"""
-        return      ["Area Under The Curve"] + ["Accuracy", "Precision", "Recall"] if self.mode == "classification" else \
-                    ["Mean Squared Error", "Root Mean Squared Error", "Percentage of Bias", "Pearson Correlation Coefficient"] + ["Accuracy", "Precision", "Recall"]
+        return ["Mean Squared Error", "Root Mean Squared Error", "Percentage of Bias", "Pearson Correlation Coefficient"] + ["Accuracy", "Precision", "Recall"]
 
     def get_results(self):
         r"""Retreives the results of all the metrics"""
@@ -95,9 +92,8 @@ class BlackSea_Metrics():
         r"""Computes each metric (scalar) for each individual forecasted day, i.e. returns a tensor of shape [forecasted days, metrics]"""
 
         # Selecting the mean, i.e. metrics are computed with the mean value predicted
-        if self.mode == "regression":
-            y_pred = y_pred[:, :, 0]
-            y_true = y_true[:, :, 0]
+        y_pred = y_pred[:, :, 0]
+        y_true = y_true[:, :, 0]
 
         # Retrieving dimensions for ease of comprehension
         batch_size, days, = y_true.shape[0], y_true.shape[1]
@@ -115,65 +111,40 @@ class BlackSea_Metrics():
         # Stores all the scores
         results = list()
 
-        # ------- CLASSIFICATION (ROCAUC) -------
-        if self.mode == "classification":
+        # Retrieving dimensions (Ease of comprehension)
+        t = y_true_per_day.shape[0]
 
-            # Retrieving dimensions (Ease of comprehension)
-            t, c, x, y = y_true_per_day.shape
+        # Metrics to perform regression (Computed on each sample, everything is then summed and averaged over the number of samples afterwards)
+        metrics_regression = [PercentageOfBias(),
+                                MeanSquaredError(num_outputs = t),
+                                RootMeanSquaredError(),
+                                R2Score(num_outputs = t, multioutput = 'raw_values'),
+                                PearsonCorrCoef( num_outputs = t)]
 
-            # Retrieving values in the sea, swapping axis (t, c, x, y) to (c, t, x, y) and flattening (c, t * x * y)
-            y_true_per_day = y_true_per_day[:, :, self.mask[:, :] == 1].reshape(t, c, -1)
-            y_pred_per_day = y_pred_per_day[:, :, self.mask[:, :] == 1].reshape(t, c, -1)
+        # Dataset for precision and recall (only computed on region where hypoxia can occur)
+        y_true_per_day_hyp = torch.swapaxes(y_true_per_day[:, self.mask_complete[:, :] >= 1], 0, 1)
+        y_pred_per_day_hyp = torch.swapaxes(y_pred_per_day[:, self.mask_complete[:, :] >= 1], 0, 1)
 
-            # Used th compute the area under the curve
-            toolAUC = MulticlassAUROC(num_classes = c)
+        # Swapping axes (t, x * y) to (x * y, t)
+        y_true_per_day = torch.swapaxes(y_true_per_day[:, self.mask[:, :] == 1], 0, 1)
+        y_pred_per_day = torch.swapaxes(y_pred_per_day[:, self.mask[:, :] == 1], 0, 1)
 
-            # Transforming the problem to non-probabilistic
-            y_true_per_day = np.argmax(y_true_per_day, axis = 1)
+        # Computations
+        results += [torch.sum(metric(y_pred_per_day, y_true_per_day)).item() for metric in metrics_regression]
 
-            # Computations
-            results += [toolAUC(y_pred_per_day, y_true_per_day).item() * self.number_of_samples]
+        # Transforming problem to classification
+        y_true_per_day = (y_true_per_day < self.treshold_normalized_oxygen) * 1
+        y_pred_per_day = (y_pred_per_day < self.treshold_normalized_oxygen) * 1
 
-            # Transforming the problem to non-probabilistic
-            y_pred_per_day = np.argmax(y_pred_per_day, axis = 1)
+        y_true_per_day_hyp = (y_true_per_day_hyp < self.treshold_normalized_oxygen) * 1
+        y_pred_per_day_hyp = (y_pred_per_day_hyp < self.treshold_normalized_oxygen) * 1
 
-        # ------- REGRESSION -------
-        if self.mode == "regression":
+        # Swapping axes (x * y, t) to (t, x * y)
+        y_true_per_day = torch.swapaxes(y_true_per_day, 0, 1)
+        y_pred_per_day = torch.swapaxes(y_pred_per_day, 0, 1)
 
-            # Retrieving dimensions (Ease of comprehension)
-            t = y_true_per_day.shape[0]
-
-            # Metrics to perform regression (Computed on each sample, everything is then summed and averaged over the number of samples afterwards)
-            metrics_regression = [PercentageOfBias(),
-                                  MeanSquaredError(num_outputs = t),
-                                  RootMeanSquaredError(),
-                                  R2Score(num_outputs = t, multioutput = 'raw_values'),
-                                  PearsonCorrCoef( num_outputs = t)]
-
-            # Dataset for precision and recall (only computed on region where hypoxia can occur)
-            y_true_per_day_hyp = torch.swapaxes(y_true_per_day[:, self.mask_complete[:, :] >= 1], 0, 1)
-            y_pred_per_day_hyp = torch.swapaxes(y_pred_per_day[:, self.mask_complete[:, :] >= 1], 0, 1)
-
-            # Swapping axes (t, x * y) to (x * y, t)
-            y_true_per_day = torch.swapaxes(y_true_per_day[:, self.mask[:, :] == 1], 0, 1)
-            y_pred_per_day = torch.swapaxes(y_pred_per_day[:, self.mask[:, :] == 1], 0, 1)
-
-            # Computations
-            results += [torch.sum(metric(y_pred_per_day, y_true_per_day)).item() for metric in metrics_regression]
-
-            # Transforming problem to classification
-            y_true_per_day = (y_true_per_day < self.treshold_normalized_oxygen) * 1
-            y_pred_per_day = (y_pred_per_day < self.treshold_normalized_oxygen) * 1
-
-            y_true_per_day_hyp = (y_true_per_day_hyp < self.treshold_normalized_oxygen) * 1
-            y_pred_per_day_hyp = (y_pred_per_day_hyp < self.treshold_normalized_oxygen) * 1
-
-            # Swapping axes (x * y, t) to (t, x * y)
-            y_true_per_day = torch.swapaxes(y_true_per_day, 0, 1)
-            y_pred_per_day = torch.swapaxes(y_pred_per_day, 0, 1)
-
-            y_true_per_day_hyp = torch.swapaxes(y_true_per_day_hyp, 0, 1)
-            y_pred_per_day_hyp = torch.swapaxes(y_pred_per_day_hyp, 0, 1)
+        y_true_per_day_hyp = torch.swapaxes(y_true_per_day_hyp, 0, 1)
+        y_pred_per_day_hyp = torch.swapaxes(y_pred_per_day_hyp, 0, 1)
 
         # ------- CLASSIFICATION (ACC, PRE, ...) -------
         #
@@ -287,29 +258,16 @@ class BlackSea_Metrics():
             y_true_per_day = y_true[:, i]
             y_pred_per_day = y_pred[:, i]
 
-            # ------- CLASSIFICATION (ROCAUC) -------
-            if self.mode == "classification":
+            # Extracting the mean value
+            y_pred_per_day = y_pred_per_day[:, 0]
+            y_true_per_day = y_true_per_day[:, 0]
 
-                # Drawing plot
-                self.plots += self.compute_plots_classification_ROCAUC(y_pred_per_day[:, :, self.mask[:, :] == 1], y_true_per_day[:, :, self.mask[:, :] == 1], i)
+            # Drawing plots
+            self.plots += self.compute_plots_regression(y_pred_per_day, y_true_per_day, i)
 
-                # Transforming problem to non-probabilistic
-                y_true_per_day = np.argmax(y_true_per_day, axis = 1)
-                y_pred_per_day = np.argmax(y_pred_per_day, axis = 1)
-
-            # ------- REGRESSION -------
-            if self.mode == "regression":
-
-                # Extracting the mean value
-                y_pred_per_day = y_pred_per_day[:, 0]
-                y_true_per_day = y_true_per_day[:, 0]
-
-                # Drawing plots
-                self.plots += self.compute_plots_regression(y_pred_per_day, y_true_per_day, i)
-
-                # Transforming problem to classification
-                y_pred_per_day = (y_pred_per_day < self.treshold_normalized_oxygen) * 1
-                y_true_per_day = (y_true_per_day < self.treshold_normalized_oxygen) * 1
+            # Transforming problem to classification
+            y_pred_per_day = (y_pred_per_day < self.treshold_normalized_oxygen) * 1
+            y_true_per_day = (y_true_per_day < self.treshold_normalized_oxygen) * 1
 
             # ------- CLASSIFICATION (ACC, PRE, ...) -------
             self.plots += self.compute_plots_classification(y_pred_per_day, y_true_per_day, i)
@@ -328,16 +286,16 @@ class BlackSea_Metrics():
         metrics_regression = [MeanSquaredError(num_outputs = x * y), RootMeanSquaredErrorPerPixel(), PercentageOfBiasPerPixel(), PearsonCorrCoef(num_outputs = x * y)]
 
         # Labels for the plots
-        metrics_names = ["Mean Squared Error $[(mmol/m^3)^2]$",
-                         "Root Mean Squared Error $[mmol/m^3$]",
+        metrics_names = ["Mean Squared Error $[-]$",
+                         "Root Mean Squared Error $[-]",
                          "Percentage of Bias [%]",
                          "Pearson Correlation Coefficient [-]"]
 
         # Definition of the range for the colorbar
-        metrics_ranges = [(0, 0.1), (0, 0.1), (-100, 100), (-1, 1)]
+        metrics_ranges = [(0, 0.25), (0, 0.50), (-100, 100), (-1, 1)]
 
         # Colors for the plots (need to have sequential colors and diverging )
-        metrics_colors = ["coolwarm", "coolwarm", "RdBu", "RdBu"]
+        metrics_colors = ["Blues", "Blues", "RdBu", "RdBu"]
 
         # Stores all the plots
         plots = list()
@@ -426,65 +384,12 @@ class BlackSea_Metrics():
 
         return [fig]
 
-    def compute_plots_comparison_classification(self, y_pred : torch.tensor, y_true : torch.tensor):
-        """Plot and compare two tensors"""
-
-        def convert_prob_to_classification(tensor : torch.tensor):
-            """Convert probabilities to classification"""
-            if len(tensor.shape) == 5:
-                mask = tensor[0, 0, 0] == -1
-                tensor = torch.argmax(tensor, dim=2)
-            else:
-                mask = (tensor[0, 0] == -1) * 1
-            return tensor, mask
-
-        # Determining the type of problem
-        prob_type = len(y_pred.shape)
-
-        # Defining color map
-        cmap = "viridis" if prob_type == 4 else "viridis"
-
-        # Convert probabilities to classification
-        y_pred, _         = convert_prob_to_classification(y_pred)
-        y_true, mask_true = convert_prob_to_classification(y_true)
-
-        # Hiding the land
-        y_pred[:, :, mask_true == 1] = np.nan if prob_type == 4 else -1
-        y_true[:, :, mask_true == 1] = np.nan if prob_type == 4 else -1
-
-
-        # Plotting the results
-        fig, axes = plt.subplots(2, 1, figsize = (20, 10))
-
-        # Plot Prediction
-        im1 = axes[0].imshow(y_pred[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1, vmax = 1)  # Set vmin and vmax
-        axes[0].set_ylabel('Prediction')
-        axes[0].set_xticks([])
-        axes[0].set_yticks([])
-
-        # Add colorbar to the right of the Prediction plot
-        cbar1 = fig.colorbar(im1, ax=axes[0], fraction = 0.025, pad = 0.04)
-
-        # Plot Ground Truth
-        im2 = axes[1].imshow(y_true[0, 0], cmap=cmap, vmin = 0 if prob_type == 4 else -1, vmax = 1)  # Set vmin and vmax
-        axes[1].set_ylabel('Ground Truth')
-        axes[1].set_xticks([])
-        axes[1].set_yticks([])
-
-        # Add colorbar to the right of the Ground Truth plot
-        cbar2 = fig.colorbar(im2, ax=axes[1], fraction=0.025, pad=0.04)
-
-        # Adjust layout
-        plt.tight_layout()
-        plt.show()
-
-        return fig
-
     def compute_plots_comparison_regression(self, y_pred : torch.tensor, y_true : torch.tensor, index : int):
             """Plot and compare two tensors"""
 
             # Defining color map
             cmap = "viridis"
+            minv, maxv = -3, 3
 
             # Extracting the mean and standard deviation
             y_true      =           y_true[:, 0, 0]
@@ -496,7 +401,6 @@ class BlackSea_Metrics():
             y_pred_std[ :, self.mask == 0] = np.nan
             y_true[     :, self.mask == 0] = np.nan
 
-            print(index)
             # Flipping vertically (ease of comprehension)
             y_pred_mean = y_pred_mean[index]
             y_pred_std  = y_pred_std[index]
@@ -506,23 +410,23 @@ class BlackSea_Metrics():
             fig, axes = plt.subplots(3, 1, figsize = (12, 12))
 
             # Plot Standard Devaition
-            im1 = axes[0].imshow(y_pred_std, cmap=cmap, vmin = 0, vmax = 1)
+            im1 = axes[0].imshow(y_pred_std, cmap="Reds", vmin = 0, vmax = 1)
             axes[0].imshow(self.mask_plots, cmap = "grey", alpha=0.1)
-            axes[0].set_ylabel('Uncertainty (STD)')
+            axes[0].set_ylabel('Uncertainty (Standard Deviation)')
             axes[0].set_xticks([])
             axes[0].set_yticks([])
             cbar1 = fig.colorbar(im1, ax=axes[0], fraction = 0.025, pad = 0.04)
 
             # Plot Mean Prediction
-            im2 = axes[1].imshow(y_pred_mean, cmap=cmap, vmin = 0, vmax = 1)
+            im2 = axes[1].imshow(y_pred_mean, cmap=cmap, vmin = minv, vmax = maxv)
             axes[1].imshow(self.mask_plots, cmap = "grey", alpha=0.1)
-            axes[1].set_ylabel('Prediction (M)')
+            axes[1].set_ylabel('Prediction (Mean)')
             axes[1].set_xticks([])
             axes[1].set_yticks([])
             cbar2 = fig.colorbar(im2, ax=axes[1], fraction = 0.025, pad = 0.04)
 
             # Plot Ground Truth
-            im3 = axes[2].imshow(y_true, cmap=cmap, vmin = 0, vmax = 1)
+            im3 = axes[2].imshow(y_true, cmap=cmap, vmin =  minv, vmax = maxv)
             axes[2].imshow(self.mask_plots, cmap = "grey", alpha=0.1)
             axes[2].set_ylabel('Ground Truth')
             axes[2].set_xticks([])
@@ -560,7 +464,7 @@ class BlackSea_Metrics():
         y_true = y_true.view(samples, -1)
 
         # Simple linspace between 0 and 1
-        threshold = torch.linspace(0, 1, 100)
+        threshold = torch.linspace(-10, 10, 100)
 
         # Stores the ROC curve for each threshold
         false_positive, true_positive = list(), list()

@@ -16,9 +16,9 @@
 #
 # Documentation
 # -------------
-# A Submission script for Lucia to activate a notebook !
+# A Submission script to create a notebook instance !
 #
-#     /!\   Don't forget to activate your conda environment (esa) before running this script   /!\
+#     /!\   Don't forget to activate your conda environment before running this script   /!\
 #
 # --------------
 # Job parameters
@@ -27,10 +27,10 @@
 #SBATCH --job-name=JUPYTER
 #SBATCH --time=12:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=2
 #SBATCH --gpus=1
-#SBATCH --mem-per-cpu=128G
-#SBATCH --partition=gpu
+#SBATCH --mem-per-cpu=64G
+#SBATCH --partition=ia
 #SBATCH --output=../logs/jupiter_notebook.log
 #SBATCH --mail-user=vmangeleer@uliege.be
 #SBATCH --mail-type=FAIL

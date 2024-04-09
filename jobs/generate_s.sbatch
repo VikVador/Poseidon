@@ -16,21 +16,21 @@
 #
 # Documentation
 # -------------
-# A submission script to analyze the distributions of the data (__distributions.py)
+# A submission script to standardize the original data (__generate_s.py)
 #
 # --------------
 # Job parameters
 # --------------
 #SBATCH --account=bsmfc
-#SBATCH --job-name=DISTRIBUTION
-#SBATCH --time=12:00:00
+#SBATCH --job-name=GENERATE_S_DATA
+#SBATCH --time=24:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gpus=0
 #SBATCH --mem-per-cpu=32G
 #SBATCH --partition=medium
-#SBATCH --output=../logs/distribution.log
-#SBATCH --error=../logs/distribution_error.log
+#SBATCH --output=../logs/generate_s_data.log
+#SBATCH --error=../logs/generate_s_data_error.log
 #SBATCH --mail-user=vmangeleer@uliege.be
 #SBATCH --mail-type=FAIL
 #
@@ -46,4 +46,4 @@ cd ../src/debs/
 
 # Running the script
 echo "Running the script"
-python -u __distributions.py
+python -u __generate_s.py

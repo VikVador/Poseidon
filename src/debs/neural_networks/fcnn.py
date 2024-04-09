@@ -21,29 +21,20 @@
 import torch
 import torch.nn as nn
 
-# Custom libraries
-from neural_networks.encoder import ENCODER
-
 
 class FCNN(nn.Sequential):
     r"""A fully convolutional neural network"""
 
-    def __init__(self, problem: str, inputs: int, outputs: int, window_transformation: int = 1, kernel_size : int = 3, scaling : int = 1):
+    def __init__(self, inputs: int, kernel_size : int = 3, scaling : int = 1):
         super(FCNN, self).__init__()
 
-        # Initialization
+        # Initialization (Mean and STD)
         self.n_in    = inputs
-        self.problem = problem
+        self.n_out   = 2
         self.padding = kernel_size // 2
-
-        # Number of output channels, i.e. times 2 because either mean and std for regression or both classes for classification
-        self.n_out   = outputs * 2
 
         # ------ Architecture ------
         #
-        # Temporal Encoder
-        self.block_encoder = ENCODER(window_transformation)
-
         # Main Layers
         self.conv_init           = nn.Conv2d(self.n_in    , 256 * scaling, kernel_size, padding = self.padding)
         self.conv_intermediate_1 = nn.Conv2d(256 * scaling, 128 * scaling, kernel_size, padding = self.padding)
@@ -60,26 +51,7 @@ class FCNN(nn.Sequential):
         self.normalization_intermediate_2 = nn.BatchNorm2d(self.conv_intermediate_2.out_channels)
         self.normalization_intermediate_3 = nn.BatchNorm2d(self.conv_intermediate_3.out_channels)
 
-    def forward(self, x, t):
-
-        # Retrieiving dimensions (Ease of comprehension)
-        samples, days, values, variables, x_res, y_res = x.shape
-
-        # ----- Encoding Time -----
-        #
-        # Applying the encoder
-        weights = torch.squeeze(self.block_encoder(t), dim = -1)
-
-        # Applying the weights (except to mesh (dim = 2) and bathymetry (dim = 3))
-        for sample in range(samples):
-            for value in range(days):
-                x[:, value, :, :-3] *= weights[sample, value]
-
-        # Reshaping
-        x = x.reshape(samples, days * values * variables, x_res, y_res)
-
-        # ----- Fully Convolutionnal -----
-        #
+    def forward(self, x):
         x = self.normalization_init(self.activation(self.conv_init(x)))
         x = self.normalization_intermediate_1(self.activation(self.conv_intermediate_1(x)))
         x = self.normalization_intermediate_2(self.activation(self.conv_intermediate_2(x)))

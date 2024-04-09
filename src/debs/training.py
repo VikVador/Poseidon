@@ -15,7 +15,7 @@
 #
 # Documentation
 # -------------
-# A (main) function used to train a neural network to forecast the oxygen concentration in the Black Sea.
+# Function used to train a neural network to forecast the oxygen concentration in the Black Sea.
 #
 import wandb
 import time
@@ -29,7 +29,7 @@ import torch.optim as optim
 
 # Custom libraries
 from tools                  import *
-from losses                 import compute_loss
+from losses                 import loss_regression
 from dataset                import BlackSea_Dataset
 from metrics                import BlackSea_Metrics
 from dataloader             import BlackSea_Dataloader
@@ -51,13 +51,8 @@ def training(**kwargs):
   end_month        = kwargs['Month (Ending)']
   start_year       = kwargs['Year (Starting)']
   end_year         = kwargs['Year (Ending)']
-  problem          = kwargs['Problem']
-  hypoxia_treshold = kwargs['Hypoxia Treshold']
-  depth            = kwargs['Depth']
   inputs           = kwargs['Inputs']
   windows_inputs   = kwargs['Window (Inputs)']
-  windows_outputs  = kwargs['Window (Output)']
-  windows_transfo  = kwargs['Window (Transformation)']
 
   # Model
   architecture     = kwargs['Architecture']
@@ -96,80 +91,69 @@ def training(**kwargs):
   bs_mask_with_depth  = BS_dataset.get_mask(continental_shelf = True)
   bs_mask_complete    = get_complete_mask(data_oxygen, hypox_tresh, bs_mask_with_depth)
 
-  # Hypoxia treshold
-  hypox_tresh = xarray.open_dataset(BS_dataset.paths[0])["HYPON"].data.item()
+  # Retrieves the ratios of the different classes (Used to get insights about the data)
+  ratio_oxygenated, ratio_switching, ratio_hypoxia = get_ratios(bs_mask_complete)
 
   # -------------—---------
   #     Preprocessing
   # -------------—---------
   #
-  # Creating the dataloader
-  BS_loader = BlackSea_Dataloader( x = input_datasets,
-                                   y = data_oxygen,
-                                   t = days_ID,
-                                mesh = mesh,
-                                mask = bs_mask,
-                     mask_with_depth = bs_mask_with_depth,
-                          bathymetry = bathy,
-                          window_inp = windows_inputs,
-                          window_out = windows_outputs,
-                      window_transfo = windows_transfo,
-                                mode = problem,
-                    hypoxia_treshold = hypox_tresh,
-                       datasets_size = datasets_size)
+  # Creating the dataloaders
+  BS_loader = BlackSea_Dataloader(x = input_datasets,
+                                  y = data_oxygen,
+                                  t = days_ID,
+                               mesh = mesh,
+                               mask = bs_mask,
+                         bathymetry = bathy,
+                         window_inp = windows_inputs)
 
-  # Preprocessing the data
   dataset_train      = BS_loader.get_dataloader(type = "train",      batch_size = batch_size)
   dataset_validation = BS_loader.get_dataloader(type = "validation", batch_size = batch_size)
   dataset_test       = BS_loader.get_dataloader(type = "test",       batch_size = batch_size)
 
-  # Extracting the normalized oxygen treshold value
-  norm_oxy = BS_loader.get_normalized_deoxygenation_treshold()
-
   # Extracting the number of samples in the validation set
   number_samples_validation = BS_loader.get_number_of_samples(type = "validation")
 
-  # Retrieves the ratios of the different classes (Used to get insights about the data)
-  ratio_oxygenated, ratio_switching, ratio_hypoxia = get_ratios(bs_mask_complete)
+  # Generate random samplex indexes for the regression plot comparison
+  random_samples_index = np.random.randint(0, number_samples_validation - 1, 10)
 
   # -------------—---------
   #        Settings
   # -------------—---------
   #
+  # Fixing random seed for reproducibility
+  np.random.seed(2701)
+
+  # Information over terminal (1)
+  project_title(kwargs)
+
   # Check if a GPU is available
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+  # -------------—---------
+  #       Training
+  # -------------—---------
+  #
   # Loading the neural network
   neural_net = load_neural_network(architecture = architecture,
                                     data_output = data_oxygen,
-                                          device = device,
-                                          kwargs = kwargs)
+                                         device = device,
+                                         kwargs = kwargs)
 
-  # Pushing the neural network to the correct device (not needed because loading function does it)
+  # Information over terminal (0)
+  print("Number of trainable parameters: ", neural_net.count_parameters())
+
+  # Pushing the neural network to the correct device
   neural_net.to(device)
 
   # Loading the optimizer
   optimizer  = optim.Adam(neural_net.parameters(), lr = learning_rate)
 
-  # Loading the loss information
-  loss_type = "MSE" if problem == "regression" else "BCE"
-
   # Used to compute the total time left,
   epoch_time = 0.0
 
-  # Information over terminal (1)
-  project_title(kwargs)
-
-  # Validation set in torch format (used for metrics)
-  validation_torch = torch.from_numpy(BS_loader.y_validation)
-
-  # Fixing random seed for reproducibility
-  np.random.seed(0)
-
-  # Generate random samplex indexes for the regression plot comparison
-  random_samples_index = np.random.randint(0, number_samples_validation - 1, 5)
-
   # WandB (1) - Initialization
+  #wandb.init(project = project, mode = "disabled", config = kwargs)
   wandb.init(project = project, config = kwargs)
 
   # WandB (2) - Sending information about the datasets
@@ -180,9 +164,7 @@ def training(**kwargs):
              "Dataset & Architecture/Ratio Hypoxia"                           : ratio_hypoxia,
              "Dataset & Architecture/Trainable Parameters"                    : neural_net.count_parameters()})
 
-  # -------------—---------
-  #        Training
-  # -------------—---------
+  # Main training loop
   for epoch in range(nb_epochs):
 
     # Timing the epoch
@@ -192,34 +174,25 @@ def training(**kwargs):
     training_loss, training_batch_steps = 0.0, 0
 
     # Used to compute our metrics and visual inspection for the validation set
-    metrics_tool = BlackSea_Metrics(mode = problem,
-                                    mask = bs_mask_with_depth,
-                            mask_complete = bs_mask_complete,
-                                treshold = norm_oxy,
-                        number_of_samples = number_samples_validation)
+    metrics_tool = BlackSea_Metrics(mask = bs_mask_with_depth,
+                           mask_complete = bs_mask_complete,
+                                treshold = hypox_tresh,
+                       number_of_samples = number_samples_validation)
 
-    # Stores all the predictions made on the validation samples (needed for pixelwise metrics)
-    prediction_all = None
-
-    # Clearing all plots to save memory
-    plt.close()
+    # Stores predictions and validation samples (needed for pixelwise metrics)
+    prediction_all, validation_all = None, None
 
     # Training the neural network
-    for x, t, y in dataset_train:
+    for x, y in dataset_train:
 
         # Pushing the data to the correct device
-        x, t, y = x.to(device), t.to(device), y.to(device)
+        x, y = x.to(device), y.to(device)
 
         # Prediction of the neural network
-        prediction = neural_net.forward(x, t)
+        prediction = neural_net.forward(x)
 
         # Computing the loss
-        loss_training = compute_loss(y_pred = prediction,
-                                     y_true = y,
-                                       mask = bs_mask_with_depth,
-                                    problem = problem,
-                                     device = device,
-                                     kwargs = kwargs)
+        loss_training = loss_regression(y_pred = prediction, y_true = y, mask = bs_mask_with_depth)
 
         # Information over terminal (2)
         progression(epoch = epoch,
@@ -230,7 +203,7 @@ def training(**kwargs):
       loss_validation_aob = 0)
 
         # WandB (3) - Sending information about the training loss
-        wandb.log({f"Training/Loss ({loss_type}, T)": loss_training.item()})
+        wandb.log({f"Training/Loss (T)": loss_training.item()})
 
         # Accumulating the loss and updating the number of steps
         training_loss        += loss_training.item()
@@ -249,20 +222,20 @@ def training(**kwargs):
         # Optimizing the parameters
         optimizer.step()
 
-        # Emptying the trash !
-        del x, t, y, prediction, loss_training
-        torch.cuda.empty_cache()
+        # Cleaning
+        x, y, prediction = x.to("cpu"), y.to("cpu"), prediction.to("cpu")
+        del x, y, prediction, loss_training
 
     # Information over terminal (3)
     progression(epoch = epoch,
-            number_epoch = nb_epochs,
-           loss_training = training_loss / training_batch_steps,
-       loss_training_aob = training_loss / training_batch_steps,
-         loss_validation = 0,
-     loss_validation_aob = 0)
+         number_epoch = nb_epochs,
+        loss_training = training_loss / training_batch_steps,
+    loss_training_aob = training_loss / training_batch_steps,
+      loss_validation = 0,
+  loss_validation_aob = 0)
 
     # WandB (4) - Sending information about the training loss
-    wandb.log({f"Training/Loss ({loss_type}, Training): ": training_loss / training_batch_steps})
+    wandb.log({f"Training/Loss (Training): ": training_loss / training_batch_steps})
 
     with torch.no_grad():
 
@@ -270,21 +243,16 @@ def training(**kwargs):
         validation_loss, validation_batch_steps = 0.0, 0
 
         # Validating the neural network
-        for x, t, y in dataset_validation:
+        for x, y in dataset_validation:
 
             # Pushing the data to the correct device
-            x, t, y = x.to(device), t.to(device), y.to(device)
+            x, y = x.to(device), y.to(device)
 
             # Prediction of the neural network
-            prediction = neural_net.forward(x, t)
+            prediction = neural_net.forward(x)
 
             # Computing the loss
-            loss_validation = compute_loss(y_pred = prediction,
-                                           y_true = y,
-                                             mask = bs_mask_with_depth,
-                                          problem = problem,
-                                           device = device,
-                                           kwargs = kwargs)
+            loss_validation = loss_regression(y_pred = prediction, y_true = y, mask = bs_mask_with_depth)
 
             # Information over terminal (4)
             progression(epoch = epoch,
@@ -294,51 +262,42 @@ def training(**kwargs):
               loss_validation = loss_validation.item(),
           loss_validation_aob = 0)
 
-            # WandB (4) - Sending information about the validation loss
-            wandb.log({f"Training/Loss ({loss_type}, V)": loss_validation.item()})
+            # WandB (5) - Sending information about the validation loss
+            wandb.log({f"Training/Loss (V)": loss_validation.item()})
 
             # Accumulating the loss and updating the number of steps
             validation_loss        += loss_validation.item()
             validation_batch_steps += 1
 
             # Pushing everything back to the CPU
-            x, t, y, prediction = x.to("cpu"), t.to("cpu"), y.to("cpu"), prediction.to("cpu")
-
-            # Transforming to probabilities (not done in forward pass because BCEWithLogitsLoss does it for us)
-            # prediction = nn.Softmax(dim = 2)(prediction) if problem == "classification" else prediction
+            x, y, prediction = x.to("cpu"), y.to("cpu"), prediction.to("cpu")
 
             # Accumulating the predictions
             prediction_all = torch.cat((prediction_all, prediction), dim = 0) if prediction_all is not None else prediction
+            validation_all = torch.cat((validation_all, y),          dim = 0) if validation_all is not None else y
 
-            # Emptying the trash !
-            del x, t, y, prediction, loss_validation
+            # Cleaning
+            del x, y, prediction, loss_validation
             torch.cuda.empty_cache()
 
         # Metrics - Computing all the different metrics
         metrics_tool.compute_metrics(y_pred = prediction_all,
-                                     y_true = validation_torch)
+                                     y_true = validation_all)
 
         # Visualization - Comparaison plot
         cmp_plots = [metrics_tool.compute_plots_comparison_regression(y_pred = prediction_all,
-                                                                      y_true = validation_torch,
+                                                                      y_true = validation_all,
                                                                       index  = i) for i in random_samples_index]
 
         # Visualization - Pixelwise metrics
         metrics_tool.compute_plots(y_pred = prediction_all,
-                                   y_true = validation_torch)
+                                   y_true = validation_all)
+
 
         # Visualization - Global AUC
         fp, tp, auc, auc_plot = metrics_tool.compute_plot_ROCAUC_global(y_pred = prediction_all,
-                                                                        y_true = validation_torch,
-                                                          normalized_threshold = norm_oxy)
-
-        # WandB (5) - Sending visual information
-        wandb.log({f"Metrics/Area Under The Curve (Global)"                 : auc,
-                   f"Visualization/Area Under The Curve (Global)"           : wandb.Image(auc_plot)})
-
-        # WandB (6) - Sending visual information
-        for i, p in enumerate(cmp_plots):
-            wandb.log({f"Visualization/Prediction VS Ground Truth - Sample {i})" : wandb.Image(p)})
+                                                                        y_true = validation_all,
+                                                          normalized_threshold = hypox_tresh)
 
         # Information over terminal (5)
         progression(epoch = epoch,
@@ -357,29 +316,29 @@ def training(**kwargs):
         # Getting the plots of each metric
         plots, plots_name = metrics_tool.get_plots()
 
-        # WandB (6) - Sending information about the validation loss
-        wandb.log({f"Training/Loss ({loss_type}, Validation)": validation_loss / validation_batch_steps,
-                    "Training/Epochs"                        : nb_epochs - epoch,
-                    "Training/Time Left"                     : (nb_epochs - epoch) * epoch_time})
+        # WandB (6) - Sending validation loss and visual information
+        wandb.log({"Training/Loss (Validation)"                             : validation_loss / validation_batch_steps,
+                   "Training/Epochs"                                        : nb_epochs - epoch,
+                   "Training/Time Left"                                     : (nb_epochs - epoch) * epoch_time,
+                   f"Metrics/Area Under The Curve (Global)"                 : auc,
+                   f"Visualization (Metrics)/Area Under The Curve (Global)" : wandb.Image(auc_plot)})
 
-        # WandB (7) - Sending metrics scores
+        # WandB (7) - Sending visual information
+        for i, p in enumerate(cmp_plots):
+            wandb.log({f"Visualization (Prediction VS Ground Truth)/Sample {i}" : wandb.Image(p)})
+
+        # WandB (8) - Sending metrics scores
         for d, day_results in enumerate(results):
             for i, result in enumerate(day_results):
-
-              # Metric with corresponding forecasted day (Only if more than 1 day is forecasted)
-              m_name = results_name[i] + " D(" + str(d) + ")" if windows_outputs > 1 else results_name[i]
-
-              # Logging
-              wandb.log({f"Metrics/{m_name}" : result})
+              wandb.log({f"Metrics/{results_name[i]}" : result})
 
         # WandB (8) - Sending visual information
         for plot, name in zip(plots, plots_name):
+          wandb.log({f"Visualization (Metrics)/{name}" : wandb.Image(plot)})
 
-          # Logging
-          wandb.log({f"Visualization/{name}" : wandb.Image(plot)})
-
-          # Clearing all plots to save memory
-          plt.close()
+    # Clearing the plot
+    plt.clf()
+    plt.close()
 
   # Extracting the Neural Network back to CPU
   neural_net.to("cpu")

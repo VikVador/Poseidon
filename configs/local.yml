@@ -19,31 +19,35 @@
 #
 config:
 
+  # WIN        : 330
+  # SCALING    : UNET 24 (76978702)
+  # KERNEL     : No effect
+  # BATCH SIZE : 16
+
   # WandB
-  "Project"                 : "ESA - Black Sea Deoxygenation Emulator - Test (Local)"
+  "Project"                 : "ESA - Black Sea Deoxygenation Emulator - Test 2 (Local)"
 
   # Data
-  "Month (Starting)"        : 3
+  "Month (Starting)"        : 6
   "Month (Ending)"          : 9
-  "Year (Starting)"         : 2000
-  "Year (Ending)"           : 2000
-  "Problem"                 : "regression"
+  "Year (Starting)"         : 1980
+  "Year (Ending)"           : 1980
   "Hypoxia Treshold"        : 63
   "Depth"                   : 150
-  "Inputs"                  : ["temperature"]
-  "Window (Inputs)"         : 7
+  "Inputs"                  : ["temperature", "salinity", "chlorophyll", "kshort", "klong"]
+  "Window (Inputs)"         : 14
   "Window (Output)"         : 1
   "Window (Transformation)" : 1
 
   # Model & Training
   "Architecture"            : "UNET"
-  "Scaling"                 : 1
-  "Kernel Size"             : 5
+  "Scaling"                 : 8
+  "Kernel Size"             : 3
   "Datasets Size"           : [0.6, 0.3]
   "Loss Weights"            : [1, 1]
   "Learning Rate"           : 0.001
   "Batch Size"              : 16
-  "Epochs"                  : 1
+  "Epochs"                  : 10
 
 cluster:
   "Dawgz"    : False

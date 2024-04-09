@@ -14,9 +14,12 @@
 #
 # -------------------------------------------------------
 #
+# Documentation
+# -------------
+# A script to launch (for me because I am lazy) a jupyter notebook
+#
 # Moving to the jobs directory
 cd jobs
 
 # Launching a jupyter notebook
 sbatch jupyter.sbatch
-

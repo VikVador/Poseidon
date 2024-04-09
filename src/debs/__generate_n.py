@@ -15,7 +15,7 @@
 #
 # Documentation
 # -------------
-# A simple script to preprocess the data (normalization, flipping, reshaping, ...) the data
+# A simple script to preprocess the data (normalization (min-max), flipping, reshaping, ...) the data
 #
 
 import os

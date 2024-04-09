@@ -21,13 +21,15 @@ import numpy             as np
 import pandas            as pd
 import seaborn           as sns
 import matplotlib.pyplot as plt
+
 from dataset             import BlackSea_Dataset
 from matplotlib.patches  import Rectangle
 from datetime            import datetime, timedelta
 
-
-# Parameters (If you change from 250, you will have to place)
-sampling = 250
+# ----------
+# Parameters
+# ----------
+sampling = 150
 years    = np.arange(1980, 2023, 1)
 months   = np.arange(1, 13, 1)
 
@@ -41,7 +43,7 @@ for year in years:
         print(f"Processing year {year} and month {month}")
 
         # Loading the dataset
-        BSD_dataset        = BlackSea_Dataset(year_start = year, year_end = year, month_start = month, month_end = month)
+        BSD_dataset        = BlackSea_Dataset(year_start = year, year_end = year, month_start = month, month_end = month, data_type = "normalized")
         data_temperature   = BSD_dataset.get_data(variable = "temperature")
         data_salinity      = BSD_dataset.get_data(variable = "salinity")
         data_chlorophyll   = BSD_dataset.get_data(variable = "chlorophyll")

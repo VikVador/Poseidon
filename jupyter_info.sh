@@ -14,6 +14,10 @@
 #
 # -------------------------------------------------------
 #
+# Documentation
+# -------------
+# A script to extract (for me because I am lazy) the jupyter notebook access link
+#
 # Prints the link to the jupyter notebook
 grep "http://localhost:8888/lab?token=" logs/jupiter_notebook.log | awk '{print $NF}'
 

@@ -21,31 +21,22 @@
 import torch
 import torch.nn as nn
 
-# Custom libraries
-from neural_networks.encoder import ENCODER
-
 
 class UNET(nn.Module):
     r"""A simple UNET architecture"""
 
-    def __init__(self, problem : str, inputs : int, outputs : int, window_transformation: int = 1, kernel_size : int = 3, scaling : int = 1):
+    def __init__(self, inputs : int, kernel_size : int = 3, scaling : int = 1):
         super(UNET, self).__init__()
 
         # Initialization
         self.n_in    = inputs
+        self.n_out   = 2
         self.padding = kernel_size // 2
         self.kernel  = kernel_size
-        self.problem = problem
         features     = 8 + 4 * (scaling - 1)
-
-        # Number of output channels,
-        self.n_out = outputs * 2
 
         # ------ Architecture ------
         #
-        # Temporal Encoder
-        self.block_encoder = ENCODER(window_transformation)
-
         # Main Layers
         self.pool1      = nn.MaxPool2d(                                   kernel_size = 2, stride = 2)
         self.pool2      = nn.MaxPool2d(                                   kernel_size = 2, stride = 2)
@@ -88,26 +79,7 @@ class UNET(nn.Module):
             nn.BatchNorm2d(num_features = features),
             nn.GELU())
 
-    def forward(self, x, t):
-
-        # Retrieiving dimensions (Ease of comprehension)
-        samples, days, values, variables, x_res, y_res = x.shape
-
-        # ----- Encoding Time -----
-        #
-        # Applying the encoder
-        weights = torch.squeeze(self.block_encoder(t), dim = -1)
-
-        # Applying the weights (except to mesh (dim = 2) and bathymetry (dim = 3))
-        for sample in range(samples):
-            for value in range(days):
-                x[:, value, :, :-3] *= weights[sample, value]
-
-        # Reshaping
-        x = x.reshape(samples, days * values * variables, x_res, y_res)
-
-        # ----- U-NET -----
-        #
+    def forward(self, x):
         enc1       = self.encoder1(x)
         enc2       = self.encoder2(self.pool1(enc1))
         enc3       = self.encoder3(self.pool2(enc2))
@@ -123,8 +95,6 @@ class UNET(nn.Module):
         dec1       = self.decoder1(dec1)
         x          = self.conv(dec1)
 
-        # ----- Reshaping -----
-        #
         # Retrieiving dimensions (Ease of comprehension)
         b, c, x_res, y_res = x.shape
 

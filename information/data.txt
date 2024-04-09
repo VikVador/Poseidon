@@ -1,1 +1,1 @@
-{"cluster": "../../../../../../../scratch/acad/bsmfc/victor/data/", "local": "../../data/"}
+{"cluster_processed": "../../../../../../../scratch/acad/bsmfc/victor/data/", "cluster_unprocessed": "../../../../../../../projects/acad/bsmfc/nemo4.2.0/BSFS_BIO/", "local": "../../data/"}

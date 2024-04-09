@@ -44,7 +44,7 @@ def get_data_info():
         data_info = json.load(f)
 
     # Extracting the information
-    return data_info["cluster"], data_info["local"]
+    return data_info["cluster_processed"], data_info["cluster_unprocessed"], data_info["local"]
 
 def get_complete_mask(data: np.array, treshold: float, bs_mask_with_depth: np.array):
     r"""Used to retrieve a mask highliting the land, oxygenated, hypoxia and switching zones"""
