@@ -294,19 +294,22 @@ class BlackSea_Metrics():
         # Definition of the range for the colorbar
         metrics_ranges = [(0, 0.25), (0, 0.50), (-100, 100), (-1, 1)]
 
+        # Conversion to %
+        metrics_conversion = [1, 1, 100, 1]
+
         # Colors for the plots (need to have sequential colors and diverging )
         metrics_colors = ["Blues", "Blues", "RdBu", "RdBu"]
 
         # Stores all the plots
         plots = list()
 
-        for metric, name, limits, color in zip(metrics_regression, metrics_names, metrics_ranges, metrics_colors):
+        for metric, name, conv, limits, color in zip(metrics_regression, metrics_names, metrics_conversion, metrics_ranges, metrics_colors):
 
             # Computing score
             score = metric(y_pred, y_true).reshape(x, y)
 
             # Adding results, i.e. fig and name (multipliy by 100 for percentage)
-            plots.append(self.make_plots(score * limits[1], index_day, name, color, limits))
+            plots.append(self.make_plots(score * conv, index_day, name, color, limits))
 
         return plots
 
@@ -575,3 +578,192 @@ class BlackSea_Metrics():
 
         # Return the figure
         return fig
+
+
+# ---------------
+#     OTHERS
+# ---------------
+
+import matplotlib.dates      as mdates
+import numpy                 as np
+import pandas                as pd
+from torchmetrics.regression import *
+
+def plots_accross_time_global(prediction: torch.Tensor,
+                     ground_truth: torch.Tensor,
+                     time_indices: torch.Tensor,
+                             mask: np.array,
+                         treshold: float,
+                            epoch: int = 0):
+    """Used to show neural network prediction capabilities accross time"""
+
+    def smooth_signal(data, smooting_window = 20):
+        """Used to smooth out a signal"""
+        window_size = smooting_window
+        smoothed_data = np.convolve(data, np.ones(window_size)/window_size, mode='valid')
+        padding = (len(data) - len(smoothed_data)) // 2
+        smoothed_data = np.pad(smoothed_data, (padding, padding), mode='edge')
+        return smoothed_data
+
+    def process_tensor_global(t: torch.tensor, mask : np.array):
+        t = t[:, 0, 0]
+        t = t[:, mask == 1]
+        t = torch.swapaxes(t, 0, 1)
+        return torch.nan_to_num(t, nan=0.0)
+
+    # Generating date range from January 1st, 2018 to December 31st, 2018
+    dates = pd.date_range(start='2018-01-01', end='2020-01-01')
+
+    # ---------------
+    #     GLOBAL
+    # ---------------
+    # Extracting values
+    y_pred = process_tensor_global(prediction,   mask)
+    y_true = process_tensor_global(ground_truth, mask)
+
+    # Information about shapes
+    values, steps = y_true.shape
+
+    # Parameters
+    fig_dimension = (14, 6)
+
+    # Tool
+    mean_squared_error      = MeanSquaredError(num_outputs = steps)
+    root_mean_squared_error = MeanSquaredError(num_outputs = steps, squared = False)
+    r2score                 = R2Score(         num_outputs = steps, multioutput='raw_values')
+    correlation             = PearsonCorrCoef( num_outputs = steps)
+
+    # Computing
+    mse  = mean_squared_error(y_pred, y_true)
+    rmse = root_mean_squared_error(y_pred, y_true)
+    r2   = r2score(y_pred, y_true)
+    cor  = correlation(y_pred, y_true)
+
+    # Smoothed version
+    mse_smooth  = smooth_signal(mse)
+    rmse_smooth = smooth_signal(rmse)
+    r2_smooth   = smooth_signal(r2)
+    cor_smooth  = smooth_signal(cor)
+
+    fig_mse = plt.figure(figsize = fig_dimension)
+    plt.ylim([0, 5])
+    plt.ylabel("Mean Squarred Error [-]")
+    plt.plot(dates, mse[:len(dates)], label = "True", lw = 2, color = "#0072c3")
+    plt.plot(dates, mse_smooth[:len(dates)], label = "Smoothed", lw = 2, ls ="--", color = "#a2191f")
+    plt.gca().xaxis.set_major_locator(mdates.MonthLocator())
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+    plt.legend(loc = "upper left")
+
+    # Add the epoch number text box
+    plt.text(0.95, 0.95, f'Epoch: {epoch}', horizontalalignment='center', verticalalignment='center',
+            transform=plt.gca().transAxes, color='white', fontsize=10, bbox=dict(facecolor='black', alpha=0.75))
+
+    plt.grid(alpha = 0.25)
+    plt.show()
+
+    fig_rmse = plt.figure(figsize = fig_dimension)
+    plt.ylim([0, 5])
+    plt.ylabel("Root Mean Squarred Error [-]")
+    plt.plot(dates, rmse[:len(dates)], label = "True", lw = 2, color = "#0072c3")
+    plt.plot(dates, rmse_smooth[:len(dates)], label = "Smoothed", lw = 2, ls ="--", color = "#a2191f")
+    plt.gca().xaxis.set_major_locator(mdates.MonthLocator())
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+    plt.legend(loc = "upper left")
+    # Add the epoch number text box
+    plt.text(0.95, 0.95, f'Epoch: {epoch}', horizontalalignment='center', verticalalignment='center',
+            transform=plt.gca().transAxes, color='white', fontsize=10, bbox=dict(facecolor='black', alpha=0.75))
+
+    plt.grid(alpha = 0.25)
+    plt.show()
+
+    fig_r2 = plt.figure(figsize = fig_dimension)
+    plt.ylim([-3, 1])
+    plt.ylabel("Coefficient of determination $R^2$")
+    plt.plot(dates, r2[:len(dates)], label = "True", lw = 2, color = "#0072c3")
+    plt.plot(dates, r2_smooth[:len(dates)], label = "Smoothed", lw = 2, ls ="--", color = "#a2191f")
+    plt.axhline(y = 0, color = 'black', linestyle='--', lw = 1)
+    plt.gca().xaxis.set_major_locator(mdates.MonthLocator())
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+    plt.legend(loc = "upper left")
+    # Add the epoch number text box
+    plt.text(0.95, 0.95, f'Epoch: {epoch}', horizontalalignment='center', verticalalignment='center',
+            transform=plt.gca().transAxes, color='white', fontsize=10, bbox=dict(facecolor='black', alpha=0.75))
+
+    plt.grid(alpha = 0.25)
+    plt.show()
+
+    fig_corr = plt.figure(figsize = fig_dimension)
+    plt.ylim([-1, 1])
+    plt.ylabel("Pearson Correlation Coefficient")
+    plt.plot(dates, cor[:len(dates)], label = "True", lw = 2, color = "#0072c3")
+    plt.plot(dates, cor_smooth[:len(dates)], label = "Smoothed", lw = 2, ls ="--", color = "#a2191f")
+    plt.gca().xaxis.set_major_locator(mdates.MonthLocator())
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+    plt.legend(loc = "upper left")
+    # Add the epoch number text box
+    plt.text(0.95, 0.95, f'Epoch: {epoch}', horizontalalignment='center', verticalalignment='center',
+            transform=plt.gca().transAxes, color='white', fontsize=10, bbox=dict(facecolor='black', alpha=0.75))
+
+    plt.grid(alpha = 0.25)
+    plt.show()
+
+    return [fig_mse, fig_rmse, fig_r2, fig_corr]
+
+def plots_accross_time_local(prediction: torch.Tensor,
+                           ground_truth: torch.Tensor,
+                           time_indices: torch.Tensor,
+                                   mask: np.array,
+                               treshold: float,
+                                  epoch: int = 0):
+    r"""Computes each metric per pixel and show the results on a plot"""
+
+    def process_tensor_local(t: torch.tensor):
+        return t[:, 0, 0]
+
+    # Generating date range from January 1st, 2018 to December 31st, 2018
+    dates = pd.date_range(start='2019-01-01', end='2020-01-01')
+
+    # Extracting values
+    y_pred = process_tensor_local(prediction)
+    y_true = process_tensor_local(ground_truth)
+
+    # Computing the local root squared error
+    rmse_local = torch.sqrt((y_pred - y_true) ** 2)
+
+    # Computing the bias
+    bias_local = (y_pred - y_true)/y_true * 100
+
+    # Find indices corresponding to the first day of each month
+    first_day_indices = [dates.get_loc(date) for date in dates if date.day == 1]
+
+    # Stores the different plots
+    fig_rmse_list, fig_bias_list = list(), list()
+
+    # Looping over the different samples
+    for index_day in first_day_indices:
+
+        fig_rmse = plt.figure(figsize = (14, 6))
+        plt.imshow(rmse_local[index_day], cmap = 'Blues', vmin = 0, vmax = 5)
+        plt.ylabel("Root Squarred Error [-]")
+        plt.colorbar(fraction = 0.021)
+        date_str = dates[index_day].strftime("%Y-%m-%d")
+        text = f'{date_str} - EPOCH {epoch}'
+        plt.text(0.90, 0.95, text, horizontalalignment='center', verticalalignment='center',
+                 transform=plt.gca().transAxes, color='white', fontsize=10, bbox=dict(facecolor='black', alpha=0.75))
+        plt.grid(alpha = 0.25)
+
+        fig_bias = plt.figure(figsize = (14, 6))
+        plt.imshow(bias_local[index_day], cmap = 'RdBu', vmin = -100, vmax = 100)
+        plt.ylabel("Percentage of bias [%]")
+        plt.colorbar(fraction = 0.021)
+        date_str = dates[index_day].strftime("%Y-%m-%d")
+        text = f'{date_str} - EPOCH {epoch}'
+        plt.text(0.90, 0.95, text, horizontalalignment='center', verticalalignment='center',
+                 transform=plt.gca().transAxes, color='white', fontsize=10, bbox=dict(facecolor='black', alpha=0.75))
+        plt.grid(alpha = 0.25)
+
+        # Appending
+        fig_rmse_list.append(fig_rmse)
+        fig_bias_list.append(fig_bias)
+
+    return fig_rmse_list, fig_bias_list

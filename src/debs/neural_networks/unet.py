@@ -25,12 +25,12 @@ import torch.nn as nn
 class UNET(nn.Module):
     r"""A simple UNET architecture"""
 
-    def __init__(self, inputs : int, kernel_size : int = 3, scaling : int = 1):
+    def __init__(self, inputs : int, outputs : int, kernel_size : int = 3, scaling : int = 1):
         super(UNET, self).__init__()
 
         # Initialization
         self.n_in    = inputs
-        self.n_out   = 2
+        self.n_out   = outputs * 2
         self.padding = kernel_size // 2
         self.kernel  = kernel_size
         features     = 8 + 4 * (scaling - 1)

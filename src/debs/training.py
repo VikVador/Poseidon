@@ -31,7 +31,7 @@ import torch.optim as optim
 from tools                  import *
 from losses                 import loss_regression
 from dataset                import BlackSea_Dataset
-from metrics                import BlackSea_Metrics
+from metrics                import *
 from dataloader             import BlackSea_Dataloader
 from neural_networks.loader import load_neural_network
 
@@ -105,7 +105,8 @@ def training(**kwargs):
                                mesh = mesh,
                                mask = bs_mask,
                          bathymetry = bathy,
-                         window_inp = windows_inputs)
+                         window_inp = windows_inputs,
+                      datasets_size = datasets_size)
 
   dataset_train      = BS_loader.get_dataloader(type = "train",      batch_size = batch_size)
   dataset_validation = BS_loader.get_dataloader(type = "validation", batch_size = batch_size)
@@ -153,7 +154,7 @@ def training(**kwargs):
   epoch_time = 0.0
 
   # WandB (1) - Initialization
-  #wandb.init(project = project, mode = "disabled", config = kwargs)
+  # wandb.init(project = project, mode = "disabled", config = kwargs)
   wandb.init(project = project, config = kwargs)
 
   # WandB (2) - Sending information about the datasets
@@ -179,52 +180,52 @@ def training(**kwargs):
                                 treshold = hypox_tresh,
                        number_of_samples = number_samples_validation)
 
-    # Stores predictions and validation samples (needed for pixelwise metrics)
-    prediction_all, validation_all = None, None
+    # Stores time index vector, predictions and validation samples (needed for pixelwise metrics)
+    time_indices, prediction_all, validation_all = None, None, None
 
     # Training the neural network
     for x, y in dataset_train:
 
-        # Pushing the data to the correct device
-        x, y = x.to(device), y.to(device)
+      # Pushing the data to the correct device
+      x, y = x.to(device), y.to(device)
 
-        # Prediction of the neural network
-        prediction = neural_net.forward(x)
+      # Prediction of the neural network
+      prediction = neural_net.forward(x)
 
-        # Computing the loss
-        loss_training = loss_regression(y_pred = prediction, y_true = y, mask = bs_mask_with_depth)
+      # Computing the loss
+      loss_training = loss_regression(y_pred = prediction, y_true = y, mask = bs_mask_with_depth)
 
-        # Information over terminal (2)
-        progression(epoch = epoch,
-             number_epoch = nb_epochs,
-            loss_training = loss_training.item(),
-          loss_validation = 0,
-        loss_training_aob = 0,
-      loss_validation_aob = 0)
+      # Information over terminal (2)
+      progression(epoch = epoch,
+            number_epoch = nb_epochs,
+          loss_training = loss_training.item(),
+        loss_validation = 0,
+      loss_training_aob = 0,
+    loss_validation_aob = 0)
 
-        # WandB (3) - Sending information about the training loss
-        wandb.log({f"Training/Loss (T)": loss_training.item()})
+      # WandB (3) - Sending information about the training loss
+      wandb.log({f"Training/Loss (T)": loss_training.item()})
 
-        # Accumulating the loss and updating the number of steps
-        training_loss        += loss_training.item()
-        training_batch_steps += 1
+      # Accumulating the loss and updating the number of steps
+      training_loss        += loss_training.item()
+      training_batch_steps += 1
 
-        # AverageNet - No optimization needed !
-        if architecture == "AVERAGE":
-            continue
+      # AverageNet - No optimization needed !
+      if architecture == "AVERAGE":
+          continue
 
-        # Reseting the gradients
-        optimizer.zero_grad()
+      # Reseting the gradients
+      optimizer.zero_grad()
 
-        # Backward pass
-        loss_training.backward()
+      # Backward pass
+      loss_training.backward()
 
-        # Optimizing the parameters
-        optimizer.step()
+      # Optimizing the parameters
+      optimizer.step()
 
-        # Cleaning
-        x, y, prediction = x.to("cpu"), y.to("cpu"), prediction.to("cpu")
-        del x, y, prediction, loss_training
+      # Cleaning
+      x, y, prediction = x.to("cpu"), y.to("cpu"), prediction.to("cpu")
+      del x, y, prediction, loss_training
 
     # Information over terminal (3)
     progression(epoch = epoch,
@@ -239,102 +240,133 @@ def training(**kwargs):
 
     with torch.no_grad():
 
-        # Used to store and compute instantaneous validation loss
-        validation_loss, validation_batch_steps = 0.0, 0
+      # Used to store and compute instantaneous validation loss
+      validation_loss, validation_batch_steps = 0.0, 0
 
-        # Validating the neural network
-        for x, y in dataset_validation:
+      # Validating the neural network
+      for x, y in dataset_validation:
 
-            # Pushing the data to the correct device
-            x, y = x.to(device), y.to(device)
+        # Extracting the time vector
+        time_indices = x[:, -4, 0, 0] if time_indices is None else torch.cat((time_indices, x[:, -4, 0, 0]), dim = 0)
 
-            # Prediction of the neural network
-            prediction = neural_net.forward(x)
+        # Pushing the data to the correct device
+        x, y = x.to(device), y.to(device)
 
-            # Computing the loss
-            loss_validation = loss_regression(y_pred = prediction, y_true = y, mask = bs_mask_with_depth)
+        # Prediction of the neural network
+        prediction = neural_net.forward(x)
 
-            # Information over terminal (4)
-            progression(epoch = epoch,
-                 number_epoch = nb_epochs,
-                loss_training = training_loss / training_batch_steps,
-            loss_training_aob = training_loss / training_batch_steps,
-              loss_validation = loss_validation.item(),
-          loss_validation_aob = 0)
+        # Computing the loss
+        loss_validation = loss_regression(y_pred = prediction, y_true = y, mask = bs_mask_with_depth)
 
-            # WandB (5) - Sending information about the validation loss
-            wandb.log({f"Training/Loss (V)": loss_validation.item()})
-
-            # Accumulating the loss and updating the number of steps
-            validation_loss        += loss_validation.item()
-            validation_batch_steps += 1
-
-            # Pushing everything back to the CPU
-            x, y, prediction = x.to("cpu"), y.to("cpu"), prediction.to("cpu")
-
-            # Accumulating the predictions
-            prediction_all = torch.cat((prediction_all, prediction), dim = 0) if prediction_all is not None else prediction
-            validation_all = torch.cat((validation_all, y),          dim = 0) if validation_all is not None else y
-
-            # Cleaning
-            del x, y, prediction, loss_validation
-            torch.cuda.empty_cache()
-
-        # Metrics - Computing all the different metrics
-        metrics_tool.compute_metrics(y_pred = prediction_all,
-                                     y_true = validation_all)
-
-        # Visualization - Comparaison plot
-        cmp_plots = [metrics_tool.compute_plots_comparison_regression(y_pred = prediction_all,
-                                                                      y_true = validation_all,
-                                                                      index  = i) for i in random_samples_index]
-
-        # Visualization - Pixelwise metrics
-        metrics_tool.compute_plots(y_pred = prediction_all,
-                                   y_true = validation_all)
-
-
-        # Visualization - Global AUC
-        fp, tp, auc, auc_plot = metrics_tool.compute_plot_ROCAUC_global(y_pred = prediction_all,
-                                                                        y_true = validation_all,
-                                                          normalized_threshold = hypox_tresh)
-
-        # Information over terminal (5)
+        # Information over terminal (4)
         progression(epoch = epoch,
-             number_epoch = nb_epochs,
+              number_epoch = nb_epochs,
             loss_training = training_loss / training_batch_steps,
         loss_training_aob = training_loss / training_batch_steps,
-          loss_validation = validation_loss / validation_batch_steps,
-      loss_validation_aob = validation_loss / validation_batch_steps)
+          loss_validation = loss_validation.item(),
+      loss_validation_aob = 0)
 
-        # Updating timing
-        epoch_time = time.time() - start
+        # WandB (5) - Sending information about the validation loss
+        wandb.log({f"Training/Loss (V)": loss_validation.item()})
 
-        # Getting results of each metric (averaged over each batch)
-        results, results_name = metrics_tool.get_results()
+        # Accumulating the loss and updating the number of steps
+        validation_loss        += loss_validation.item()
+        validation_batch_steps += 1
 
-        # Getting the plots of each metric
-        plots, plots_name = metrics_tool.get_plots()
+        # Pushing everything back to the CPU
+        x, y, prediction = x.to("cpu"), y.to("cpu"), prediction.to("cpu")
 
-        # WandB (6) - Sending validation loss and visual information
-        wandb.log({"Training/Loss (Validation)"                             : validation_loss / validation_batch_steps,
-                   "Training/Epochs"                                        : nb_epochs - epoch,
-                   "Training/Time Left"                                     : (nb_epochs - epoch) * epoch_time,
-                   f"Metrics/Area Under The Curve (Global)"                 : auc,
-                   f"Visualization (Metrics)/Area Under The Curve (Global)" : wandb.Image(auc_plot)})
+        # Accumulating the predictions
+        prediction_all = torch.cat((prediction_all, prediction), dim = 0) if prediction_all is not None else prediction
+        validation_all = torch.cat((validation_all, y),          dim = 0) if validation_all is not None else y
 
-        # WandB (7) - Sending visual information
-        for i, p in enumerate(cmp_plots):
-            wandb.log({f"Visualization (Prediction VS Ground Truth)/Sample {i}" : wandb.Image(p)})
+        # Cleaning
+        del x, y, prediction, loss_validation
+        torch.cuda.empty_cache()
 
-        # WandB (8) - Sending metrics scores
-        for d, day_results in enumerate(results):
-            for i, result in enumerate(day_results):
-              wandb.log({f"Metrics/{results_name[i]}" : result})
+      # Compute time evolution plot for global metrics
+      figs_accross_time_global = plots_accross_time_global(prediction_all,
+                                                           validation_all,
+                                                             time_indices,
+                                                       bs_mask_with_depth,
+                                                              hypox_tresh,
+                                                              epoch)
 
-        # WandB (8) - Sending visual information
-        for plot, name in zip(plots, plots_name):
-          wandb.log({f"Visualization (Metrics)/{name}" : wandb.Image(plot)})
+      # Compute time evolution plot for local metrics
+      figs_rmse, figs_bias = plots_accross_time_local(prediction_all,
+                                                      validation_all,
+                                                        time_indices,
+                                                  bs_mask_with_depth,
+                                                         hypox_tresh,
+                                                               epoch)
+
+       # WandB (6) - Sending visual information (X)
+      for i, p in enumerate(figs_accross_time_global):
+        wandb.log({f"Visualization (Global Evolution)/Metric {i}" : wandb.Image(p)})
+      for i, p in enumerate(figs_rmse):
+        wandb.log({f"Visualization (Local Evolution - RMSE)/Month {i}" : wandb.Image(p)})
+      for i, p in enumerate(figs_bias):
+        wandb.log({f"Visualization (Local Evolution - BIAS)/Month {i}" : wandb.Image(p)})
+
+      # Clearing the plot (already too many)
+      plt.clf()
+      plt.close()
+
+      # Metrics - Computing all the different metrics
+      metrics_tool.compute_metrics(y_pred = prediction_all,
+                                    y_true = validation_all)
+
+      # Visualization - Comparaison plot
+      cmp_plots = [metrics_tool.compute_plots_comparison_regression(y_pred = prediction_all,
+                                                                    y_true = validation_all,
+                                                                    index  = i) for i in random_samples_index]
+
+      # Visualization - Pixelwise metrics
+      metrics_tool.compute_plots(y_pred = prediction_all,
+                                  y_true = validation_all)
+
+
+      # Visualization - Global AUC
+      fp, tp, auc, auc_plot = metrics_tool.compute_plot_ROCAUC_global(y_pred = prediction_all,
+                                                                      y_true = validation_all,
+                                                        normalized_threshold = hypox_tresh)
+
+      # Information over terminal (5)
+      progression(epoch = epoch,
+            number_epoch = nb_epochs,
+          loss_training = training_loss / training_batch_steps,
+      loss_training_aob = training_loss / training_batch_steps,
+        loss_validation = validation_loss / validation_batch_steps,
+    loss_validation_aob = validation_loss / validation_batch_steps)
+
+      # Updating timing
+      epoch_time = time.time() - start
+
+      # Getting results of each metric (averaged over each batch)
+      results, results_name = metrics_tool.get_results()
+
+      # Getting the plots of each metric
+      plots, plots_name = metrics_tool.get_plots()
+
+      # WandB (7) - Sending validation loss and visual information
+      wandb.log({"Training/Loss (Validation)"                             : validation_loss / validation_batch_steps,
+                  "Training/Epochs"                                        : nb_epochs - epoch,
+                  "Training/Time Left"                                     : (nb_epochs - epoch) * epoch_time,
+                  f"Metrics/Area Under The Curve (Global)"                 : auc,
+                  f"Visualization (Metrics)/Area Under The Curve (Global)" : wandb.Image(auc_plot)})
+
+      # WandB (8) - Sending visual information
+      for i, p in enumerate(cmp_plots):
+          wandb.log({f"Visualization (Prediction VS Ground Truth)/Sample {i}" : wandb.Image(p)})
+
+      # WandB (9) - Sending metrics scores
+      for d, day_results in enumerate(results):
+          for i, result in enumerate(day_results):
+            wandb.log({f"Metrics/{results_name[i]}" : result})
+
+      # WandB (10) - Sending visual information
+      for plot, name in zip(plots, plots_name):
+        wandb.log({f"Visualization (Metrics)/{name}" : wandb.Image(plot)})
 
     # Clearing the plot
     plt.clf()

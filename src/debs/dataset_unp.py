@@ -186,7 +186,7 @@ class BlackSea_Dataset_UNPROCESSED():
         r"""Used to retreive the data for a given variable at a specific level or a specific region"""
 
         # Security (1)
-        assert variable in ["temperature", "salinity", "oxygen", "chlorophyll", "kshort", "klong"], f"ERROR (get_data), Incorrect variable ({variable})"
+        assert variable in ["temperature", "salinity", "height", "oxygen", "chlorophyll", "kshort", "klong"], f"ERROR (get_data), Incorrect variable ({variable})"
         assert level  == None or (0 <= level and level < 59),                                       f"ERROR (get_data), Incorrect level (0 < {level} < 59)"
         assert region == None or region in ["surface", "bottom", "all"],                            f"ERROR (get_data), Incorrect region ({region})"
 
@@ -200,6 +200,7 @@ class BlackSea_Dataset_UNPROCESSED():
             # Stores the translations for all the EO variables and oxygen
             translations = {"temperature" : ["votemper", "physics"],
                             "salinity"    : ["vosaline", "physics"],
+                            "height"      : ["ssh",      "physics"],
                             "oxygen"      : ["DOX",      "biogeochemistry"],
                             "chlorophyll" : ["CHL",      "biogeochemistry"],
                             "kshort"      : ["KBIOS",    "biogeochemistry"],
@@ -249,6 +250,10 @@ class BlackSea_Dataset_UNPROCESSED():
 
         # Needed to do this stupidly because xarrays cannot handle two same files (needed to fix missing days)
         data = xarray.concat(datasets, dim = "time_counter")
+
+        # Height
+        if variable == "ssh":
+            return data[variable].data
 
         # Level, i.e. selecting a specific depth by its index
         if not level == None:

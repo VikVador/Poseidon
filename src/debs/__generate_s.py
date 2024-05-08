@@ -17,7 +17,6 @@
 # -------------
 # A simple script to preprocess the data (standardization, flipping, reshaping, ...) the data
 #
-
 import os
 import json
 import wandb
@@ -26,432 +25,249 @@ import calendar
 import numpy as np
 from dataset_unp import BlackSea_Dataset_UNPROCESSED
 
-# Maths
-# -----
+# Determining total number of pixels
 #
-# Number of timesteps accross all the years : (15706, 256, 576)
-# Number of valid pixels (mask applied)     : (15706, 74068)
-# In total                                  :  15706 * 74068 = 1163312008
+# Training   : 1980-2015 -> 12784 ---- conversion to total pixels ----> 12784 * 74068 = 946885312
+# Validation : 2015-2020 -> 1826  ---- conversion to total pixels ----> 1826  * 74068 = 135248168
+# Test       : 2020-2023 -> 1096  ---- conversion to total pixels ----> 1096  * 74068 = 81178528
+#
+# ----------
+# Parameters
+# ----------
+# Pixels
+training_pixels   = 946885312
+validation_pixels = 135248168
+test_pixels       = 81178528
 
+# Initialization of the project for easy follow-up online
+wandb.init(project = "Generating data (Standardized)", mode = "online")
+
+# --------------
 # Initialization
-months       = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-years        = [i for i in range(2002, 2023)]
-oxy_treshold = 63
-max_depth    = 200
+# --------------
+def preprocess(year_start: int, year_end: int, pixels: int, path: str):
+    """ A simple function to preprocess the data """
 
-# Initial mean and variance values
-t_mean,           t_variance = 15.634022032720223 , 47.84012854142219
-s_mean,           s_variance = 17.786955222420445 , 0.9846352557378572
-c_mean,           c_variance = 1.3657086471744726 , 8.609137194548328
-kshort_mean, kshort_variance = 0.13270733572890703, 0.015299949430704457
-klong_mean,   klong_variance = 0.3810429258351644 , 0.008328035745959672
-o_mean,           o_variance = 58.30502765686229  , 12472.950808966465
+    # Security
+    assert path in ["Training", "Validation", "Test"], print("ERROR PATH")
 
-# Loading the mask to make sure we do not take into account values outside the Black Sea
-tool            = BlackSea_Dataset_UNPROCESSED(year_start = 1980, year_end = 1980, month_start = 1, month_end = 1)
-processing_mask = tool.get_mask(depth = None)
+    # Initialization
+    continental_shelf_depth = 150
+    hypoxia_treshold        = 63
 
-# Total number of elements
-N_elements = 1163312008
+    # Stores the different useful variables
+    t_mean, t_variance, t_standard_deviation = 0, 0, 0 # Temperature
+    s_mean, s_variance, s_standard_deviation = 0, 0, 0 # Salinity
+    c_mean, c_variance, c_standard_deviation = 0, 0, 0 # Chlorophyll
+    h_mean, h_variance, h_standard_deviation = 0, 0, 0 # Sea Surface Height
+    o_mean, o_variance, o_standard_deviation = 0, 0, 0 # Oxygen
 
-# Information over the terminal (1)
-print("---------------------------------")
-print("Starting to look for the mean ...")
-print("---------------------------------")
+    # Extracting the Black Sea Mask
+    mask = BlackSea_Dataset_UNPROCESSED(1980, 1980, 1, 1).get_mask()
 
-# Sending information to wandb
-wandb.init(project = "Generating data (Standardized)")
+    # ---------- Mean ----------
+    for y in range(year_start, year_end + 1):
+        for m in range(1, 13):
 
-# Finding the average values
-for y in years:
-        for m in months:
-                print(f"\n --------- Observing : {m}/{y} ---------")
-                BSD_dataset = BlackSea_Dataset_UNPROCESSED(year_start = y, year_end = y, month_start = m, month_end = m)
+            # Terminal (1)
+            print(f"----- Dataset : {y}-{m} (MEAN)")
 
-                # Loading the data
-                data_temperature   = BSD_dataset.get_data(variable = "temperature", region = "surface")
-                data_salinity      = BSD_dataset.get_data(variable = "salinity",    region = "surface")
-                data_chlorophyll   = BSD_dataset.get_data(variable = "chlorophyll", region = "surface")
-                data_kshort        = BSD_dataset.get_data(variable = "kshort",      region = "surface")
-                data_klong         = BSD_dataset.get_data(variable = "klong",       region = "surface")
-                data_oxygen        = BSD_dataset.get_data(variable = "oxygen",      region = "bottom")
+            # Tool for loading the datasets
+            tool = BlackSea_Dataset_UNPROCESSED(year_start = y, year_end = y, month_start = m, month_end = m)
 
-                # Cliping negative values (needed for unphysical results due to numerical schemes)
-                data_oxygen = np.clip(data_oxygen, 0, None)
+            # Loading the inputs
+            data_temperature        = tool.get_data(variable = "temperature",        region = "surface")
+            data_salinity           = tool.get_data(variable = "salinity",           region = "surface")
+            data_chlorophyll        = tool.get_data(variable = "chlorophyll",        region = "surface")
+            data_sea_surface_height = tool.get_data(variable = "height",             region = "surface")
+            data_oxygen             = tool.get_data(variable = "oxygen",             region = "bottom")
 
-                # Finding the minimum and maximum values
-                t_mean      += np.nansum(data_temperature[:, processing_mask == 1])/N_elements
-                s_mean      += np.nansum(data_salinity[:,    processing_mask == 1])/N_elements
-                c_mean      += np.nansum(data_chlorophyll[:, processing_mask == 1])/N_elements
-                kshort_mean += np.nansum(data_kshort[:,      processing_mask == 1])/N_elements
-                klong_mean  += np.nansum(data_klong[:,       processing_mask == 1])/N_elements
-                o_mean      += np.nansum(data_oxygen[:,      processing_mask == 1])/N_elements
+            # Cliping negative values
+            data_oxygen = np.clip(data_oxygen, 0, None)
 
-                # Displaying information over the terminal (2)
-                print(f"Temperature:\n Mean = {t_mean}")
-                print(f"Salinity:\n Mean = {s_mean}")
-                print(f"Chlorophyll:\n Mean = {c_mean}")
-                print(f"Kshort:\n Mean = {kshort_mean}")
-                print(f"Klong:\n Mean = {klong_mean}")
-                print(f"Oxygen:\n Mean = {o_mean}")
+            # Computing the partial mean (already averaging on total number of pixels in given period)
+            o_mean += np.nansum(data_oxygen[:,             mask == 1])/pixels
+            t_mean += np.nansum(data_temperature[:,        mask == 1])/pixels
+            s_mean += np.nansum(data_salinity[:,           mask == 1])/pixels
+            c_mean += np.nansum(data_chlorophyll[:,        mask == 1])/pixels
+            h_mean += np.nansum(data_sea_surface_height[:, mask == 1])/pixels
 
-                # Sending information to wandb
-                wandb.log({"Year (Preprocessing - Mean)"  : y,
-                           "Month (Preprocessing - Mean)" : m,
-                           "Temperature Mean"             : t_mean,
-                           "Salinity Mean"                : s_mean,
-                           "Chlorophyll Mean"             : c_mean,
-                           "Kshort Mean"                  : kshort_mean,
-                           "Klong Mean"                   : klong_mean,
-                           "Oxygen Mean"                  : o_mean})
-
-# Information over the terminal (3)
-print("-------------------------------------")
-print("Starting to look for the variance ...")
-print("-------------------------------------")
-
-# Finding the variance values
-for y in years:
-        for m in months:
-                print(f"\n --------- Observing : {m}/{y} ---------")
-                BSD_dataset = BlackSea_Dataset_UNPROCESSED(year_start = y, year_end = y, month_start = m, month_end = m)
-
-                # Loading the data
-                data_temperature   = BSD_dataset.get_data(variable = "temperature", region = "surface")
-                data_salinity      = BSD_dataset.get_data(variable = "salinity",    region = "surface")
-                data_chlorophyll   = BSD_dataset.get_data(variable = "chlorophyll", region = "surface")
-                data_kshort        = BSD_dataset.get_data(variable = "kshort",      region = "surface")
-                data_klong         = BSD_dataset.get_data(variable = "klong",       region = "surface")
-                data_oxygen        = BSD_dataset.get_data(variable = "oxygen",      region = "bottom")
-
-                # Cliping negative values (needed for unphysical results due to numerical schemes)
-                data_oxygen = np.clip(data_oxygen, 0, None)
-
-                # Finding the minimum and maximum values
-                t_variance  += np.nansum((data_temperature[:, processing_mask == 1] - t_mean)      ** 2)/N_elements
-                s_variance  += np.nansum((data_salinity[:,    processing_mask == 1] - s_mean)      ** 2)/N_elements
-                c_variance  += np.nansum((data_chlorophyll[:, processing_mask == 1] - c_mean)      ** 2)/N_elements
-                kshort_variance += np.nansum((data_kshort[:,  processing_mask == 1] - kshort_mean) ** 2)/N_elements
-                klong_variance  += np.nansum((data_klong[:,   processing_mask == 1] - klong_mean)  ** 2)/N_elements
-                o_variance  += np.nansum((data_oxygen[:,      processing_mask == 1] - o_mean)      ** 2)/N_elements
-
-                # Displaying information over the terminal (4)
-                print(f"Temperature:\n Variance = {t_variance}")
-                print(f"Salinity:\n Variance = {s_variance}")
-                print(f"Chlorophyll:\n Variance = {c_variance}")
-                print(f"Kshort:\n Variance = {kshort_variance}")
-                print(f"Klong:\n Variance = {klong_variance}")
-                print(f"Oxygen:\n Variance = {o_variance}")
-
-                # Sending information to wandb
-                wandb.log({"Year (Preprocessing - Variance)"  : y,
-                           "Month (Preprocessing - Variance)" : m,
-                           "Temperature Variance"             : t_variance,
-                           "Salinity Variance"                : s_variance,
-                           "Chlorophyll Variance"             : c_variance,
-                           "Kshort Variance"                  : kshort_variance,
-                           "Klong Variance"                   : klong_variance,
-                           "Oxygen Variance"                  : o_variance})
-
-# Computing the standard deviation
-t_std      = np.sqrt(t_variance)
-s_std      = np.sqrt(s_variance)
-c_std      = np.sqrt(c_variance)
-kshort_std = np.sqrt(kshort_variance)
-klong_std  = np.sqrt(klong_variance)
-o_std      = np.sqrt(o_variance)
-
-# Sending information to wandb
-wandb.log({"Temperature Standard Deviation" : t_std,
-           "Salinity Standard Deviation"    : s_std,
-           "Chlorophyll Standard Deviation" : c_std,
-           "Kshort Standard Deviation"      : kshort_std,
-           "Klong Standard Deviation"       : klong_std,
-           "Oxygen Standard Deviation"      : o_std})
-
-# Loading or computing fixed variables
-mask_BS     = BSD_dataset.get_mask(depth = None)
-mask_CS     = BSD_dataset.get_mask(depth = max_depth)
-bathy_METER = BSD_dataset.get_depth(unit = "meter")[0]
-bathy_INDEX = BSD_dataset.get_depth(unit = "index")[0]
-oxy_standa  = (oxy_treshold - o_mean)/o_std
-
-# Flipping vertically the data
-mask_BS     = np.flip(mask_BS,     axis = 0)
-mask_CS     = np.flip(mask_CS,     axis = 0)
-bathy_METER = np.flip(bathy_METER, axis = 0)
-bathy_INDEX = np.flip(bathy_INDEX, axis = 0)
-
-# Removing dimensions to be a multiple of 2
-mask_BS     = mask_BS[2:, 2:]
-mask_CS     = mask_CS[2:, 2:]
-bathy_METER = bathy_METER[2:, 2:]
-bathy_INDEX = bathy_INDEX[2:, 2:]
+            # WandB (1)
+            wandb.log({"Preprocessing (Mean)/Year"  : y,
+                       "Preprocessing (Mean)/Month" : m,
+                       "Mean/Temperature"           : t_mean,
+                       "Mean/Salinity"              : s_mean,
+                       "Mean/Chlorophyll"           : c_mean,
+                       "Mean/Sea Surface Height"    : h_mean,
+                       "Mean/Oxygen"                : o_mean})
 
 
-# Information over the terminal (5)
-print("\n--------------------------")
-print("Standardizing the data ...")
-print("--------------------------")
+    # ---------- Standard Deviation ----------
+    for y in range(year_start, year_end + 1):
+        for m in range(1, 13):
 
-# Normalizing and saving the data
-for y in years:
-        for m in months:
-                print(f"\n --------- Processing : {m}/{y} ---------")
-                BSD_dataset = BlackSea_Dataset_UNPROCESSED(year_start = y, year_end = y, month_start = m, month_end = m)
+            # Terminal (2)
+            print(f"----- Dataset : {y}-{m} (VARIANCE)")
 
-                # Loading the different inputs
-                data_temperature   = BSD_dataset.get_data(variable = "temperature", region = "surface")
-                data_salinity      = BSD_dataset.get_data(variable = "salinity",    region = "surface")
-                data_chlorophyll   = BSD_dataset.get_data(variable = "chlorophyll", region = "surface")
-                data_kshort        = BSD_dataset.get_data(variable = "kshort",      region = "surface")
-                data_klong         = BSD_dataset.get_data(variable = "klong",       region = "surface")
-                data_oxygen_CS     = BSD_dataset.get_data(variable = "oxygen",      region = "bottom", depth = max_depth)
-                data_oxygen_ALL    = BSD_dataset.get_data(variable = "oxygen",      region = "bottom", depth = None)
+            # Tool for loading the datasets
+            tool = BlackSea_Dataset_UNPROCESSED(year_start = y, year_end = y, month_start = m, month_end = m)
 
-                # Cliping negative values
-                data_oxygen_CS  = np.clip(data_oxygen_CS,  0, None)
-                data_oxygen_ALL = np.clip(data_oxygen_ALL, 0, None)
+            # Loading the inputs
+            data_temperature        = tool.get_data(variable = "temperature",        region = "surface")
+            data_salinity           = tool.get_data(variable = "salinity",           region = "surface")
+            data_chlorophyll        = tool.get_data(variable = "chlorophyll",        region = "surface")
+            data_sea_surface_height = tool.get_data(variable = "height",             region = "surface")
+            data_oxygen             = tool.get_data(variable = "oxygen",             region = "bottom")
 
-                # Normalizing the data
-                data_temperature = (data_temperature  - t_mean)      /t_std
-                data_salinity    = (data_salinity     - s_mean)      /s_std
-                data_chlorophyll = (data_chlorophyll  - c_mean)      /c_std
-                data_kshort      = (data_kshort       - kshort_mean) /kshort_std
-                data_klong       = (data_klong        - klong_mean)  /klong_std
-                data_oxygen_CS   = (data_oxygen_CS    - o_mean)      /o_std
-                data_oxygen_ALL  = (data_oxygen_ALL   - o_mean)      /o_std
+            # Cliping negative values
+            data_oxygen = np.clip(data_oxygen, 0, None)
 
-                # Flipping vertically the data (Black Sea is upside down)
-                data_temperature = np.flip(data_temperature, axis = 1)
-                data_salinity    = np.flip(data_salinity,    axis = 1)
-                data_chlorophyll = np.flip(data_chlorophyll, axis = 1)
-                data_kshort      = np.flip(data_kshort,      axis = 1)
-                data_klong       = np.flip(data_klong,       axis = 1)
-                data_oxygen_CS   = np.flip(data_oxygen_CS,  axis = 1)
-                data_oxygen_ALL  = np.flip(data_oxygen_ALL, axis = 1)
+            # Computing the partial variance (already averaging on total number of pixels in given period)
+            o_variance += np.nansum( (data_oxygen[:,             mask == 1] - o_mean) ** 2 )/pixels
+            t_variance += np.nansum( (data_temperature[:,        mask == 1] - t_mean) ** 2 )/pixels
+            s_variance += np.nansum( (data_salinity[:,           mask == 1] - s_mean) ** 2 )/pixels
+            c_variance += np.nansum( (data_chlorophyll[:,        mask == 1] - c_mean) ** 2 )/pixels
+            h_variance += np.nansum( (data_sea_surface_height[:, mask == 1] - h_mean) ** 2 )/pixels
 
-                # Removing dimensions to be a multiple of 2
-                data_temperature = data_temperature[:, 2:, 2:]
-                data_salinity    = data_salinity[:,    2:, 2:]
-                data_chlorophyll = data_chlorophyll[:, 2:, 2:]
-                data_kshort      = data_kshort[:,      2:, 2:]
-                data_klong       = data_klong[:,       2:, 2:]
-                data_oxygen_CS  = data_oxygen_CS[:,    2:, 2:]
-                data_oxygen_ALL = data_oxygen_ALL[:,   2:, 2:]
+            # WandB (2)
+            wandb.log({"Preprocessing (Variance)/Year"  : y,
+                       "Preprocessing (Variance)/Month" : m,
+                       "Variance/Temperature"           : t_variance,
+                       "Variance/Salinity"              : s_variance,
+                       "Variance/Chlorophyll"           : c_variance,
+                       "Variance/Sea Surface Height"    : h_variance,
+                       "Variance/Oxygen"                : o_variance})
 
-                # Hiding the land
-                data_temperature[:, mask_BS == 0] = np.nan
-                data_salinity[   :, mask_BS == 0] = np.nan
-                data_chlorophyll[:, mask_BS == 0] = np.nan
-                data_kshort[     :, mask_BS == 0] = np.nan
-                data_klong[      :, mask_BS == 0] = np.nan
-                data_oxygen_CS[  :, mask_BS == 0] = np.nan
-                data_oxygen_ALL[ :, mask_BS == 0] = np.nan
+    # Computing the standard deviation
+    o_standard_deviation = np.sqrt(o_variance)
+    t_standard_deviation = np.sqrt(t_variance)
+    s_standard_deviation = np.sqrt(s_variance)
+    c_standard_deviation = np.sqrt(c_variance)
+    h_standard_deviation = np.sqrt(h_variance)
 
-                # Creation of the different xarrays
-                #
-                # Physical and Biogeochemical variables
-                ds_oxy_ALL = xarray.DataArray(
-                                name  = "OXY",
-                                data  = data_oxygen_ALL,
-                                dims  = ["time", "x", "y"],
-                                attrs = {"Units": "mmol/m3",
-                                        "Description": "Oxygen concentration at the bottom layer of the Black Sea"})
+    # Computing the standardized hypoxia treshold
+    hypoxia_treshold_standardized = (hypoxia_treshold - o_mean)/o_standard_deviation
 
-                ds_oxy_CS = xarray.DataArray(
-                                name  = "OXYCS",
-                                data  = data_oxygen_CS,
-                                dims  = ["time", "x", "y"],
-                                attrs = {"Units": "mmol/m3",
-                                        "Description": "Oxygen concentration at the bottom layer of the Black Sea continental shelf (< 200m)"})
+    # ----------- Fixed Variables -----------
+    #
+    # Used to load other variables
+    tool = BlackSea_Dataset_UNPROCESSED(1980, 1980, 1, 1)
 
-                ds_temp = xarray.DataArray(
-                                name  = "TEMP",
-                                data  = data_temperature,
-                                dims  = ["time", "x", "y"],
-                                attrs = {"Units": "degC",
-                                        "Description": "Temperature at the surface layer of the Black Sea"})
+    # Loading mask and bathymetry
+    mask_continental_shelf = tool.get_mask(depth = continental_shelf_depth)
+    bathy_METER            = tool.get_depth(unit = "meter")[0]
+    bathy_INDEX            = tool.get_depth(unit = "index")[0]
 
-                ds_sal = xarray.DataArray(
-                                name  = "SAL",
-                                data  = data_salinity,
-                                dims  = ["time", "x", "y"],
-                                attrs = {"Units": "1e-3",
-                                        "Description": "Salinity at the surface layer of the Black Sea"})
+    # Flipping vertically the data
+    mask                   = np.flip(mask,                   axis = 0)
+    mask_continental_shelf = np.flip(mask_continental_shelf, axis = 0)
+    bathy_METER            = np.flip(bathy_METER,            axis = 0)
+    bathy_INDEX            = np.flip(bathy_INDEX,            axis = 0)
 
-                ds_chloro = xarray.DataArray(
-                                name  = "CHL",
-                                data  = data_chlorophyll,
-                                dims  = ["time", "x", "y"],
-                                attrs = {"Units": "mmol/m3",
-                                        "Description": "Chlorophyll concentration at the surface layer of the Black Sea"})
+    # Removing useless dimensions to become a power of 2
+    mask                   = mask[2:, 2:]
+    mask_continental_shelf = mask_continental_shelf[2:, 2:]
+    bathy_METER            = bathy_METER[2:, 2:]
+    bathy_INDEX            = bathy_INDEX[2:, 2:]
 
-                ds_kshort = xarray.DataArray(
-                                name  = "KSHORT",
-                                data  = data_kshort,
-                                dims  = ["time", "x", "y"],
-                                attrs = {"Units": "-",
-                                        "Description": "Reflectance (short wavelenghts) at the surface layer of the Black Sea"})
+    # ------------- Preprocessing the data -------------
+    def standardize(data: np.array, mask: np.array, mean: float, std: float, clip: bool = False):
+        """Used to process the data easily"""
+        data = np.clip(data,  0, None) if clip else data
+        data = (data - mean)/std
+        data = np.flip(data, axis = 1)
+        data = data[:, 2:, 2:]
+        data[:, mask == 0] = np.nan
+        return data
 
-                ds_klong = xarray.DataArray(
-                                name  = "KLONG",
-                                data  = data_klong,
-                                dims  = ["time", "x", "y"],
-                                attrs = {"Units": "-",
-                                        "Description": "Reflectance (long wavelenghts) at the surface layer of the Black Sea"})
+    for y in range(year_start, year_end + 1):
+        for m in range(1, 13):
 
-                # Masks and bathymetry
-                ds_mask_BS = xarray.DataArray(
-                                name  = "MASK",
-                                data  = mask_BS,
-                                dims  = ["x", "y"],
-                                attrs = {"Description": "Mask of the Black Sea"})
+            # Terminal (3)
+            print(f"----- Dataset : {y}-{m} (PREPROCESSING)")
 
-                ds_mask_CS = xarray.DataArray(
-                                name  = "MASKCS",
-                                data  = mask_CS,
-                                dims  = ["x", "y"],
-                                attrs = {"Description": "Mask of the Black Sea highlighting the continental shelf (< 200m)"})
+            # Tool for loading the datasets
+            tool = BlackSea_Dataset_UNPROCESSED(year_start = y, year_end = y, month_start = m, month_end = m)
 
-                ds_bathy_M = xarray.DataArray(
-                                name  = "BATHYM",
-                                data  = bathy_METER,
-                                dims  = ["x", "y"],
-                                attrs = {"Description": "Bathymetry in meters, i.e. maximum depth of a region"})
+            # Loading the different inputs
+            data_temperature              = tool.get_data(variable = "temperature",  region = "surface")
+            data_salinity                 = tool.get_data(variable = "salinity",     region = "surface")
+            data_chlorophyll              = tool.get_data(variable = "chlorophyll",  region = "surface")
+            data_sea_surface_height       = tool.get_data(variable = "height",       region = "surface")
+            data_oxygen                   = tool.get_data(variable = "oxygen",       region = "bottom")
+            data_oxygen_continental_shelf = tool.get_data(variable = "oxygen",       region = "bottom", depth = continental_shelf_depth)
 
-                ds_bathy_I = xarray.DataArray(
-                                name  = "BATHYI",
-                                data  = bathy_INDEX,
-                                dims  = ["x", "y"],
-                                attrs = {"Description": "Bathymetry indices, i.e. indexes at which we found the bottom value in the 59 vertical layers"})
+            # Standardizing
+            data_oxygen                   = standardize(data_oxygen,                                     mask, o_mean, o_standard_deviation, clip = True)
+            data_oxygen_continental_shelf = standardize(data_oxygen_continental_shelf, mask_continental_shelf, o_mean, o_standard_deviation, clip = True)
+            data_temperature              = standardize(data_temperature,                                mask, t_mean, t_standard_deviation, clip = False)
+            data_salinity                 = standardize(data_salinity,                                   mask, s_mean, s_standard_deviation, clip = False)
+            data_chlorophyll              = standardize(data_chlorophyll,                                mask, c_mean, c_standard_deviation, clip = False)
+            data_sea_surface_height       = standardize(data_sea_surface_height,                         mask, h_mean, h_standard_deviation, clip = False)
 
-                ds_tresh_real = xarray.DataArray(
-                                name  = "HYPO",
-                                data  = oxy_treshold,
-                                attrs = {"Units": "mmol/m3",
-                                        "Description": "Hypoxia Treshold"})
+            # Datasets - Inputs
+            ds_o = xarray.DataArray(data = data_oxygen,             name = "OXY", dims = ["time", "x", "y"], attrs = {"Units": "mmol/m3", "Description": "Oxygen concentration at the bottom layer of the Black Sea"})
+            ds_t = xarray.DataArray(data = data_temperature,        name = "TEM", dims = ["time", "x", "y"], attrs = {"Units": "degC",    "Description": "Temperature at the surface of the Black Sea"})
+            ds_s = xarray.DataArray(data = data_salinity,           name = "SAL", dims = ["time", "x", "y"], attrs = {"Units": "1e-3",    "Description": "Salinity at the surface of the Black Sea"})
+            ds_c = xarray.DataArray(data = data_chlorophyll,        name = "CHL", dims = ["time", "x", "y"], attrs = {"Units": "mmol/m3", "Description": "Chlorophyll concentration at the surface of the Black Sea"})
+            ds_h = xarray.DataArray(data = data_sea_surface_height, name = "SSH", dims = ["time", "x", "y"], attrs = {"Units": "[m]",     "Description": "Sea Surface Height of the Black Sea"})
 
-                ds_tresh_norm = xarray.DataArray(
-                                name  = "HYPON",
-                                data  = oxy_standa,
-                                attrs = {"Units": "-",
-                                        "Description": "Standardized Hypoxia Treshold (using the mean and variance values of the oxygen concentration)"})
+            # Datasets - Input CS
+            ds_o_c = xarray.DataArray(data = data_oxygen_continental_shelf, name = "OXYCS", dims = ["time", "x", "y"], attrs = {"Units": "mmol/m3", "Description": "Oxygen concentration at the bottom layer of the Black Sea Continental Shelf"})
 
-                # Minimum and maximum values
-                ds_oxy_mean = xarray.DataArray(
-                                name  = "OXYMEAN",
-                                data  = o_mean,
-                                attrs = {"Units": "mmol/m3",
-                                        "Description": "Mean value of oxygen concentration at the bottom layer of the Black Sea"})
+            # Datasets - Masks and others
+            ds_mask    = xarray.DataArray(data = mask,                   name = "MASK",   dims = ["x", "y"], attrs = {"Description": "Black Sea Mask"})
+            ds_mask_cs = xarray.DataArray(data = mask_continental_shelf, name = "MASKCS", dims = ["x", "y"], attrs = {"Description": "Black Sea Continental Shelf Mask"})
+            ds_bathy   = xarray.DataArray(data = bathy_METER,            name = "BATHYM", dims = ["x", "y"], attrs = {"Units": "[m]", "Description": "Bathymetry of the Black Sea in meters"})
+            ds_bathy_i = xarray.DataArray(data = bathy_INDEX,            name = "BATHYI", dims = ["x", "y"], attrs = {"Units": "[-]", "Description": "Bathymetry of the Black Sea index"})
 
-                ds_oxy_variance = xarray.DataArray(
-                                name  = "OXYVAR",
-                                data  = o_variance,
-                                attrs = {"Units": "[mmol/m3]^2",
-                                        "Description": "Variance value of oxygen concentration at the bottom layer of the Black Sea"})
+            # Datasets - Scalars
+            ds_hypoxia              = xarray.DataArray(data = hypoxia_treshold,              name = "HYPOXIA",              attrs = {"Description": "Hypoxia Treshold"})
+            ds_hypoxia_standardized = xarray.DataArray(data = hypoxia_treshold_standardized, name = "HYPOXIA_STANDARDIZED", attrs = {"Description": "Standardized Hypoxia Treshold"})
 
-                ds_temp_mean = xarray.DataArray(
-                                name  = "TEMPMEAN",
-                                data  = t_mean,
-                                attrs = {"Units": "degC",
-                                        "Description": "Mean value of temperature at the surface layer of the Black Sea"})
+            # Datasets - Means and Standard Deviations
+            ds_omean = xarray.DataArray(data = o_mean, name = "OMEAN", attrs = {"Description": "Mean Oxygen Concentration"})
+            ds_tmean = xarray.DataArray(data = t_mean, name = "TMEAN", attrs = {"Description": "Mean Temperature"})
+            ds_smean = xarray.DataArray(data = s_mean, name = "SMEAN", attrs = {"Description": "Mean Salinity"})
+            ds_cmean = xarray.DataArray(data = c_mean, name = "CMEAN", attrs = {"Description": "Mean Chlorophyll"})
+            ds_hmean = xarray.DataArray(data = h_mean, name = "HMEAN", attrs = {"Description": "Mean Sea Surface Height"})
 
-                ds_temp_variance = xarray.DataArray(
-                                name  = "TEMPVAR",
-                                data  = t_variance,
-                                attrs = {"Units": "[degC]^2",
-                                        "Description": "Variance value of temperature at the surface layer of the Black Sea"})
+            ds_ostd = xarray.DataArray(data = o_standard_deviation, name = "OSTD", attrs = {"Description": "Standard Deviation Oxygen Concentration"})
+            ds_tstd = xarray.DataArray(data = t_standard_deviation, name = "TSTD", attrs = {"Description": "Standard Deviation Temperature"})
+            ds_sstd = xarray.DataArray(data = s_standard_deviation, name = "SSTD", attrs = {"Description": "Standard Deviation Salinity"})
+            ds_cstd = xarray.DataArray(data = c_standard_deviation, name = "CSTD", attrs = {"Description": "Standard Deviation Chlorophyll"})
+            ds_hstd = xarray.DataArray(data = h_standard_deviation, name = "HSTD", attrs = {"Description": "Standard Deviation Sea Surface Height"})
 
-                ds_sal_mean = xarray.DataArray(
-                                name  = "SALMEAN",
-                                data  = s_mean,
-                                attrs = {"Units": "1e-3",
-                                        "Description": "Mean value of salinity at the surface layer of the Black Sea"})
+            # ------- Finalizing --------
+            #
+            # Creation of the name
+            file_name = f"BlackSea-DeepLearning_Standardized_{y}_{m}.nc"
 
-                ds_sal_variance = xarray.DataArray(
-                                name  = "SALVAR",
-                                data  = s_variance,
-                                attrs = {"Units": "[1e-3]^2",
-                                        "Description": "Variance value of salinity at the surface layer of the Black Sea"})
+            # Merging everything
+            data_final = xarray.merge([ds_o, ds_t, ds_s, ds_c, ds_h, ds_o_c, ds_mask, ds_mask_cs, ds_bathy, ds_bathy_i,
+                                       ds_hypoxia, ds_hypoxia_standardized, ds_omean, ds_tmean, ds_smean, ds_cmean, ds_hmean,
+                                       ds_ostd, ds_tstd, ds_sstd, ds_cstd, ds_hstd])
 
-                ds_chloro_mean = xarray.DataArray(
-                                name  = "CHLMEAN",
-                                data  = c_mean,
-                                attrs = {"Units": "mmol/m3",
-                                        "Description": "Mean value of chlorophyll concentration at the surface layer of the Black Sea"})
-
-                ds_chloro_variance = xarray.DataArray(
-                                name  = "CHLVAR",
-                                data  = c_variance,
-                                attrs = {"Units": "[mmol/m3]^2",
-                                        "Description": "Variance value of chlorophyll concentration at the surface layer of the Black Sea"})
-
-                ds_kshort_mean = xarray.DataArray(
-                                name  = "KSHORTMEAN",
-                                data  = kshort_mean,
-                                attrs = {"Units": "-",
-                                        "Description": "Mean value of reflectance (short wavelengths) at the surface layer of the Black Sea"})
-
-                ds_kshort_variance = xarray.DataArray(
-                                name  = "KSHORTVAR",
-                                data  = kshort_variance,
-                                attrs = {"Units": "-",
-                                        "Description": "Variance value of reflectance (short wavelengths) at the surface layer of the Black Sea"})
-
-                ds_klong_mean = xarray.DataArray(
-                                name  = "KLONGMEAN",
-                                data  = klong_mean,
-                                attrs = {"Units": "-",
-                                        "Description": "Mean value of reflectance (long wavelengths) at the surface layer of the Black Sea",})
-
-                ds_klong_variance = xarray.DataArray(
-                                name  = "KLONGVAR",
-                                data  = klong_variance,
-                                attrs = {"Units": "-",
-                                        "Description": "Variance value of reflectance (long wavelengths) at the surface layer of the Black Sea",})
-
-                # Creation of the name
-                file_name = f"BlackSea-DeepLearning_Standardized_{y}_{m}.nc"
-
-                # Concatenating everything
-                dataset = xarray.merge([ds_temp,
-                                        ds_sal,
-                                        ds_chloro,
-                                        ds_kshort,
-                                        ds_klong,
-                                        ds_oxy_ALL,
-                                        ds_oxy_CS,
-                                        ds_mask_BS,
-                                        ds_mask_CS,
-                                        ds_bathy_M,
-                                        ds_bathy_I,
-                                        ds_tresh_real,
-                                        ds_tresh_norm,
-                                        ds_temp_mean,
-                                        ds_temp_variance,
-                                        ds_sal_mean,
-                                        ds_sal_variance,
-                                        ds_chloro_mean,
-                                        ds_chloro_variance,
-                                        ds_kshort_mean,
-                                        ds_kshort_variance,
-                                        ds_klong_mean,
-                                        ds_klong_variance,
-                                        ds_oxy_mean,
-                                        ds_oxy_variance])
-
-                # Adding metadata
-                dataset.attrs = {"Author": "Victor Mangeleer",
-                                "Contact": "vmangeleer@uliege.be",
-                                "Description": "Preprocessed (Standardized) Black Sea Dataset (2D Formulation, surface to bottom) used for Deep Learning",
+            # Adding metadata
+            data_final.attrs = {"Author"         : "Victor Mangeleer",
+                                "Contact"        : "vmangeleer@uliege.be",
+                                "Description"    : "Preprocessed (Standardized) Black Sea Dataset used for Deep Learning",
+                                "Dataset"        : f"{path}",
                                 "Simulation Date": f"{y}-{m}"}
 
-                # Saving the data
-                dataset.to_netcdf(f"../../../../../../../scratch/acad/bsmfc/victor/data/standardized/{file_name}")
+            # Saving the data
+            data_final.to_netcdf(f"../../../../../../../scratch/acad/bsmfc/victor/data/deep_learning/{path}/{file_name}")
 
-                # Displaing information over the terminal
-                print(f"Data saved : {file_name}")
+            # Displaing information over the terminal
+            print(f"Data saved : {file_name}")
 
-                # Sending information to wandb
-                wandb.log({"Year (Processing)": y, "Month (Processing)": m})
+            # WandB (3)
+            wandb.log({"Preprocessing (Data)/Year"  : y,
+                       "Preprocessing (Data)/Month" : m})
+
+# ------
+#  Main
+# ------
+preprocess(year_start = 1980, year_end = 2014, pixels = training_pixels,   path = "Training")
+preprocess(year_start = 2015, year_end = 2019, pixels = validation_pixels, path = "Validation")
+preprocess(year_start = 2020, year_end = 2022, pixels = test_pixels,       path = "Test")

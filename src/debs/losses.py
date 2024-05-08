@@ -15,26 +15,45 @@
 #
 # Documentation
 # -------------
-# Function used to create custom losses
+# Definition of the loss(es) used during training
 #
-# Pytorch
 import torch
+import numpy as np
 
 
-def loss_regression(y_pred : torch.Tensor, y_true : torch.Tensor, mask : torch.Tensor):
-    r"""Regression loss (Mean and Standard Deviation)"""
+def forecasting_loss(y_true: torch.Tensor, y_pred: torch.Tensor, mask: np.array, lambdas: list = None):
+    """Used to compute the forecasting loss"""
 
-    # Extracting the mean and the log variance)
-    ground_truth = y_true[:, 0, 0, mask == 1]
-    mean         = y_pred[:, 0, 0, mask == 1]
-    log_variance = y_pred[:, 0, 1, mask == 1]
-    variance     = torch.exp(log_variance)
+    # Security
+    if lambdas != None:
+        assert len(lambdas) == y_true.shape[1], "ERROR (forecasting_loss), The number of multipliers should be equal to the number of forecasted days"
 
-    # Computing the negative log likelihood (element wise)
-    error_pixel_wise = -log_variance - ( ((ground_truth - mean) ** 2) / (2 * variance) )
+    def loss(y_true: torch.Tensor, y_pred_mean: torch.Tensor, y_pred_log_variance: torch.Tensor):
+        """Used to compute the loss on an individual day"""
 
-    # Computing the negative log likelihood (all) and averaging over all pixels to get the final loss
-    error = - torch.nansum(error_pixel_wise) / torch.numel(error_pixel_wise)
+        # Computing loss for each pixel
+        loss_pixelwise = - y_pred_log_variance -  ((y_true - y_pred_mean) ** 2)/torch.exp(y_pred_log_variance)
 
-    # Summing and averaging over the observed region
-    return error
+        # Computing average loss
+        return - torch.nansum(loss_pixelwise) / torch.numel(loss_pixelwise)
+
+    # Extracting sea values
+    y_true = y_true[:, :,    mask[0] == 1]
+    y_pred = y_pred[:, :, :, mask[0] == 1]
+
+    # Extracting the mean and log variance
+    y_pred_mean         = y_pred[:, :, 0]
+    y_pred_log_variance = y_pred[:, :, 1]
+
+    # Extracting information
+    batch_size, number_days, number_values = y_true.shape
+
+    # Computing the loss for each indivual day
+    loss_per_day = [loss(y_true[:, i], y_pred_mean[:, i], y_pred_log_variance[:, i]) for i in range(number_days)]
+
+    # Applying the multipliers
+    if lambdas != None:
+        loss_per_day = [loss_per_day[i] * lambdas[i] for i in range(number_days)]
+
+    # Returning the total loss and loss per day
+    return torch.sum(torch.hstack(loss_per_day)), loss_per_day

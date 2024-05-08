@@ -15,73 +15,57 @@
 #
 # Documentation
 # -------------
-# A tool to load preprocessed (normalized and standardized) Black Sea datasets coming from the NEMO simulator.
+# A tool to load training (1980 to 2014), validation (2015 to 2019) and test (2020 to 2022) standardized Black Sea datasets coming from the NEMO simulator.
 #
 import os
-import json
 import xarray
-import calendar
 import numpy as np
 
-from tools import get_data_info, get_mask_info
 
 class BlackSea_Dataset():
-    r"""A simple tool to load data of Black Sea simulations (NEMO Simulator) from 1980 to 2023."""
+    r"""A simple tool to load data of Black Sea simulations (NEMO Simulator)"""
 
-    def __init__(self, year_start: int = 1980,
-                         year_end: int = 1980,
-                      month_start: int = 1,
-                        month_end: int = 1,
-                        data_type: str = "standardized"):
-        super().__init__()
+    def __init__(self, dataset_type: str = "Training"):
 
-        # Security (1)
-        assert year_start  in [i for i in range(1980, 2023)], f"ERROR (Dataset, init) - Incorrect starting year (1980 <= {year_start} <= 2022)"
-        assert year_end    in [i for i in range(1980, 2023)], f"ERROR (Dataset, init) - Incorrect ending year (1980 <= {year_end} <= 2022)"
-        assert month_start in [i for i in range(1, 13)],      f"ERROR (Dataset, init) - Incorrect starting month (1 <= {month_start} <= 12)"
-        assert month_end   in [i for i in range(1, 13)],      f"ERROR (Dataset, init) - Incorrect ending month (1 <= {month_end} <= 12)"
-        assert  year_start <= year_end,                       f"ERROR (Dataset, init) - Incorrect years ({year_start} <= {year_end})"
-        assert data_type in ["standardized", "normalized"],   f"ERROR (Dataset, init) - Incorrect data type ({data_type})"
+        # Security
+        assert dataset_type in ["Training", "Validation", "Test"], f"ERROR (BlackSea_Dataset), Incorrect dataset type ({dataset_type})"
 
-        # Loading the name of all the useless variables, i.e. not usefull for our specific problem (for the sake of efficiency)
-        with open('../../information/useless.txt', 'r') as file:
-            self.useless_variables = json.load(file)
+        # Path to cluster files
+        path = f"../../../../../../../scratch/acad/bsmfc/victor/data/deep_learning/{dataset_type}/"
 
-        # Retrieving possible path to the folder containing the datasets
-        data_path_cluster, _, data_path_local = get_data_info()
+        # Creation of the files name
+        month_start, month_end, year_start, year_end = 1, 12, 0, 0
 
-        # Path to the folder containing the data
-        self.datasets_folder = data_path_cluster if os.path.exists(data_path_cluster) else \
-                               data_path_local
+        if dataset_type == "Training":
+            year_start, year_end = 1980, 2014
+        elif dataset_type == "Validation":
+            year_start, year_end = 2015, 2019
+        else:
+            year_start, year_end = 2020, 2022
 
-        # Stores all the relevant paths datasets
-        paths = list()
+        files = [path + f"BlackSea-DeepLearning_Standardized_{y}_{m}.nc" for y in range(year_start, year_end + 1) for m in range(1, 13)]
 
-        # Extraction
-        for year in range(year_start, year_end + 1):
-            for month in range(1, 13):
-
-                # Security (Start and ending years)
-                if year == year_start:
-                    if month < month_start:
-                        continue
-                if year == year_end:
-                    if month_end < month:
-                        break
-
-                # Adding the paths
-                paths = paths + [self.datasets_folder + f"normalized/BlackSea-DeepLearning_V2_{year}_{month}.nc"] if data_type == "normalized" else \
-                        paths + [self.datasets_folder + f"standardized/BlackSea-DeepLearning_Standardized_{year}_{month}.nc"]
-
-        # Saving other relevant information
-        self.paths       = paths
+        # Loading the data and saving other relevant information
+        self.data        = xarray.open_mfdataset(files, combine = 'nested', concat_dim = "time").compute()
+        self.data_type   = dataset_type
         self.month_start = month_start
         self.month_end   = month_end
-        self.year_end    = year_end
         self.year_start  = year_start
-        self.data_type   = data_type
+        self.year_end    = year_end
 
-    def get_mesh(self, x: int, y: int):
+    def get_data(self, variable: str):
+        """ Used to access the input/output data more clearly"""
+
+        # Security
+        assert variable in ["temperature", "salinity", "chlorophyll", "height", "oxygen"], f"ERROR (get_data), Incorrect variable ({variable})"
+
+        # Stores the translations
+        translations = {"temperature": "TEM", "salinity": "SAL", "chlorophyll": "CHL", "height": "SSH", "oxygen": "OXYCS"}
+
+        # Extracting the data
+        return self.data[translations[variable]].data
+
+    def get_mesh(self, x: int = 256, y: int = 576):
         r"""Used to retrieve a mesh with normalized coordinates for the given shape (x, y)"""
 
         # Creation of the mesh
@@ -90,92 +74,83 @@ class BlackSea_Dataset():
         # Concatenation of the mesh (np.float32 is the type needed for torch when converted afterforwards)
         return np.stack((x_mesh, y_mesh), axis = 0, dtype = np.float32)
 
-    def get_depth(self, unit: str):
+    def get_depth(self, unit: str = "index"):
         """Used to retrieve the maximum depths position (indexes in 3D data) or the maximum depths values (in meters)"""
 
         # Security
         assert unit in ["index", "meter"], f"ERROR (get_depth), Incorrect unit ({unit})"
 
         # Loading the data
-        data = xarray.open_dataset(self.paths[0])
+        depths = self.data["BATHYM"].data[0] if unit == "meter" else self.data["BATHYI"].data[0]
 
-        # Returning the corresponding mask
-        return data["BATHYM"].data if unit == "meter" else data["BATHYI"].data
+        # Returning with an additional dimension
+        return np.expand_dims(depths, axis = 0)
 
     def get_mask(self, continental_shelf: bool = False):
         r"""Used to retreive a mask of the Black Sea, i.e. 0 if land, 1 if the Black Sea. If depth is given, it will also set to 0 all regions below that depth"""
 
         # Loading the data
-        data = xarray.open_dataset(self.paths[0])
+        mask = self.data["MASK"].data[0] if continental_shelf == False else self.data["MASKCS"].data[0]
 
-        # Returning the corresponding mask
-        return data["MASK"].data if continental_shelf == False else data["MASKCS"].data
+        # Returning with an additional dimension
+        return np.expand_dims(mask, axis = 0)
 
-    def get_days(self):
-        """Used to get the IDs of days for a given time period, i.e. for each sample we have its day ID (1 to 365, repeated if multiple years are given)"""
+    def get_treshold(self, standardized = False):
+        r"""Used to retrieve the hypoxia treshold value, i.e. the oxygen concentration below which hypoxia is considered to occur"""
+        return self.data["HYPOXIA_STANDARDIZED"].data[0] if standardized else self.data["HYPOXIA"].data[0]
 
-        def is_leap_year(year):
-            """Used to check if a given year is a leap year"""
-            return (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
+    def get_mean(self, variable: str):
+        """Used to retreive the mean value of a variable for a given dataset type"""
 
-        # Stores the day IDs
-        day_ids = []
+        # Security
+        assert variable in ["temperature", "salinity", "chlorophyll", "height", "oxygen"], f"ERROR (get_data), Incorrect variable ({variable})"
 
-        # Looping over the years
-        for year in range(self.year_start, self.year_end + 1):
+        # Stores the translations
+        translations = {"temperature": "TMEAN", "salinity": "SMEAN", "chlorophyll": "CMEAN", "height": "HMEAN", "oxygen": "OMEAN"}
 
-            # Handling the starting and ending months
-            start_month = self.month_start if year == self.year_start else 1
-            end_month   = self.month_end   if year == self.year_end   else 12
+        # Extracting the data
+        return self.data[translations[variable]].data[0]
 
-            # Used to keep track of IDs
-            current_day_id = 1
+    def get_standard_deviation(self, variable: str):
+        """Used to retreive the stand value of a variable for a given dataset type"""
 
-            # Looping over the months
-            for month in range(1, end_month + 1):
+        # Security
+        assert variable in ["temperature", "salinity", "chlorophyll", "height", "oxygen"], f"ERROR (get_data), Incorrect variable ({variable})"
 
-                # Determine the number of days
-                _, num_days = calendar.monthrange(year, month)
+        # Stores the translations
+        translations = {"temperature": "TSTD", "salinity": "SSTD", "chlorophyll": "CSTD", "height": "HSTD", "oxygen": "OSTD"}
 
-                # Append day IDs for the current month
-                day_ids.extend(range(current_day_id, current_day_id + num_days)) if start_month <= month else None
+        # Extracting the data
+        return self.data[translations[variable]].data[0]
 
-                # Increment current day ID
-                current_day_id += num_days
+    def get_time(self):
+        """Generate time information about the dataset, i.e. for each day, retrieves the relative index, the month and year"""
 
-                # Correction for leaping years
-                if month == 2:
-                    if not is_leap_year(year):
-                        current_day_id += 1
+        # Used to play easily with dates
+        from datetime import datetime, timedelta
 
-        return np.array(day_ids, dtype = np.float32)
+        # Helper functions
+        def get_index_day(date):
+            """Get the index of the day in the year"""
+            return date.timetuple().tm_yday
 
-    def get_data(self, variable: str):
-        r"""Used to retreive the data for a given variable"""
+        def get_index_month(date):
+            """Get the index of the month in the year"""
+            return date.month
 
-        # Security (1)
-        assert variable in ["temperature", "salinity", "oxygen", "oxygenall", "chlorophyll", "kshort", "klong"], f"ERROR (get_data), Incorrect variable ({variable})"
+        def get_index_year(date):
+            """Get the year associated with the given date"""
+            return date.year
 
-        def translate(variable: str):
-            r"""Used to translate a variable into its name in the dataset, retrieve the type of dataset and the useless variables (the other ones)"""
+        # Conversion of the date to appropriate format
+        start_date = datetime(self.year_start, 1,   1)
+        end_date   = datetime(self.year_end,  12,  31)
 
-            # Stores the translations for all the EO variables and oxygen
-            translations = {"temperature" : "TEMP",
-                            "salinity"    : "SAL",
-                            "oxygen"      : "OXYCS",
-                            "oxygenall"   : "OXY",
-                            "chlorophyll" : "CHL",
-                            "kshort"      : "KSHORT",
-                            "klong"       : "KLONG"}
+        # Creation of the dates
+        num_days    = (end_date - start_date).days + 1
+        dates       = [start_date + timedelta(days = i) for i in range(num_days)]
+        index_day   = np.array([get_index_day(date)   for date in dates])
+        index_month = np.array([get_index_month(date) for date in dates])
+        index_year  = np.array([get_index_year(date)  for date in dates])
 
-            # Retrieving translation
-            return translations[variable]
-
-        # Translation
-        variable = translate(variable)
-
-        # Opening all the datasets
-        data = xarray.open_mfdataset(self.paths, combine = 'nested', concat_dim = "time")
-
-        # Returns the corresponding data
-        return np.array(data[variable].data)
+        return index_day, index_month, index_year
