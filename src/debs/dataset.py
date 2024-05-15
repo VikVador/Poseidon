@@ -15,7 +15,8 @@
 #
 # Documentation
 # -------------
-# A tool to load training (1980 to 2014), validation (2015 to 2019) and test (2020 to 2022) standardized Black Sea datasets coming from the NEMO simulator.
+# A tool to load training (1980 to 2014), validation (2015 to 2019) and test
+# (2020 to 2022) standardized Black Sea datasets coming from the NEMO simulator.
 #
 import os
 import xarray
@@ -36,6 +37,9 @@ class BlackSea_Dataset():
         # Creation of the files name
         month_start, month_end, year_start, year_end = 1, 12, 0, 0
 
+        # Dropping variables to save RAM memory
+        dv = ["OXY"] if dataset_type == "Test" else ["OXY", "BATHYI", "BATHYM", "MASKCS", "MASK"]
+
         if dataset_type == "Training":
             year_start, year_end = 1980, 2014
         elif dataset_type == "Validation":
@@ -43,10 +47,14 @@ class BlackSea_Dataset():
         else:
             year_start, year_end = 2020, 2022
 
+        # Generating all the paths
         files = [path + f"BlackSea-DeepLearning_Standardized_{y}_{m}.nc" for y in range(year_start, year_end + 1) for m in range(1, 13)]
 
         # Loading the data and saving other relevant information
-        self.data        = xarray.open_mfdataset(files, combine = 'nested', concat_dim = "time").compute()
+        self.data        = xarray.open_mfdataset(files,
+                                                 drop_variables = dv,
+                                                 combine        = 'nested',
+                                                 concat_dim     = "time").compute()
         self.data_type   = dataset_type
         self.month_start = month_start
         self.month_end   = month_end

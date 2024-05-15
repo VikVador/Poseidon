@@ -20,6 +20,9 @@
 import numpy as np
 
 # Torch
+import torch
+import torch.nn as nn
+
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
@@ -27,14 +30,48 @@ from torch.utils.data import DataLoader
 from dataset import BlackSea_Dataset
 
 
+def time_encoding(time: torch.Tensor, frequencies:int = 128):
+    r"""Encoding the time using the "Attention is all you need" paper encoding scheme"""
+
+    # Security
+    with torch.no_grad():
+
+        # Encoding functions
+        sinusoidal   = lambda time, frequency_index, frequencies: torch.sin(time / (10000 ** (frequency_index / frequencies)))
+        cosinusoidal = lambda time, frequency_index, frequencies: torch.cos(time / (10000 ** (frequency_index / frequencies)))
+
+        # Storing the encoding
+        encoded_time = torch.zeros(time.shape[0], time.shape[1], frequencies * 2)
+
+        # Mapping time to its encoding
+        for b_index, b in enumerate(time):
+            for t_index, t in enumerate(b):
+
+                # Stores the current encoding
+                encoding = list()
+
+                # Computing the encoding, i.e. alternating between sinusoidal and cosinusoidal encoding
+                for i in range(frequencies):
+                    encoding += [sinusoidal(t, i, frequencies), cosinusoidal(t, i, frequencies)]
+
+                # Conversion to torch tensor and storing the encoding
+                encoded_time[b_index, t_index, :] =  torch.FloatTensor(encoding).clone()
+
+        return encoded_time
+
 class BlackSea_Dataloader():
    r"""A tool to create a dataloader that processes and loads the Black Sea datasets on the fly"""
 
    def __init__(self, dataset: BlackSea_Dataset,
                  window_input: int = 1,
                 window_output: int = 10,
+                  frequencies: int = 128,
                    batch_size: int = 1,
-                  num_workers: int = 2):
+                  num_workers: int = 2,
+                         mesh: np.array = None,
+                         mask: np.array = None,
+                      mask_CS: np.array = None,
+                   bathymetry: np.array = None):
 
       # Extracting the data
       temperature = dataset.get_data("temperature")
@@ -46,8 +83,10 @@ class BlackSea_Dataloader():
       # Creation of the input/output data
       self.x, self.y = np.stack([temperature, salinity, chlorophyll, height], axis = 1), oxygen
 
-      # Extracting time information
-      self.time_day, self.time_month, self.time_year = dataset.get_time()
+      # Creating time tensor (sample, (day, month, year)), encoding and concatenating embeddings
+      self.encoded_time = torch.from_numpy(np.stack(dataset.get_time(), axis = 1))
+      self.encoded_time = time_encoding(self.encoded_time, frequencies = frequencies)
+      self.encoded_time = self.encoded_time.reshape(oxygen.shape[0], -1)
 
       # Corresponds to the number of samples used as "buffer"
       self.nb_buffered_samples = 365
@@ -57,10 +96,10 @@ class BlackSea_Dataloader():
       self.window_output = window_output
       self.batch_size    = batch_size
       self.num_workers   = num_workers
-      self.mesh          = dataset.get_mesh()
-      self.mask          = dataset.get_mask(continental_shelf = False)
-      self.mask_CS       = dataset.get_mask(continental_shelf = True)
-      self.bathymetry    = dataset.get_depth(unit = "meter")
+      self.mesh          = mesh
+      self.mask          = mask
+      self.mask_CS       = mask_CS
+      self.bathymetry    = bathymetry
 
    def get_number_of_samples(self):
       r"""Returns the number of samples in the dataset"""
@@ -74,11 +113,9 @@ class BlackSea_Dataloader():
 
                def __init__(self, x: np.array,
                                   y: np.array,
+                                  t: np.array,
                                mesh: np.array,
                                mask: np.array,
-                           time_day: np.array,
-                         time_month: np.array,
-                          time_year: np.array,
                          bathymetry: np.array,
                        window_input: int,
                       window_output: int,
@@ -87,18 +124,15 @@ class BlackSea_Dataloader():
                   # Initialization
                   self.x                   = x
                   self.y                   = y
+                  self.t                   = t
                   self.mesh                = mesh
                   self.mask                = mask
-                  self.time_day            = time_day
-                  self.time_month          = time_month
-                  self.time_year           = time_year
                   self.bathymetry          = bathymetry
                   self.window_input        = window_input
                   self.window_output       = window_output
                   self.x_res               = self.x.shape[2]
                   self.y_res               = self.x.shape[3]
                   self.nb_buffered_samples = nb_samples_buffered
-                  self.time_img            = np.ones((self.x_res, self.y_res))
 
                def process(self, index : int):
                   """Used as a processing pipeline, i.e. it fetch and process a single data sample"""
@@ -112,11 +146,6 @@ class BlackSea_Dataloader():
                   x = self.x[index_t_before : index_t]
                   y = self.y[index_t - 1    : index_t_after]
 
-                  # Creation of temporal data
-                  t = np.stack([self.time_img * self.time_day[index_t],
-                                self.time_img * self.time_month[index_t],
-                                self.time_img * self.time_year[index_t]], axis = 0)
-
                   # Merging window intputs with physical variables values
                   x = x.reshape((-1, self.x_res, self.y_res))
 
@@ -124,10 +153,13 @@ class BlackSea_Dataloader():
                   x = np.where(self.mask == 0, 0, x)
 
                   # Stacking all the information
-                  x = np.concatenate([x, self.mesh, self.bathymetry, t], axis = 0)
+                  x = np.concatenate([x, self.mesh, self.bathymetry], axis = 0)
+
+                  # Time
+                  t = self.t[index_t]
 
                   # Returning the preprocessed samples (format changed for pytorch)
-                  return x.astype(np.float32), y.astype(np.float32)
+                  return x.astype(np.float32), t, y.astype(np.float32)
 
                def __len__(self):
                   return self.x.shape[0] - self.nb_buffered_samples - self.window_output
@@ -138,11 +170,9 @@ class BlackSea_Dataloader():
          # Creation of the dataset for dataloader
          dataset = BS_Dataset(x = self.x,
                               y = self.y,
+                              t = self.encoded_time,
                            mesh = self.mesh,
                            mask = self.mask,
-                       time_day = self.time_day,
-                     time_month = self.time_month,
-                      time_year = self.time_year,
                      bathymetry = self.bathymetry,
                    window_input = self.window_input,
                   window_output = self.window_output,

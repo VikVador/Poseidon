@@ -20,33 +20,32 @@
 import numpy as np
 
 # Custom libraries
-from .fcnn     import FCNN
-from .unet     import UNET
-from .average  import AVERAGE
+from .unet    import TimeResidual_UNET
+from .average import AVERAGE
 
 
 def load_neural_network(architecture : str, data_output : np.array, device : str, kwargs : dict):
     r"""Loads a neural network of a given architecture"""
 
     # Security
-    assert architecture in ["FCNN", "UNET", "AVERAGE"], f"Architecture {architecture} not recognized"
+    assert architecture in ["UNET", "AVERAGE"], f"Architecture {architecture} not recognized"
 
     # Extracting information
+    architecture    = kwargs['Architecture']
     windows_inputs  = kwargs['Window (Inputs)']
     window_output   = kwargs['Window (Outputs)']
-    architecture    = kwargs['Architecture']
+    frequencies     = kwargs['Frequencies']
     scaling         = kwargs['Scaling']
-    kernel_size     = kwargs['Kernel Size']
 
-    # Final number of inputs
-    nb_inputs = windows_inputs * 4 + 6
+    # Total number of inputs (4 physical variables * windows_inputs + bathymetry (1) + mesh (2))
+    nb_inputs = windows_inputs * 4 + 3
 
-    # Initialization of neural network and pushing it to device (GPU)
-    if architecture == "FCNN":
-        return FCNN(inputs = nb_inputs, scaling = scaling, kernel_size = kernel_size)
+    # Predicting the mean and log(var)
+    window_output = window_output * 2
 
-    elif architecture == "UNET":
-        return UNET(inputs = nb_inputs, outputs = window_output, scaling = scaling)
+    # Neural Network
+    if architecture == "UNET":
+        return TimeResidual_UNET(input_channels = nb_inputs, output_channels = window_output, frequencies = frequencies, scaling = scaling)
 
     elif architecture == "AVERAGE":
         return AVERAGE(data_output = data_output, device = device, kwargs = kwargs)

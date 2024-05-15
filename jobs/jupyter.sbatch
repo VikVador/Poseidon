@@ -25,11 +25,11 @@
 # --------------
 #SBATCH --account=bsmfc
 #SBATCH --job-name=JUPYTER
-#SBATCH --time=48:00:00
+#SBATCH --time=01:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --gpus=1
-#SBATCH --mem=120G
+#SBATCH --gpus=4
+#SBATCH --mem=240G
 #SBATCH --partition=ia
 #SBATCH --output=../logs/jupiter_notebook.log
 #SBATCH --mail-user=vmangeleer@uliege.be
