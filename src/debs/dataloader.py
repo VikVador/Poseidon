@@ -71,7 +71,8 @@ class BlackSea_Dataloader():
                          mesh: np.array = None,
                          mask: np.array = None,
                       mask_CS: np.array = None,
-                   bathymetry: np.array = None):
+                   bathymetry: np.array = None,
+                       random: bool = False):
 
       # Extracting the data
       temperature = dataset.get_data("temperature")
@@ -100,6 +101,7 @@ class BlackSea_Dataloader():
       self.mask          = mask
       self.mask_CS       = mask_CS
       self.bathymetry    = bathymetry
+      self.random        = random
 
    def get_number_of_samples(self):
       r"""Returns the number of samples in the dataset"""
@@ -119,7 +121,8 @@ class BlackSea_Dataloader():
                          bathymetry: np.array,
                        window_input: int,
                       window_output: int,
-                nb_samples_buffered: int):
+                nb_samples_buffered: int,
+                             random: bool):
 
                   # Initialization
                   self.x                   = x
@@ -133,6 +136,8 @@ class BlackSea_Dataloader():
                   self.x_res               = self.x.shape[2]
                   self.y_res               = self.x.shape[3]
                   self.nb_buffered_samples = nb_samples_buffered
+                  self.random              = random
+                  self.random_indexes      = np.random.permutation(np.indices(x[:(- self.nb_buffered_samples - self.window_output), 0, 0, 0].shape)[0])
 
                def process(self, index : int):
                   """Used as a processing pipeline, i.e. it fetch and process a single data sample"""
@@ -165,6 +170,11 @@ class BlackSea_Dataloader():
                   return self.x.shape[0] - self.nb_buffered_samples - self.window_output
 
                def __getitem__(self, idx):
+
+                  # Random sampling
+                  idx = idx if not self.random else self.random_indexes[idx]
+
+                  # Processing the data
                   return self.process(index = idx)
 
          # Creation of the dataset for dataloader
@@ -176,7 +186,8 @@ class BlackSea_Dataloader():
                      bathymetry = self.bathymetry,
                    window_input = self.window_input,
                   window_output = self.window_output,
-            nb_samples_buffered = self.nb_buffered_samples)
+            nb_samples_buffered = self.nb_buffered_samples,
+                         random = self.random)
 
          # Creation of the dataloader
          return DataLoader(dataset, batch_size = self.batch_size, num_workers = self.num_workers)

@@ -101,7 +101,8 @@ def training(**kwargs):
                                         mesh,
                                         bs_mask,
                                         bs_mask_with_depth,
-                                        bathymetry)
+                                        bathymetry,
+                                        random = True)
 
   BS_loader_validation = BlackSea_Dataloader(validation,
                                              window_input,
@@ -112,7 +113,8 @@ def training(**kwargs):
                                              mesh,
                                              bs_mask,
                                              bs_mask_with_depth,
-                                             bathymetry)
+                                             bathymetry,
+                                             random = False)
 
   BS_loader_test = BlackSea_Dataloader(test,
                                        window_input,
@@ -123,7 +125,8 @@ def training(**kwargs):
                                        mesh,
                                        bs_mask,
                                        bs_mask_with_depth,
-                                       bathymetry)
+                                       bathymetry,
+                                       random = False)
 
 
   # Creating the dataloaders
@@ -214,7 +217,6 @@ def training(**kwargs):
 
       # Freeing memory
       del x, t, y, pred, loss_training_batch_total, loss_training_batch_per_day
-      break
 
     # WandB (2.2) - Sending information about the training results
     wandb.log({f"Training/Loss (Training): ": loss_training_total / loss_training_index})
