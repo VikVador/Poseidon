@@ -21,6 +21,7 @@ import wandb
 import calendar
 import numpy as np
 import matplotlib.pyplot as plt
+from einops import rearrange, reduce, repeat
 
 # Pytorch
 import torch
@@ -29,304 +30,342 @@ import torch
 from dataset                import BlackSea_Dataset
 from dataloader             import BlackSea_Dataloader
 
-
-def analyze(y_true: torch.Tensor, y_pred: torch.Tensor, mask: np.array, dataset: BlackSea_Dataset, dataloader: BlackSea_Dataloader):
-    """Used to compute a variety of metrics to evaluate the neural network"""
-
-    def get_months_indices(data: np.array, window_output: int):
-        """Used to extract the indices of the months, i.e. extract all the data for a given month"""
-
-        # Conversion to torch
-        data = torch.from_numpy(data)
-
-        # Removing buffered days (beginning) and output window (end)
-        data = data[365: -window_output]
-
-        # Find the indices where the values change
-        change_indices = torch.nonzero(data[:-1] != data[1:]).squeeze(1) + 1
-
-        # Starting indices of consecutive sequences
-        start_indices = torch.cat((torch.tensor([0]), change_indices))
-
-        # Ending indices of consecutive sequences
-        end_indices = torch.cat((change_indices, torch.tensor([len(data)])))
-
-        return start_indices, end_indices
-
-    def plot_seasonal_median_quantile(data: torch.Tensor, name_plot: str, name_wandb:str, ylimits: list, window_output: int, time_months: np.array, colors: list = ["#e13342", "#36193e", "#f6b48f"]):
-        "Used to nicely plots the results"
-
-        # Extracting the dimensions of the data
-        samples, forecasted_days = data.shape
-
-        # Extrating the indices of the months
-        start_indices, end_indices = get_months_indices(time_months, window_output)
-
-        # Axis coordinates definition
-        row_axis, col_axis, row_dimension = list(), list(), [i for i in range(0, 12)]
-
-        # Circular indices
-        for i in range(4):
-            row_axis += row_dimension
-            col_axis += [i for j in range(0, 12)]
-
-        # Looping over different limits
-        for k, lims in enumerate(ylimits):
-
-            # Initialization of the subplots (row = months, column = years)
-            fig, axs = plt.subplots(12, 4, figsize=(18,26))
-
-            for s, e, i, j in zip(start_indices, end_indices, row_axis, col_axis):
-
-                # Extracting the data
-                data_monthly = data[s:e]
-
-                # Computing
-                data_monthly_quantiled = torch.quantile(data_monthly, torch.tensor([0.10, 0.5, 0.90]), dim = 0)
-                data_monthly_mean      = torch.mean(data_monthly, dim = 0)
-
-                # Plotting the quantiles and median
-                axs[i, j].plot(data_monthly_mean, "--",   color = colors[0], label='Mean')                                                # Mean
-                axs[i, j].plot(data_monthly_quantiled[0], color = colors[2], label='Lower-quantile (10%)', marker = ".",  markersize = 4, ) # Lower-quantile
-                axs[i, j].plot(data_monthly_quantiled[1], color = colors[1], label='Median (50%)')                                              # Median
-                axs[i, j].plot(data_monthly_quantiled[2], color = colors[2], label='Upper-quantile (90%)', marker = "o",  markersize = 4, ) # Upper-quantile
-
-                # Fixing limits
-                axs[i, j].set_ylim(lims)
-
-                # Filling the area between the quantiles
-                axs[i, j].fill_between(range(10), data_monthly_quantiled[0], data_monthly_quantiled[2, :], color = colors[0], alpha = 0.1)
-
-                # Adding a grid
-                axs[i, j].grid(True, linestyle = '--', alpha = 0.25)
-
-                # Remove x and y labels/ticks except for left edge and bottom edge
-                if j not in [0]:
-                    axs[i, j].set_yticklabels([])
-
-                if j == 3:
-                    axs[i, j].yaxis.tick_right()
-                    axs[i, j].yaxis.set_label_position("right")
-
-                if i not in [11]:
-                    axs[i, j].set_xticklabels([])
-
-                # Write the month corresponding to each row on the left edge
-                if j == 3:
-                    axs[i, j].set_ylabel(calendar.month_name[i+1], rotation = 270, labelpad = 15)
-
-                # Add the xlabel
-                if i in [11]:
-                    axs[i, j].set_xlabel(f"Forecasted Days [{str(2016 + j)}]")
-
-                # Adding metric name
-                if i in [1, 4, 7, 10] and j == 0:
-                    axs[i, j].set_ylabel(name_plot, labelpad = 20)
-
-            # Create a legend subplot and add legend to it
-            handles, labels = axs[0, 0].get_legend_handles_labels()
-            fig.legend(handles, labels, loc = 'upper right', bbox_to_anchor=(0.905, 0.905), ncol = 4)
-
-            # WandB - Sending Results
-            wandb.log({f"Analyzing - Seasonal/{name_wandb}/Scale ({k})": wandb.Image(fig)})
-
-    def plot_daily(y_true        : torch.Tensor,
-                   y_pred        : torch.Tensor,
-                   y_std         : torch.Tensor,
-                   metric_BIAS   : torch.Tensor,
-                   mask          : torch.Tensor,
-                   window_output : int,
-                   time_months   : np.array):
-        """Used to show some daily predictions"""
-
-        # Adding the mask
-        y_true[:, :, mask == 0]      = float('nan')
-        y_pred[:, :, mask == 0]      = float('nan')
-        y_std[:, :, mask == 0]       = float('nan')
-        metric_BIAS[:, :, mask == 0] = float('nan')
-
-        # Extracting the index of each beginning month
-        first_day_of_the_month, _ = get_months_indices(time_months, window_output)
-
-        # Looping over the different years
-        for year in range(4):
-
-            # Initialization of the subplots (row = months, column = years)
-            fig, axs = plt.subplots(12, 4, figsize = (14, 30))
-
-            # Looping over the metrics then the day
-            for i in range(12):
-
-                # Determining the index of the first day of the month
-                index = first_day_of_the_month[i * (year + 1)]
-
-                # Plotting results
-                axs[i, 0].imshow(y_true[     index,0], cmap = "viridis", vmin = -2,  vmax = 2)
-                axs[i, 1].imshow(y_pred[     index,0], cmap = "viridis", vmin = -2,  vmax = 2)
-                axs[i, 2].imshow(y_std[      index,0], cmap = "RdBu",    vmin = -2,  vmax = 2)
-                axs[i, 3].imshow(metric_BIAS[index,0], cmap = "RdBu",    vmin = -15, vmax = 15)
-                axs[i, 2].imshow(mask,                 cmap = "grey", alpha = 0.05)
-                axs[i, 3].imshow(mask,                 cmap = "grey", alpha = 0.05)
-
-                # Remove y ticks
-                axs[i, 0].set_yticks([])
-                axs[i, 1].set_yticks([])
-                axs[i, 2].set_yticks([])
-                axs[i, 3].set_yticks([])
-
-                # Remove x ticks
-                axs[i, 0].set_xticks([])
-                axs[i, 1].set_xticks([])
-                axs[i, 2].set_xticks([])
-                axs[i, 3].set_xticks([])
-
-                # Adding month of prediction
-                axs[i, 3].yaxis.set_label_position("right")
-                axs[i, 3].set_ylabel(calendar.month_name[i+1], rotation = 270, labelpad = 20)
-
-            # Add colorbar every 3 rows
-            for j, ax in enumerate(axs[-1]):
-                fig.colorbar(ax.images[0], ax=ax, orientation='horizontal', fraction=0.065, pad=0.05)
-
-            # Adding title
-            axs[0, 0].set_title("Ground Truth",     pad = 10)
-            axs[0, 1].set_title("Prediction",       pad = 10)
-            axs[0, 2].set_title("Uncertainty",      pad = 10)
-            axs[0, 3].set_title("Percent Bias [%]", pad = 10)
-
-            # Wandb - Sending Everything
-            wandb.log({f"Analyzing - Daily/{2016 + year}/Observation": wandb.Image(fig)})
-
-    # --------------------
-    #    Initialization
-    # --------------------
-    # Cropping area
-    xmin, xmax, ymin, ymax = 20, 160, 55, 255
-
-    # Extracting the mean and standard deviation
-    y_pred_mean = y_pred[:, :, 0]
-    y_pred_std  = torch.sqrt(torch.exp(y_pred[:, :, 1]))
-
-    # Extracting the sea values
-    y_pred_mean = y_pred_mean[:, :, mask[0] == 1]
-    y_pred_std  = y_pred_std[:,  :, mask[0] == 1]
-
-    y_true_spatial = y_true[:, :,xmin:xmax, ymin:ymax]
-    y_true         = y_true[:, :, mask[0] == 1]
-    y_true_mean    = torch.nanmean(y_true, axis = 2).unsqueeze(2)
-
-    # ---------------------------------
-    #        Metrics - Regression
-    # ---------------------------------
-    # Computing the metrics samplewise
-    metric_MAE  = torch.nanmean(torch.absolute(y_true - y_pred_mean), axis = 2)
-    metric_MSE  = torch.nanmean((y_true - y_pred_mean) ** 2, axis = 2)
-    metric_RMSE = torch.sqrt(metric_MSE)
-    metric_BIAS = torch.nanmean((y_true - y_pred_mean)/torch.absolute(y_true), axis = 2) * 100
-
-    metric_R2_numerator   = torch.nansum((y_true - y_pred_mean) ** 2, axis = 2)
-    metric_R2_denominator = torch.nansum((y_true - y_true_mean) ** 2, axis = 2)
-    metric_R2             = 1 - metric_R2_numerator/metric_R2_denominator
-
-    # 1. Global - Averaged value accross all samples and forecasted days
-    metric_MAE_global  = torch.nanmean(metric_MAE)
-    metric_MSE_global  = torch.nanmean(metric_MSE)
-    metric_RMSE_global = torch.nanmean(metric_RMSE)
-    metric_BIAS_global = torch.nanmean(metric_BIAS)
-    metric_R2_global   = torch.nanmean(metric_R2)
-
-    # 2. Global Forecasted Days - Averaged value accross all samples but for individual forecasted days
-    metric_MAE_global_forecasted_days  = torch.nanmean(metric_MAE,  axis = 0)
-    metric_MSE_global_forecasted_days  = torch.nanmean(metric_MSE,  axis = 0)
-    metric_RMSE_global_forecasted_days = torch.nanmean(metric_RMSE, axis = 0)
-    metric_BIAS_global_forecasted_days = torch.nanmean(metric_BIAS, axis = 0)
-    metric_R2_global_forecasted_days   = torch.nanmean(metric_R2,   axis = 0)
-
-    # Wandb - Sending global metrics
-    wandb.log({
-        "Analyzing - Global/Mean Absolute Error"              : metric_MAE_global.item(),
-        "Analyzing - Global/Mean Squarred Error"              : metric_MSE_global.item(),
-        "Analyzing - Global/Root Mean Squarred Error"         : metric_RMSE_global.item(),
-        "Analyzing - Global/Percent Bias"                     : metric_BIAS_global.item(),
-        "Analyzing - Global/Coefficient of Determination R^2" : metric_R2_global.item()
-    })
-
-    # Wandb - Sending global metrics for each forecasted days
-    for i in range(metric_MAE_global_forecasted_days.shape[0]):
-        wandb.log({
-            f"Analyzing - Global/Forecasted Day {i}/Mean Absolute Error"              : metric_MAE_global_forecasted_days[i].item(),
-            f"Analyzing - Global/Forecasted Day {i}/Mean Squarred Error"              : metric_MSE_global_forecasted_days[i].item(),
-            f"Analyzing - Global/Forecasted Day {i}/Root Mean Squarred Error"         : metric_RMSE_global_forecasted_days[i].item(),
-            f"Analyzing - Global/Forecasted Day {i}/Percent Bias"                     : metric_BIAS_global_forecasted_days[i].item(),
-            f"Analyzing - Global/Forecasted Day {i}/Coefficient of Determination R^2" : metric_R2_global_forecasted_days[i].item()
-        })
-
-    # Extrating temporal information
-    time_days, time_months, time_years = dataset.get_time()
-
-    # 3. Seasonal - Averaged value accross all samples in a given month but for individual forecasted days
-    #
-    # Extrating temporal information
-    time_days, time_months, time_years = dataset.get_time()
-
-    # WandB - Plotting the results
-    plot_seasonal_median_quantile(data        = metric_MAE,
-                                name_plot     = "Mean Absolute Error (Avg. Days) [$mmol/m^3$]",
-                                name_wandb    = "Mean Absolute Error",
-                                ylimits       = [[0, 2], [0, 1], [0, 0.5]],
-                                window_output = dataloader.window_output,
-                                time_months   = time_months,
-                                colors        = ["#98002e", "#36193e", "#180311"])
-
-    plot_seasonal_median_quantile(data        = metric_MSE,
-                                name_plot     = "Mean Squarred Error (Avg. Days) [$(mmol/m^3)^2$]",
-                                name_wandb    = "Mean Squarred Error",
-                                ylimits       = [[0, 2], [0, 1], [0, 0.5]],
-                                window_output = dataloader.window_output,
-                                time_months   = time_months,
-                                colors        = ["#fdb917", "#36193e", "#180311"])
-
-    plot_seasonal_median_quantile(data        = metric_RMSE,
-                                name_plot     = "Root Mean Squarred Error (Avg. Days) [$mmol/m^3$]",
-                                name_wandb    = "Root Mean Squarred Error",
-                                ylimits       = [[0, 2], [0, 1], [0, 0.5]],
-                                window_output = dataloader.window_output,
-                                time_months   = time_months,
-                                colors        = ["#132e52", "#36193e", "#180311"] )
-
-    plot_seasonal_median_quantile(data        = metric_BIAS,
-                                name_plot     = "Percent Bias [%]",
-                                name_wandb    = "Percent Bias",
-                                ylimits       = [[-500, 500], [-100, 100],  [-50, 50]],
-                                window_output = dataloader.window_output,
-                                time_months   = time_months,
-                                colors        = ["#6c22a3", "#36193e", "#180311"] )
-
-    plot_seasonal_median_quantile(data        = metric_R2,
-                                name_plot     = "Coefficient of Determination $R^2$ (Avg. Days) [-]",
-                                name_wandb    = "Coefficient of Determination $R^2$",
-                                ylimits       = [[-5, 1.01], [-2, 1.01], [-0.5, 1.01]],
-                                window_output = dataloader.window_output,
-                                time_months   = time_months,
-                                colors        = ["#2e5e4e", "#36193e", "#180311"] )
-
-    # 4. Daily - Observing what is happening on a daily basis
-    #
-    # Extracting the data, keeping all the spatial information and cropping on the main interesting area
-    y_pred_mean = y_pred[:, :, 0, xmin:xmax, ymin:ymax]
-    y_pred_std  = torch.sqrt(torch.exp(y_pred[:, :, 1, xmin:xmax, ymin:ymax]))
-
-    # Extracting the corresponding mask
-    mask_daily = mask[0, xmin:xmax, ymin:ymax]
-
-    # Computing the local bias
-    metric_spatial_BIAS = (y_true_spatial - y_pred_mean)/torch.absolute(y_true_spatial) * 100
-
-    # Plotting the results for the first day of each month for every year
-    plot_daily(y_true        = y_true_spatial,
-               y_pred        = y_pred_mean,
-               y_std         = y_pred_std,
-               metric_BIAS   = metric_spatial_BIAS,
-               mask          = mask_daily,
-               window_output = dataloader.window_output,
-               time_months   = time_months)
+class BlackSea_Metrics():
+    r"""A tool to create a dataloader that processes and loads the Black Sea datasets on the fly"""
+
+    def __init__(self, data_oxygen: np.array, mask: np.array, hypoxia_treshold: float, window_output: int = 10, number_trajectories: int = 10, number_samples: int = 1461):
+        r"""Initialization of the metrics helper tool"""
+
+        # Storing useful information
+        self.index                        = 0
+        self.mask                         = torch.from_numpy(mask)
+        self.window_output                = window_output
+        self.number_samples               = number_samples
+        self.hypoxia_treshold             = hypoxia_treshold
+        self.number_trajectories          = number_trajectories
+        self.data_oxygen_temporal_average = torch.from_numpy(np.mean(data_oxygen[365:(1826 - window_output)], axis = 0))
+
+        # Storing regression metrics results
+        self.bias        = None
+        self.mae         = None
+        self.rmse        = None
+        self.r2_spatial  = None
+        self.r2_temporal = None
+
+        # Storing classification metrics results
+        self.acc  = None
+        self.pre  = None
+        self.rec  = None
+
+    def analyze(self, y_pred: torch.Tensor, y_true: torch.Tensor):
+        """Used to analyze the predictions of the neural network by computing different metrics"""
+
+        def generate_trajectories(y_pred: torch.Tensor, number_trajectories: int):
+            """Used to generate trajectories from the neural network means, standard deviations and coefficients"""
+
+            # Extracting dimensions
+            batch_size, forecasted_days, number_gaussians, values, x_res, y_res = y_pred.shape
+
+            # ----- Deterministic Trajectories -----
+            if number_gaussians == 1:
+                return y_pred[:, :, :, 0].clone()
+
+            # ----- Stochastic Trajectories -----
+            #
+            # Extracting values
+            mean, std, pi = y_pred[:, :, :, 0], torch.exp(y_pred[:, :, :, 1]/2), torch.nn.functional.softmax(y_pred[:, :, :, 2], dim = 2)
+
+            # Reshaping to apply multinomial
+            mean = rearrange(mean, 'b d n x y -> (b d x y) n')
+            std  = rearrange(std,  'b d n x y -> (b d x y) n')
+            pi   = rearrange(pi,   'b d n x y -> (b d x y) n')
+
+            # Sampling the coefficients
+            coefficients = torch.multinomial(input = pi, num_samples = number_trajectories, replacement = True)
+
+            # Extracting the mean and standard deviation of each trajectory
+            mean = mean.gather(1, coefficients)
+            std  = std.gather(1, coefficients)
+
+            # Sampling the trajectories
+            trajectories = torch.normal(mean, std)
+
+            # Reshaping the trajectories
+            return rearrange(trajectories, '(b d x y) n -> b d n x y', b = batch_size, d = forecasted_days, n = number_trajectories, x = x_res, y = y_res)
+
+        def compute_percentiles(metric: torch.Tensor):
+            """Used to compute the percentiles (10% and 90%) as well as the median across realizations for given metric results"""
+            return rearrange(torch.quantile(metric, torch.tensor([0.10, 0.5, 0.90]), dim = 2), 'n b d -> b d n')
+
+        def vizualize_trajectories(trajectories: torch.Tensor, y_true: torch.Tensor, mask: torch.Tensor, index: int):
+            """Used to vizualize different generated the trajectories"""
+
+            # -------------------------
+            #    Deterministic Model
+            # -------------------------
+            #
+            # Only one trajectory because its the mean
+            if trajectories.shape[2] == 1:
+
+                # Extracting trajectories
+                visualized_trajectory = trajectories[0, 0, 0].detach().numpy()
+                visualized_true         = y_true[0, 0].detach().numpy()
+
+                # Masking the values
+                visualized_trajectory[mask[0] == 0] = np.nan
+                visualized_true[mask[0] == 0]       = np.nan
+
+                # Extracting region of interest
+                visualized_trajectory = visualized_trajectory[25:125, 70:270]
+                visualized_true       = visualized_true[25:125, 70:270]
+
+                # Defining minimum and maximum values
+                vmin, vmax = np.nanmin(visualized_true), np.nanmax(visualized_true)
+
+                # Creation of the Plot
+                fig, axes = plt.subplots(1, 2, figsize = (15, 6))
+                im = axes[0].imshow(visualized_true, cmap = "viridis", vmin=vmin, vmax=vmax)
+                axes[0].set_title("Ground Truth", fontsize = 10)
+                axes[0].axis('off')
+                im = axes[1].imshow(visualized_trajectory, cmap = "viridis", vmin=vmin, vmax=vmax)
+                axes[1].set_title("Prediction (Mean)", fontsize = 10)
+                axes[1].axis('off')
+
+                # Add a colorbar to the ground truth plot
+                cbar = fig.colorbar(im, ax=axes[1], fraction = 0.026, pad = 0.04)
+
+                # Sending results to WandB
+                wandb.log({f"Observing Trajectories (Mean)/Sample ({index})": wandb.Image(fig)})
+                plt.close()
+
+            # -------------------------
+            #     Generative Model
+            # -------------------------
+            #
+            else:
+
+                # Extracting trajectories
+                visualized_trajectories = trajectories[0, 0, :10].detach().numpy()
+                visualized_true         = y_true[0, 0].detach().numpy()
+
+                # Masking the values
+                visualized_trajectories[:, mask[0] == 0] = np.nan
+                visualized_true[mask[0] == 0]         = np.nan
+
+                # Extracting region of interest
+                visualized_trajectories = visualized_trajectories[:, 25:125, 70:270]
+                visualized_true         = visualized_true[25:125, 70:270]
+
+                # Defining minimum and maximum values
+                vmin, vmax = np.nanmin(visualized_true), np.nanmax(visualized_true)
+
+                # Create a figure with 3 rows and 5 columns
+                fig, axes = plt.subplots(3, 4, figsize = (15, 6))
+
+                # Plot the ground truth in the top-left corner
+                im = axes[0, 0].imshow(visualized_true, cmap = "viridis", vmin=vmin, vmax=vmax)
+                axes[0, 0].set_title("Ground Truth", fontsize = 10)
+                axes[0, 0].axis('off')
+
+                # Add a colorbar to the ground truth plot
+                cbar = fig.colorbar(im, ax=axes[0, 0], fraction = 0.026, pad = 0.04)
+
+                # Hide the rest of the plots in the first row
+                for i in range(1, 4):
+                    axes[0, i].axis('off')
+
+                # Plot the predicted trajectories in the next two rows
+                for i in range(8):
+                    row = i // 4 + 1
+                    col = i % 4
+                    axes[row, col].imshow(visualized_trajectories[i], cmap = "viridis", vmin=vmin, vmax=vmax)
+                    axes[row, col].axis('off')
+
+                # Sending results to WandB
+                wandb.log({f"Observing Trajectories/Sample ({index})": wandb.Image(fig)})
+                plt.close()
+
+        # Generating the trajectories
+        trajectories = generate_trajectories(y_pred, self.number_trajectories)
+
+        # Visualizing the trajectories on WandB
+        vizualize_trajectories(trajectories, y_true, self.mask, self.index)
+
+        # Updating the index (used to name the different samples)
+        self.index += 1
+
+        # Masking useless values
+        trajectories = trajectories[:, :, :, self.mask[0] == 1]
+        y_true       = y_true[:, :, self.mask[0] == 1]
+
+        # Adding dimensions to make broadcasting possible
+        y_true = y_true[:, :, None, :].expand(-1, -1, trajectories.shape[2], -1)
+
+        # computing the oxygen temporal and spatial average
+        data_oxygen_temporal_average = self.data_oxygen_temporal_average[None, None, None, self.mask[0] == 1].expand(trajectories.shape)
+        data_oxygen_spatial_average  = torch.nanmean(y_true, axis = 3, keepdim = True).expand(trajectories.shape)
+
+        # -------------------------
+        #    Metrics Regression
+        # -------------------------
+        #
+        # Computing the different metrics
+        metric_MAE  = torch.nanmean(torch.absolute(y_true - trajectories),          axis = 3)
+        metric_BIAS = torch.nanmean((y_true - trajectories)/torch.absolute(y_true), axis = 3) * 100
+        metric_RMSE = torch.sqrt(torch.nanmean((y_true - trajectories) ** 2,        axis = 3))
+
+        # Computing the R2 scores spatially and temporally
+        metric_R2_NUMERATOR = torch.sum((y_true - trajectories) ** 2, axis = 3)
+        metric_R2_TEMPORAL  = 1 - metric_R2_NUMERATOR / torch.sum((y_true - data_oxygen_temporal_average) ** 2, axis = 3)
+        metric_R2_SPATIAL   = 1 - metric_R2_NUMERATOR / torch.sum((y_true - data_oxygen_spatial_average)  ** 2, axis = 3)
+
+        # Computing the quantiles and updating the metrics
+        self.mae         = compute_percentiles(metric_MAE)         if self.mae is None         else torch.cat((self.mae,         compute_percentiles(metric_MAE)),         dim = 0)
+        self.bias        = compute_percentiles(metric_BIAS)        if self.bias is None        else torch.cat((self.bias,        compute_percentiles(metric_BIAS)),        dim = 0)
+        self.rmse        = compute_percentiles(metric_RMSE)        if self.rmse is None        else torch.cat((self.rmse,        compute_percentiles(metric_RMSE)),        dim = 0)
+        self.r2_spatial  = compute_percentiles(metric_R2_SPATIAL)  if self.r2_spatial is None  else torch.cat((self.r2_spatial,  compute_percentiles(metric_R2_SPATIAL)),  dim = 0)
+        self.r2_temporal = compute_percentiles(metric_R2_TEMPORAL) if self.r2_temporal is None else torch.cat((self.r2_temporal, compute_percentiles(metric_R2_TEMPORAL)), dim = 0)
+
+        # ----------------------------
+        #    Metrics Classification
+        # ----------------------------
+        #
+        # Detecting Hypoxia
+        trajectories = (trajectories < self.hypoxia_treshold) * 1
+        y_true       = (y_true       < self.hypoxia_treshold) * 1
+
+        # Calculate True Positives (TP), False Positives (FP), True Negatives (TN), False Negatives (FN)
+        TP = torch.sum(y_true * trajectories,             dim = 3)
+        FP = torch.sum((1 - y_true) * trajectories,       dim = 3)
+        TN = torch.sum((1 - y_true) * (1 - trajectories), dim = 3)
+        FN = torch.sum(y_true * (1 - trajectories),       dim = 3)
+
+        # Computing the metrics
+        metric_ACC = (TP + TN) / (TP + TN + FP + FN)
+        metric_PRE = TP / (TP + FP)
+        metric_REC = TP / (TP + FN)
+
+        # Computing the quantiles and updating the metrics
+        self.acc = compute_percentiles(metric_ACC) if self.acc is None else torch.cat((self.acc, compute_percentiles(metric_ACC)), dim = 0)
+        self.pre = compute_percentiles(metric_PRE) if self.pre is None else torch.cat((self.pre, compute_percentiles(metric_PRE)), dim = 0)
+        self.rec = compute_percentiles(metric_REC) if self.rec is None else torch.cat((self.rec, compute_percentiles(metric_REC)), dim = 0)
+
+    def send_results(self):
+
+        def metric_global(data: torch.Tensor, name: str):
+            """Used to compute a global metric, i.e., average over samples and then forecast"""
+
+            # Computing the global metric
+            global_metric = torch.nanmean(data, axis = (0, 1))
+
+            # Storing results for WandB
+            return {f"Global Metrics/{name} (10%)":  global_metric[0],
+                    f"Global Metrics/{name} (50%)":  global_metric[1],
+                    f"Global Metrics/{name} (90%)":  global_metric[2]}
+
+        def metric_forecast(data: torch.Tensor, name: str):
+            """Used to compute a forecast metric, i.e., average over samples"""
+
+            # Computing the forecast metric
+            forecast_metric = torch.nanmean(data, axis = (0))
+
+            # Stores the complete dictionary of results
+            forecast_results = {}
+
+            # Computing results for each day
+            for f, results in enumerate(forecast_metric):
+                forecast_results[f"Forecast Metrics/{name} - Day " + str(f) + " (10%)"] = results[0]
+                forecast_results[f"Forecast Metrics/{name} - Day " + str(f) + " (50%)"] = results[1]
+                forecast_results[f"Forecast Metrics/{name} - Day " + str(f) + " (90%)"] = results[2]
+
+            return forecast_results
+
+        def metric_forecast_evolution(data: torch.Tensor, limits: list, name: str):
+            """Used to display the evolution of a metric over time for a single, i.e. the validation"""
+
+            # Conversion to numpy
+            data = data.detach().numpy()
+
+            # Retrieving dimensions for ease of use
+            number_days, forecasted_days, values = data.shape
+
+            # -------------------------------
+            #   Plots For Individual Model
+            # -------------------------------
+            #
+            # Due to WandB restriction, by sending a plot, we can display evolution
+            # over epochs but cannot plot model results against one another
+            #
+            # Looping over different limits
+            for i, l in enumerate(limits):
+
+                # Plotting the evolution of the metric
+                fig = plt.figure(figsize = (15, 5))
+
+                # Showing the best (first day), worst (last day) forecast
+                plt.plot(data[:,  0,  0],  color = "#00ffff", linestyle = "dotted", label = f'($T_{0}$) Q10%')
+                plt.plot(data[:,  0,  1],  color = "#00ffff", linestyle = "solid",  label = f'($T_{0}$) Median')
+                plt.plot(data[:,  0,  2],  color = "#00ffff", linestyle = "dashed", label = f'($T_{0}$) Q90%')
+                plt.plot(data[:,  -1,  0], color = "#004c6d", linestyle = "dotted", label = f'($T_{forecasted_days - 1}$) Q10%')
+                plt.plot(data[:,  -1,  1], color = "#004c6d", linestyle = "solid",  label = f'($T_{forecasted_days - 1}$) Median')
+                plt.plot(data[:,  -1,  2], color = "#004c6d", linestyle = "dashed", label = f'($T_{forecasted_days - 1}$) Q90%')
+                plt.grid(alpha = 0.5)
+                plt.xlabel("Days")
+                plt.ylabel(name)
+                plt.ylim(l)
+                plt.legend(loc = 'upper right', bbox_to_anchor=(1.01, 1.15), ncol = 6)
+
+                # Sending to WandB
+                wandb.log({f"Forecast Metrics Evolution/{name} ({i})": wandb.Image(fig)})
+                plt.close()
+
+            # -------------------------------
+            #   Comparison Plot For Models
+            # -------------------------------
+            #
+            # Days on the x-axis
+            x_axis = np.arange(number_days)
+
+            # Logging the results
+            wandb.log({f"Forecast Metrics Evolution (Comparison)/{name} ($T_{0}$)" : wandb.plot.line_series(
+                                        xs = x_axis,
+                                        ys = [data[:, 0, 0], data[:, 0, 1], data[:, 0, 2]],
+                                    keys = ["Q10%", "Median", "Q90%"],
+                                    title = f"{name} - T0",
+                                    xname = "Days"),
+                        f"Forecast Metrics Evolution (Comparison)/{name} ($T_{forecasted_days - 1}$)" : wandb.plot.line_series(
+                                        xs = x_axis,
+                                        ys = [data[:, -1, 0], data[:, -1, 1], data[:, -1, 2]],
+                                    keys = ["Q10%", "Median", "Q90%"],
+                                    title = f"{name} - T{forecasted_days - 1}",
+                                    xname = "Days")})
+
+        # Global - Give a rough idea of the performance
+        wandb.log(metric_global(self.mae,         "Mean Absolute Error"))
+        wandb.log(metric_global(self.bias,        "Percent Bias"))
+        wandb.log(metric_global(self.rmse,        "Root Mean Square Error"))
+        wandb.log(metric_global(self.r2_spatial,  "Coefficient of Determination R2 - Spatial"))
+        wandb.log(metric_global(self.r2_temporal, "Coefficient of Determination R2 - Temporal"))
+        wandb.log(metric_global(self.acc,         "Accuracy"))
+        wandb.log(metric_global(self.pre,         "Precision"))
+        wandb.log(metric_global(self.rec,         "Recall"))
+
+        # Forecast - Give a rough idea of the performance for each forecasted days
+        wandb.log(metric_forecast(self.mae,         "Mean Absolute Error"))
+        wandb.log(metric_forecast(self.bias,        "Percent Bias"))
+        wandb.log(metric_forecast(self.rmse,        "Root Mean Square Error"))
+        wandb.log(metric_forecast(self.r2_spatial,  "Coefficient of Determination R2 - Spatial"))
+        wandb.log(metric_forecast(self.r2_temporal, "Coefficient of Determination R2 - Temporal"))
+        wandb.log(metric_forecast(self.acc,         "Accuracy"))
+        wandb.log(metric_forecast(self.pre,         "Precision"))
+        wandb.log(metric_forecast(self.rec,         "Recall"))
+
+        # Forecast Evolution - Give an idea of the evolution of a metric accross the validation set for the best and worst forecast
+        metric_forecast_evolution(self.mae,         [[0, 1], [0, 2], [0, 4]],                "Mean Absolute Error")
+        metric_forecast_evolution(self.bias,        [[-100, 100], [-250, 100], [-500, 100]], "Percent Bias")
+        metric_forecast_evolution(self.rmse,        [[0, 1], [0, 2], [0, 4]],                "Root Mean Square Error")
+        metric_forecast_evolution(self.r2_spatial,  [[-25, 1.01], [-5, 1.01], [-2, 1.01]],   "Coefficient of Determination R2 - Spatial")
+        metric_forecast_evolution(self.r2_temporal, [[-25, 1.01], [-5, 1.01], [2, 1.01]],    "Coefficient of Determination R2 - Temporal")
+        metric_forecast_evolution(self.acc,         [[0, 0.25], [0, 0.5], [0, 1.01]],        "Accuracy")
+        metric_forecast_evolution(self.pre,         [[0, 0.25], [0, 0.5], [0, 1.01]],        "Precision")
+        metric_forecast_evolution(self.rec,         [[0, 0.25], [0, 0.5], [0, 1.01]],        "Recall")

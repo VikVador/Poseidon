@@ -17,30 +17,31 @@
 # -------------
 # A configuration file to be given to the main training script (__training.py)
 #
+
 config:
 
   # WandB
-  "Project"             : "ESA - Local V2(MDN)"
-  "Mode"                : "online"
+  "Project"             : ["ESA - Cluster (MDN)"]
+  "Mode"                : ["online"]
 
   # Data
-  "Window (Inputs)"     : 1
-  "Window (Outputs)"    : 10
-  "Frequencies"         : 128
-  "Scaling"             : 2
+  "Window (Inputs)"     : [1]
+  "Window (Outputs)"    : [10]
+  "Frequencies"         : [256]
+  "Scaling"             : [4]
 
   # Model & Training
-  "Architecture"        : "UNET"
-  "Number of Gaussians" : 2
-  "Epochs"              : 10
-  "Batch Size"          : 16
-  "Learning Rate"       : 0.0001
-  "Number of Workers"   : 2
+  "Architecture"        : ["UNET"]
+  "Number of Gaussians" : [1]
+  "Epochs"              : [10]
+  "Batch Size"          : [32]
+  "Learning Rate"       : [0.0005]
+  "Number of Workers"   : [2]
 
 cluster:
-  "Dawgz"    : False
+  "Dawgz"    : True
   "CPUS"     : 2
-  "GPUS"     : 1
-  "RAM"      : "120GB"
-  "TIME"     : "06:00:00"
+  "GPUS"     : 4
+  "RAM"      : "240GB"
+  "TIME"     : "48:00:00"
   "PARTITION": "ia"

@@ -141,7 +141,7 @@ def training(**kwargs):
   print("Starting to train...")
 
   # Initialization of the neural network
-  neural_net = load_neural_network(architecture = architecture, data_output = data_oxygen, device = device, kwargs = kwargs)
+  neural_net = load_neural_network(architecture = architecture, data_output = None, device = device, kwargs = kwargs)
   neural_net.to(device)
 
   # Total number of available GPUs
@@ -175,6 +175,9 @@ def training(**kwargs):
 
     # Used to store and compute instantaneous training loss
     loss_training_total, loss_training_per_day, loss_training_index = 0.0, list(), 0
+
+    # Used to compute metrics
+    metrics = BlackSea_Metrics(data_oxygen = data_oxygen, mask = bs_mask_with_depth, hypoxia_treshold = hypox_tresh, window_output = window_output, number_trajectories = 25)
 
     # Training the neural network
     for x, t, y in dataset_train:
@@ -226,12 +229,6 @@ def training(**kwargs):
       # Used to store and compute instantaneous training loss
       loss_validation_total, loss_validation_per_day, loss_validation_index = 0.0, list(), 0
 
-      # Used to store all predictions and ground truth
-      validation_predictions, validation_ground_truth = None, None
-
-      # Used to store temporal information
-      time_days, time_months, time_years = list(), list(), list()
-
       # Validating the neural network
       for x, t, y in dataset_validation:
 
@@ -258,9 +255,8 @@ def training(**kwargs):
         wandb.log({f"Training/Loss (V)": loss_validation_batch_total.item()})
         wandb.log({f"Training/Loss (V, {i})": loss.item() for i, loss in enumerate(loss_validation_batch_per_day)})
 
-        # Storing results
-        validation_predictions  = torch.cat((validation_predictions,  pred), dim = 0) if validation_predictions  is not None else pred
-        validation_ground_truth = torch.cat((validation_ground_truth,    y), dim = 0) if validation_ground_truth is not None else y
+        # Computing metrics
+        metrics.analyze(pred, y)
 
         # Cleaning
         del x, t, y, pred, loss_validation_batch_total, loss_validation_batch_per_day
@@ -281,8 +277,8 @@ def training(**kwargs):
     wandb.log({f"Training/Loss (Validation): ": loss_validation_total / loss_validation_index,
                f"Training/Time Left (H)": epoch_time})
 
-    # Computing the results
-    analyze(validation_ground_truth, validation_predictions, bs_mask_with_depth, validation, BS_loader_validation)
+    # WandB (2.3) - Computing and sending the results
+    metrics.send_results()
 
   # Extracting the Neural Network back to CPU
   neural_net.to("cpu")

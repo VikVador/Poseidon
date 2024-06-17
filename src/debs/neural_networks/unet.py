@@ -114,13 +114,14 @@ class TimeResidual_Block(nn.Module):
 class TimeResidual_UNET(nn.Module):
     r"""A time residual UNET for time series forecasting"""
 
-    def __init__(self, input_channels: int, output_channels: int, frequencies: int, scaling: int = 1):
+    def __init__(self, input_channels: int, output_channels: int, frequencies: int, number_gaussians: int, scaling: int = 1):
         super(TimeResidual_UNET, self).__init__()
 
         # Initializations
-        self.frequencies     = frequencies
-        self.input_channels  = input_channels
-        self.output_channels = output_channels
+        self.frequencies      = frequencies
+        self.input_channels   = input_channels
+        self.output_channels  = output_channels
+        self.number_gaussians = number_gaussians
 
         # 1. Input (lifting)
         self.input_conv = nn.Conv2d(in_channels = self.input_channels, out_channels = 32 * scaling, kernel_size = 3, stride = 1, padding = 1)
@@ -219,8 +220,8 @@ class TimeResidual_UNET(nn.Module):
         x = torch.permute(x, (0, 3, 1, 2))
         b, _, x_res, y_res = x.shape
 
-        # Reshaping the output, i.e. (samples, days, values (mean or log(var)), x, y)
-        return x.reshape(b, self.output_channels // 2, 2, x_res, y_res)
+        # Reshaping the output, i.e. (samples, days, values (mean|log(var)|pi, x, y)
+        return x.reshape(b, self.output_channels // (3 * self.number_gaussians), self.number_gaussians, 3, x_res, y_res)
 
     def count_parameters(self,):
         r"""Determines the number of trainable parameters in the model"""

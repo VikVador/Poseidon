@@ -21,33 +21,27 @@
 config:
 
   # WandB
-  "Project"           : ["ESA - Cluster"]
-  "Mode"              : ["online"]
+  "Project"             : ["ESA - Cluster (MDN)"]
+  "Mode"                : ["online"]
 
   # Data
-  "Window (Inputs)"   : [1, 3, 7, 14, 30, 60, 120, 150, 180]
-  "Window (Outputs)"  : [10]
-  "Frequencies"       : [64, 128]
-  "Scaling"           : [1, 3, 5]
+  "Window (Inputs)"     : [1, 7, 14, 30, 60, 120]
+  "Window (Outputs)"    : [10]
+  "Frequencies"         : [256]
+  "Scaling"             : [4]
 
   # Model & Training
-  "Architecture"      : ["UNET"]
-  "Epochs"            : [20]
-  "Batch Size"        : [16]
-  "Learning Rate"     : [0.0001]
-  "Number of Workers" : [1]
+  "Architecture"        : ["UNET"]
+  "Number of Gaussians" : [2, 5, 10]
+  "Epochs"              : [10]
+  "Batch Size"          : [32]
+  "Learning Rate"       : [0.0005]
+  "Number of Workers"   : [2]
 
 cluster:
   "Dawgz"    : True
   "CPUS"     : 2
   "GPUS"     : 4
   "RAM"      : "240GB"
-  "TIME"     : "12:00:00"
+  "TIME"     : "48:00:00"
   "PARTITION": "ia"
-
-
-# Notes:
-# - Scaling    : 5 (max) -> 121M parameters
-# - Batch Size : 16 (on 4 GPUs) if you go far in the past (120 >) otherwise 32 works
-# - LR         : 0.0001 seems to be the most appropriate
-# - Workers    : 1 (for now)
