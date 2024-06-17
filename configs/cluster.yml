@@ -21,7 +21,7 @@
 config:
 
   # WandB
-  "Project"             : ["ESA - Cluster (MDN)"]
+  "Project"             : ["ESA - Cluster (Diffusion)"]
   "Mode"                : ["online"]
 
   # Data

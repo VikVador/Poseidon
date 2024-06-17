@@ -20,7 +20,7 @@
 config:
 
   # WandB
-  "Project"             : "ESA - Local V2(MDN)"
+  "Project"             : "ESA - Local (Diffusion)"
   "Mode"                : "online"
 
   # Data
