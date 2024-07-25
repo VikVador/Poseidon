@@ -74,9 +74,7 @@ if __name__ == "__main__":
              ram       = config_file["cluster"]["RAM"],
              time      = config_file["cluster"]["TIME"],
              partition = config_file["cluster"]["PARTITION"],
-             project   = 'bsmfc',
-             user      = 'vmangeleer@uliege.be',
-             type      = 'FAIL')
+             account   = 'bsmfc')
         def training_neural_network(i: int):
 
             # Launching the main

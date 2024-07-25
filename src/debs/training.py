@@ -17,6 +17,7 @@
 # -------------
 # Function used to train a neural network to forecast the oxygen concentration in the Black Sea.
 #
+import tqdm
 import time
 import wandb
 import xarray
@@ -32,256 +33,180 @@ from torch.optim.lr_scheduler import LinearLR
 # Custom libraries
 from metrics                import *
 from tools                  import *
-from losses                 import *
+from unet                   import *
 from dataset                import BlackSea_Dataset
-from dataloader             import BlackSea_Dataloader
-from neural_networks.loader import load_neural_network
+from dataloader             import BlackSea_Dataloader, BlackSea_Dataloader_Diffusion
 
 
 def training(**kwargs):
-  """Used to train a neural network to forecast the oxygen concentration in the Black Sea"""
+    """Used to train a neural network to forecast the oxygen concentration in the Black Sea"""
 
-  # -------------—---------
-  #     Initialization
-  # -------------—---------
-  #
-  # Checking if GPU is available
-  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # -------------—---------
+    #     Initialization
+    # -------------—---------
+    #
+    # Information over terminal (1)
+    project_title(kwargs)
 
-  # Fixing random seed for reproducibility
-  np.random.seed(2701)
-  torch.manual_seed(2701)
+    # Checking if GPU is available
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-  # Loading configuration
-  project        = kwargs['Project']
-  mode           = kwargs['Mode']
-  window_input   = kwargs['Window (Inputs)']
-  window_output  = kwargs['Window (Outputs)']
-  frequencies    = kwargs['Frequencies']
-  architecture   = kwargs['Architecture']
-  learning_rate  = kwargs['Learning Rate']
-  batch_size     = kwargs['Batch Size']
-  nb_epochs      = kwargs['Epochs']
-  num_workers    = kwargs['Number of Workers']
+    # Fixing random seed for reproducibility
+    np.random.seed(2701)
+    torch.manual_seed(2701)
 
-  # -------------—---------
-  #     Loading the data
-  # -------------—---------
-  # Displaying information over terminal (1)
-  print("Loading the data...")
+    # Loading configuration
+    project        = kwargs['Project']
+    mode           = kwargs['Mode']
+    window_input   = kwargs['Window (Inputs)']
+    window_output  = kwargs['Window (Outputs)']
+    diff_steps     = kwargs['Diffusion Steps']
+    diff_scheduler = kwargs['Diffusion Scheduler']
+    diff_variance  = kwargs['Diffusion Variance']
+    scaling        = kwargs['Scaling']
+    frequencies    = kwargs['Frequencies']
+    learning_rate  = kwargs['Learning Rate']
+    batch_size     = kwargs['Batch Size']
+    nb_epochs      = kwargs['Epochs']
+    num_workers    = kwargs['Number of Workers']
 
-  training   = BlackSea_Dataset("Training")
-  validation = BlackSea_Dataset("Validation")
-  test       = BlackSea_Dataset("Test")
+    # -------------—---------
+    #          Data
+    # -----------------------
+    #
+    # Loading preprocessed datasets
+    dataset_train      = BlackSea_Dataset("Validation")
+    dataset_validation = BlackSea_Dataset("Test")
 
-  # Extracting the output (used by AverageNET)
-  data_oxygen = training.get_data(variable = "oxygen")
+    # Loading other information
+    black_sea_mesh       = dataset_validation.get_mesh()
+    black_sea_mask       = dataset_validation.get_mask(continental_shelf = False)
+    black_sea_mask_cs    = dataset_validation.get_mask(continental_shelf = True)
+    black_sea_bathymetry = dataset_validation.get_depth(unit = "meter")
 
-  # Loading the mesh, masks and bathymetry
-  mesh                = test.get_mesh()
-  bs_mask             = test.get_mask(continental_shelf = False)
-  bs_mask_with_depth  = test.get_mask(continental_shelf = True)
-  bathymetry          = test.get_depth(unit = "meter")
+    # Used to detect the presence of hypoxia events
+    hypoxia_treshold_standardized = dataset_train.get_treshold(standardized = True)
 
-  # Hypoxia treshold
-  hypox_tresh = training.get_treshold(standardized = True)
-
-  # -------------—---------
-  #     Preprocessing
-  # -------------—---------
-  # Displaying information over terminal (2)
-  print("Preprocessing the data...")
-
-  BS_loader_train = BlackSea_Dataloader(training,
+    # Creation of the dataloaders
+    dataloader_train = BlackSea_Dataloader(dataset_train,
                                         window_input,
                                         window_output,
                                         frequencies,
                                         batch_size,
                                         num_workers,
-                                        mesh,
-                                        bs_mask,
-                                        bs_mask_with_depth,
-                                        bathymetry,
-                                        random = True)
+                                        black_sea_mesh,
+                                        black_sea_mask,
+                                        black_sea_mask_cs,
+                                        black_sea_bathymetry,
+                                        random = True).get_dataloader()
 
-  BS_loader_validation = BlackSea_Dataloader(validation,
-                                             window_input,
-                                             window_output,
-                                             frequencies,
-                                             batch_size,
-                                             num_workers,
-                                             mesh,
-                                             bs_mask,
-                                             bs_mask_with_depth,
-                                             bathymetry,
-                                             random = False)
+    dataloader_valid = BlackSea_Dataloader_Diffusion(dataset_validation,
+                                                    window_input,
+                                                    window_output,
+                                                    frequencies,
+                                                    12,
+                                                    num_workers,
+                                                    black_sea_mesh,
+                                                    black_sea_mask,
+                                                    black_sea_mask_cs,
+                                                    black_sea_bathymetry,
+                                                    random = False).get_dataloader()
+    # -------------—--------------------
+    #     Neural Network & Training
+    # -------------—--------------------
+    # Initialization
+    neural_net = Diffusion_UNET(window_input, window_output, diff_steps, diff_scheduler, diff_variance, scaling, frequencies, device).to(device)
 
-  BS_loader_test = BlackSea_Dataloader(test,
-                                       window_input,
-                                       window_output,
-                                       frequencies,
-                                       batch_size,
-                                       num_workers,
-                                       mesh,
-                                       bs_mask,
-                                       bs_mask_with_depth,
-                                       bathymetry,
-                                       random = False)
+    # Training Parameters
+    optimizer  = optim.Adam(neural_net.parameters(), lr = learning_rate)
+    scheduler  = LinearLR(optimizer, start_factor = 0.95, total_iters = nb_epochs)
 
+    # Information about the model
+    num_gpus  = torch.cuda.device_count()
+    nn_params = neural_net.count_parameters()
 
-  # Creating the dataloaders
-  dataset_train        = BS_loader_train.get_dataloader()
-  dataset_validation   = BS_loader_validation.get_dataloader()
-  dataset_test         = BS_loader_test.get_dataloader()
+    # Deploying the model on multiple GPUs
+    neural_net.parrelize(num_gpus)
 
-  # -------------—--------------------
-  #     Neural Network & Training
-  # -------------—--------------------
-  # Displaying information over terminal (2)
-  print("Starting to train...")
+    # Displaying information over the terminal
+    print("Total number of parameters: ", nn_params/1e6, "M")
+    print("Available GPUs: ", num_gpus)
 
-  # Initialization of the neural network
-  neural_net = load_neural_network(architecture = architecture, data_output = None, device = device, kwargs = kwargs)
-  neural_net.to(device)
+    # WandB (1) - Initialization of the run
+    wandb.init(project = project, mode = mode, config = kwargs)
 
-  # Total number of available GPUs
-  num_gpus = torch.cuda.device_count()
-  print("Available GPUs: ", num_gpus)
+    # WandB (2) - Logging info
+    wandb.config.update({"Number of Parameters": nn_params, "Number of GPUs": num_gpus})
 
-  # Total number of parameters
-  nn_params = neural_net.count_parameters()
+    # ------- Training Loop -------
+    for epoch in range(nb_epochs):
 
-  # Using multiple GPUS
-  neural_net = torch.nn.parallel.DataParallel(neural_net, device_ids=list(range(num_gpus)), dim = 0)
+        # Stores the mean loss
+        mean_loss = list()
 
-  # Loading the optimizer
-  optimizer = optim.Adam(neural_net.parameters(), lr = learning_rate)
+        for conditioning, _, x in dataloader_train:
 
-  # Loading the scheduler
-  scheduler = LinearLR(optimizer, start_factor = 0.95, total_iters = nb_epochs)
+            # ------ Preprocessing -----
+            #
+            # Sampling uniformly diffusion steps
+            diffusion_steps = torch.randint(0, diff_steps, (x.shape[0], 1))
 
-  # WandB (1) - Initialization of the run
-  wandb.init(project = project, mode = mode, config = kwargs)
-  wandb.log({f"Total number of parameters": nn_params})
+            # Sampling noise
+            noise = torch.normal(0, 1, x.shape)
 
-  # Used to compute the total time left,
-  epoch_time = 0.0
+            # Generating latent representations of the data
+            z_t = neural_net.generate_latent(x, noise, diffusion_steps)
 
-  # ------- Training Loop -------
-  for epoch in range(nb_epochs):
+            # Pushing to device
+            z_t, conditioning, noise, diffusion_steps =  z_t.to(device), conditioning.to(device),  noise.to(device), diffusion_steps
 
-    # Timing the epoch
-    start = time.time()
+            # Adding the conditioning
+            z_t = torch.cat([conditioning, z_t], dim = 1)
 
-    # Used to store and compute instantaneous training loss
-    loss_training_total, loss_training_per_day, loss_training_index = 0.0, list(), 0
+            # ----- Training -----
+            #
+            # Predicting the noise
+            noise_pred = neural_net.predict(z_t, diffusion_steps)
 
-    # Used to compute metrics
-    metrics = BlackSea_Metrics(data_oxygen = data_oxygen, mask = bs_mask_with_depth, hypoxia_treshold = hypox_tresh, window_output = window_output, number_trajectories = 25)
+            # Computing the loss (MSE between noise levels)
+            loss = torch.pow(noise_pred[:, :, black_sea_mask_cs[0] == 1] - noise[:, :, black_sea_mask_cs[0] == 1], 2).nanmean()
 
-    # Training the neural network
-    for x, t, y in dataset_train:
+            # Appending the loss
+            mean_loss.append(loss.item())
 
-      # Pushing the data to the correct device
-      x, t, y = x.to(device), t.to(device), y.to(device)
+            # WandB (4) - Logging the loss
+            wandb.log({"Training/Loss (Instantaneous)": loss.item()})
 
-      # Forward pass
-      pred = neural_net.forward(x, t)
+            # Optimizing
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-      # Computing the training loss
-      loss_training_batch_total, loss_training_batch_per_day = forecasting_loss(y_true = y,
-                                                                                y_pred = pred,
-                                                                                  mask = bs_mask_with_depth)
+        # WandB (3) - Logging the loss and the epoch
+        wandb.log({"Training/Loss (Averaged Over Batch)": np.mean(mean_loss), "Epoch (Left)": nb_epochs - epoch})
 
-      # Accumulating the total loss, storing losses per day and updating the number of training steps
-      loss_training_total += loss_training_batch_total.item()
-      loss_training_index += 1
-      loss_training_per_day.append([l.item() for l in loss_training_batch_per_day])
+        # Updating the learning rate
+        scheduler.step()
 
-      # AverageNet : No optimization needed !
-      if architecture == "AVERAGE":
-          continue
+        # Computing Metrics
+        if epoch % 50 == 0:
 
-      # Reseting the gradients
-      optimizer.zero_grad()
+            for c, _, x in dataloader_valid:
 
-      # Backward pass
-      loss_training_batch_total.backward()
+                # Pushing to device
+                x, c = x.to(device), c.to(device)
 
-      # Optimizing the parameters
-      optimizer.step()
+                # Generating conditionnal samples
+                forecast = neural_net.generate_samples(x = x, conditioning = c, number_trajectories = 24)
 
-      # Freeing the GPU
-      x, y, t, pred = x.to("cpu"), y.to("cpu"), t.to("cpu"), pred.to("cpu")
+                # Computing Metrics
+                metrics(x.cpu(), forecast.cpu(), black_sea_mask_cs, hypoxia_treshold_standardized)
 
-      # WandB (2.1) - Sending information about the training results
-      wandb.log({f"Training/Loss (T)": loss_training_batch_total.item()})
-      wandb.log({f"Training/Loss (T, {i})": loss.item() for i, loss in enumerate(loss_training_batch_per_day)})
+                # Only on the first batch (= one year of data)
+                break
 
-      # Freeing memory
-      del x, t, y, pred, loss_training_batch_total, loss_training_batch_per_day
+    # Extracting the Neural Network back to CPU
+    neural_net.to("cpu")
 
-    # WandB (2.2) - Sending information about the training results
-    wandb.log({f"Training/Loss (Training): ": loss_training_total / loss_training_index})
-
-    with torch.no_grad():
-
-      # Used to store and compute instantaneous training loss
-      loss_validation_total, loss_validation_per_day, loss_validation_index = 0.0, list(), 0
-
-      # Validating the neural network
-      for x, t, y in dataset_validation:
-
-        # Pushing the data to the correct device
-        x, t, y = x.to(device), t.to(device), y.to(device)
-
-        # Forward pass
-        pred = neural_net.forward(x, t)
-
-        # Computing the validation loss
-        loss_validation_batch_total, loss_validation_batch_per_day = forecasting_loss(y_true = y,
-                                                                                      y_pred = pred,
-                                                                                        mask = bs_mask_with_depth)
-
-        # Accumulating the total loss, storing losses per day and updating the number of training steps
-        loss_validation_total += loss_validation_batch_total.item()
-        loss_validation_index += 1
-        loss_validation_per_day.append([l.item() for l in loss_validation_batch_per_day])
-
-        # Pushing everything back to the CPU
-        x, y, t, pred = x.to("cpu"), y.to("cpu"), t.to("cpu"), pred.to("cpu")
-
-        # WandB (3.1) - Sending information about the validation results
-        wandb.log({f"Training/Loss (V)": loss_validation_batch_total.item()})
-        wandb.log({f"Training/Loss (V, {i})": loss.item() for i, loss in enumerate(loss_validation_batch_per_day)})
-
-        # Computing metrics
-        metrics.analyze(pred, y)
-
-        # Cleaning
-        del x, t, y, pred, loss_validation_batch_total, loss_validation_batch_per_day
-        torch.cuda.empty_cache()
-
-    # Displaying information over terminal
-    print(f"Epoch {epoch + 1}/{nb_epochs} | \
-            Training = {(loss_training_total / loss_training_index)} | \
-            Validation = {(loss_validation_total / loss_validation_index)}")
-
-    # Updating the scheduler
-    scheduler.step()
-
-    # Timing the epoch (2)
-    epoch_time = (time.time() - start)/3600
-
-    # WandB (2.2) - Sending information about the training results
-    wandb.log({f"Training/Loss (Validation): ": loss_validation_total / loss_validation_index,
-               f"Training/Time Left (H)": epoch_time})
-
-    # WandB (2.3) - Computing and sending the results
-    metrics.send_results()
-
-  # Extracting the Neural Network back to CPU
-  neural_net.to("cpu")
-
-  # Finishing the Weight and Biases run
-  wandb.finish()
+    # Finishing the Weight and Biases run
+    wandb.finish()

@@ -1,0 +1,143 @@
+[I 2024-07-24 14:44:34.305 ServerApp] jupyter_lsp | extension was successfully linked.
+[I 2024-07-24 14:44:34.309 ServerApp] jupyter_server_terminals | extension was successfully linked.
+[I 2024-07-24 14:44:34.312 ServerApp] jupyterlab | extension was successfully linked.
+[I 2024-07-24 14:44:34.516 ServerApp] notebook_shim | extension was successfully linked.
+[W 2024-07-24 14:44:34.544 ServerApp] WARNING: The Jupyter server is listening on all IP addresses and not using encryption. This is not recommended.
+[I 2024-07-24 14:44:34.545 ServerApp] notebook_shim | extension was successfully loaded.
+[I 2024-07-24 14:44:34.546 ServerApp] jupyter_lsp | extension was successfully loaded.
+[I 2024-07-24 14:44:34.547 ServerApp] jupyter_server_terminals | extension was successfully loaded.
+[I 2024-07-24 14:44:34.549 LabApp] JupyterLab extension loaded from /gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/jupyterlab
+[I 2024-07-24 14:44:34.549 LabApp] JupyterLab application directory is /gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/share/jupyter/lab
+[I 2024-07-24 14:44:34.550 LabApp] Extension Manager is 'pypi'.
+[I 2024-07-24 14:44:34.559 ServerApp] jupyterlab | extension was successfully loaded.
+[I 2024-07-24 14:44:34.559 ServerApp] Serving notebooks from local directory: /gpfs/home/acad/ulg-mast/vmangele/ESA---Black-Sea-Deoxygenation
+[I 2024-07-24 14:44:34.559 ServerApp] Jupyter Server 2.14.1 is running at:
+[I 2024-07-24 14:44:34.559 ServerApp] http://localhost:8888/lab?token=3597a02cd68cbb644b3dde46cb1b9b890ef4edbb00131fb0
+[I 2024-07-24 14:44:34.559 ServerApp]     http://127.0.0.1:8888/lab?token=3597a02cd68cbb644b3dde46cb1b9b890ef4edbb00131fb0
+[I 2024-07-24 14:44:34.559 ServerApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+[C 2024-07-24 14:44:34.563 ServerApp] 
+    
+    To access the server, open this file in a browser:
+        file:///gpfs/home/acad/ulg-mast/vmangele/.local/share/jupyter/runtime/jpserver-246783-open.html
+    Or copy and paste one of these URLs:
+        http://localhost:8888/lab?token=3597a02cd68cbb644b3dde46cb1b9b890ef4edbb00131fb0
+        http://127.0.0.1:8888/lab?token=3597a02cd68cbb644b3dde46cb1b9b890ef4edbb00131fb0
+[I 2024-07-24 14:44:34.581 ServerApp] Skipped non-installed server(s): bash-language-server, dockerfile-language-server-nodejs, javascript-typescript-langserver, jedi-language-server, julia-language-server, pyright, python-language-server, python-lsp-server, r-languageserver, sql-language-server, texlab, typescript-language-server, unified-language-server, vscode-css-languageserver-bin, vscode-html-languageserver-bin, vscode-json-languageserver-bin, yaml-language-server
+[W 2024-07-24 14:45:01.324 ServerApp] 404 GET /hub/api (@10.91.0.2) 18.57ms referer=None
+[I 2024-07-24 14:45:01.328 ServerApp] 302 GET / (@10.91.0.2) 0.51ms
+[I 2024-07-24 14:45:01.330 LabApp] 302 GET /lab? (@10.91.0.2) 0.32ms
+[W 2024-07-24 14:45:01.981 ServerApp] 404 GET /hub/api (@10.91.0.2) 1.23ms referer=None
+[I 2024-07-24 14:45:01.983 ServerApp] 302 GET / (@10.91.0.2) 0.18ms
+[I 2024-07-24 14:45:01.985 LabApp] 302 GET /lab? (@10.91.0.2) 0.24ms
+[W 2024-07-24 14:45:06.848 ServerApp] 404 GET /hub/api (@10.91.0.2) 1.21ms referer=None
+[I 2024-07-24 14:45:06.850 ServerApp] 302 GET / (@10.91.0.2) 0.18ms
+[I 2024-07-24 14:45:06.853 LabApp] 302 GET /lab? (@10.91.0.2) 0.26ms
+[I 2024-07-24 14:45:06.889 ServerApp] Kernel started: f4f48196-de5e-457e-93b0-eaec52f97b6f
+[I 2024-07-24 14:45:07.247 ServerApp] Connecting to kernel f4f48196-de5e-457e-93b0-eaec52f97b6f.
+[W 2024-07-24 14:45:07.395 ServerApp] 404 GET /hub/api (@10.91.0.2) 0.70ms referer=None
+[I 2024-07-24 14:45:07.466 ServerApp] 302 GET / (@10.91.0.2) 0.28ms
+[I 2024-07-24 14:45:07.523 LabApp] 302 GET /lab? (@10.91.0.2) 0.46ms
+[W 2024-07-24 14:45:07.660 ServerApp] wrote error: 'Forbidden'
+    Traceback (most recent call last):
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 1788, in _execute
+        result = method(*self.path_args, **self.path_kwargs)
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 3289, in wrapper
+        url = self.get_login_url()
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/jupyter_server/base/handlers.py", line 783, in get_login_url
+        raise web.HTTPError(403)
+    tornado.web.HTTPError: HTTP 403: Forbidden
+[W 2024-07-24 14:45:07.697 ServerApp] 403 GET /api/kernelspecs?1721825107657 (@10.91.0.2) 37.01ms referer=None
+[W 2024-07-24 14:45:07.698 ServerApp] wrote error: 'Forbidden'
+    Traceback (most recent call last):
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 1788, in _execute
+        result = method(*self.path_args, **self.path_kwargs)
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 3289, in wrapper
+        url = self.get_login_url()
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/jupyter_server/base/handlers.py", line 783, in get_login_url
+        raise web.HTTPError(403)
+    tornado.web.HTTPError: HTTP 403: Forbidden
+[W 2024-07-24 14:45:07.698 ServerApp] 403 GET /api/kernels?1721825107658 (@10.91.0.2) 0.87ms referer=None
+[W 2024-07-24 14:45:07.698 ServerApp] wrote error: 'Forbidden'
+    Traceback (most recent call last):
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 1788, in _execute
+        result = method(*self.path_args, **self.path_kwargs)
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 3289, in wrapper
+        url = self.get_login_url()
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/jupyter_server/base/handlers.py", line 783, in get_login_url
+        raise web.HTTPError(403)
+    tornado.web.HTTPError: HTTP 403: Forbidden
+[W 2024-07-24 14:45:07.698 ServerApp] 403 GET /api/kernels?1721825107660 (@10.91.0.2) 1.11ms referer=None
+[W 2024-07-24 14:45:07.698 ServerApp] wrote error: 'Forbidden'
+    Traceback (most recent call last):
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 1788, in _execute
+        result = method(*self.path_args, **self.path_kwargs)
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 3289, in wrapper
+        url = self.get_login_url()
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/jupyter_server/base/handlers.py", line 783, in get_login_url
+        raise web.HTTPError(403)
+    tornado.web.HTTPError: HTTP 403: Forbidden
+[W 2024-07-24 14:45:07.699 ServerApp] 403 GET /api/sessions?1721825107661 (@10.91.0.2) 1.30ms referer=None
+[W 2024-07-24 14:45:07.703 ServerApp] wrote error: 'Forbidden'
+    Traceback (most recent call last):
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 1788, in _execute
+        result = method(*self.path_args, **self.path_kwargs)
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 3289, in wrapper
+        url = self.get_login_url()
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/jupyter_server/base/handlers.py", line 783, in get_login_url
+        raise web.HTTPError(403)
+    tornado.web.HTTPError: HTTP 403: Forbidden
+[W 2024-07-24 14:45:07.703 ServerApp] 403 GET /api/kernelspecs?1721825107697 (@10.91.0.2) 0.50ms referer=None
+[W 2024-07-24 14:45:07.704 ServerApp] 404 GET /hub/api (@10.91.0.2) 0.57ms referer=None
+[I 2024-07-24 14:45:07.706 ServerApp] 302 GET / (@10.91.0.2) 0.18ms
+[I 2024-07-24 14:45:07.707 LabApp] 302 GET /lab? (@10.91.0.2) 0.25ms
+[W 2024-07-24 14:45:07.712 ServerApp] wrote error: 'Forbidden'
+    Traceback (most recent call last):
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 1788, in _execute
+        result = method(*self.path_args, **self.path_kwargs)
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 3289, in wrapper
+        url = self.get_login_url()
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/jupyter_server/base/handlers.py", line 783, in get_login_url
+        raise web.HTTPError(403)
+    tornado.web.HTTPError: HTTP 403: Forbidden
+[W 2024-07-24 14:45:07.712 ServerApp] 403 GET /api/kernelspecs?1721825107710 (@10.91.0.2) 0.44ms referer=None
+[W 2024-07-24 14:45:07.715 ServerApp] wrote error: 'Forbidden'
+    Traceback (most recent call last):
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 1788, in _execute
+        result = method(*self.path_args, **self.path_kwargs)
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 3289, in wrapper
+        url = self.get_login_url()
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/jupyter_server/base/handlers.py", line 783, in get_login_url
+        raise web.HTTPError(403)
+    tornado.web.HTTPError: HTTP 403: Forbidden
+[W 2024-07-24 14:45:07.715 ServerApp] 403 GET /api/kernels?1721825107711 (@10.91.0.2) 0.45ms referer=None
+[W 2024-07-24 14:45:07.715 ServerApp] wrote error: 'Forbidden'
+    Traceback (most recent call last):
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 1788, in _execute
+        result = method(*self.path_args, **self.path_kwargs)
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 3289, in wrapper
+        url = self.get_login_url()
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/jupyter_server/base/handlers.py", line 783, in get_login_url
+        raise web.HTTPError(403)
+    tornado.web.HTTPError: HTTP 403: Forbidden
+[W 2024-07-24 14:45:07.715 ServerApp] 403 GET /api/kernels?1721825107712 (@10.91.0.2) 0.43ms referer=None
+[W 2024-07-24 14:45:07.716 ServerApp] wrote error: 'Forbidden'
+    Traceback (most recent call last):
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 1788, in _execute
+        result = method(*self.path_args, **self.path_kwargs)
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 3289, in wrapper
+        url = self.get_login_url()
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/jupyter_server/base/handlers.py", line 783, in get_login_url
+        raise web.HTTPError(403)
+    tornado.web.HTTPError: HTTP 403: Forbidden
+[W 2024-07-24 14:45:07.716 ServerApp] 403 GET /api/sessions?1721825107712 (@10.91.0.2) 0.49ms referer=None
+[W 2024-07-24 14:45:07.716 ServerApp] wrote error: 'Forbidden'
+    Traceback (most recent call last):
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 1788, in _execute
+        result = method(*self.path_args, **self.path_kwargs)
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/tornado/web.py", line 3289, in wrapper
+        url = self.get_login_url()
+      File "/gpfs/home/acad/ulg-mast/vmangele/micromamba/envs/esa_diffusion/lib/python3.9/site-packages/jupyter_server/base/handlers.py", line 783, in get_login_url
+        raise web.HTTPError(403)
+    tornado.web.HTTPError: HTTP 403: Forbidden
+[W 2024-07-24 14:45:07.717 ServerApp] 403 GET /api/kernelspecs?1721825107713 (@10.91.0.2) 0.46ms referer=None
+slurmstepd: error: *** JOB 4921205 ON cna049 CANCELLED AT 2024-07-24T15:44:43 DUE TO TIME LIMIT ***

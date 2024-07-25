@@ -1,47 +1,40 @@
 #!/bin/bash
-# -------------------------------------------------------
+# -------------------------------------------------------------
 #
 #        |
-#       / \
-#      / _ \                  ESA - PROJECT
-#     |.o '.|
-#     |'._.'|          BLACK SEA DEOXYGENATION EMULATOR
-#     |     |
-#   ,'|  |  |`.             BY VICTOR MANGELEER
-#  /  |  |  |  \
-#  |,-'--|--'-.|                2023-2024
+#       / \                 ESA - MITHO PROJECT
+#      / _ \
+#     |.o '.|      "GENERATIVE MODELS FOR HYPOXIA FORECASTING"
+#     |'._.'|
+#     |     |               by VICTOR MANGELEER
+#   ,'|  |  |`.
+#  /  |  |  |  \                2023-2024
+#  |,-'--|--'-.|
 #
-#
-# -------------------------------------------------------
-#
-# Documentation
-# -------------
-# A Submission script to create a notebook instance !
-#
-#     /!\   Don't forget to activate your conda environment before running this script   /!\
+# --------------------------------------------------------------
+# https://eo4society.esa.int/projects/mitho/
 #
 # --------------
 # Job parameters
 # --------------
 #SBATCH --account=bsmfc
 #SBATCH --job-name=JUPYTER
-#SBATCH --time=48:00:00
+#SBATCH --time=01:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gpus=1
 #SBATCH --mem=60G
-#SBATCH --partition=ia
+#SBATCH --partition=debug-gpu
 #SBATCH --output=../logs/jupiter_notebook.log
+#SBATCH --error=../logs/jupiter_notebook.err
 #SBATCH --mail-user=vmangeleer@uliege.be
 #SBATCH --mail-type=FAIL
 #
-# ---------------
-# Loading modules
-# ---------------
-module purge
-
 # ----
 # Main
 # ----
+# Removing all the modules previously loaded
+module purge
+
 # Creating an instance of the jupyter notebook
 jupyter lab --ip='*' --notebook-dir=~/ESA---Black-Sea-Deoxygenation/ --no-browser --port 8888

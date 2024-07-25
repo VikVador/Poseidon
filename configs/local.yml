@@ -1,17 +1,17 @@
-# -------------------------------------------------------
+# -------------------------------------------------------------
 #
 #        |
-#       / \
-#      / _ \                  ESA - PROJECT
-#     |.o '.|
-#     |'._.'|          BLACK SEA DEOXYGENATION EMULATOR
-#     |     |
-#   ,'|  |  |`.             BY VICTOR MANGELEER
-#  /  |  |  |  \
-#  |,-'--|--'-.|                2023-2024
+#       / \                 ESA - MITHO PROJECT
+#      / _ \
+#     |.o '.|      "GENERATIVE MODELS FOR HYPOXIA FORECASTING"
+#     |'._.'|
+#     |     |               by VICTOR MANGELEER
+#   ,'|  |  |`.
+#  /  |  |  |  \                2023-2024
+#  |,-'--|--'-.|
 #
-#
-# -------------------------------------------------------
+# --------------------------------------------------------------
+# https://eo4society.esa.int/projects/mitho/
 #
 # Documentation
 # -------------
@@ -20,18 +20,21 @@
 config:
 
   # WandB
-  "Project"             : "ESA - Local (Diffusion)"
+  "Project"             : "ESA - Local V3 (Diffusion)"
   "Mode"                : "online"
 
   # Data
-  "Window (Inputs)"     : 1
+  "Window (Inputs)"     : 3
   "Window (Outputs)"    : 10
-  "Frequencies"         : 128
-  "Scaling"             : 2
 
-  # Model & Training
-  "Architecture"        : "UNET"
-  "Number of Gaussians" : 2
+  # Model
+  "Scaling"             : 1
+  "Frequencies"         : 32
+
+  # Training
+  "Diffusion Steps"     : 5
+  "Diffusion Scheduler" : 0.0125
+  "Diffusion Variance"  : 0.005
   "Epochs"              : 10
   "Batch Size"          : 16
   "Learning Rate"       : 0.0001
