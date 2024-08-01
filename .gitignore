@@ -1,5 +1,6 @@
 # Garbage
 *.DS_Store
+*.zarr
 
 # Keeping DAGWZ on cluster
 src/debs/.dawgz/

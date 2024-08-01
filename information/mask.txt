@@ -1,1 +1,0 @@
-{"cluster": "../../../../../../../projects/acad/bsmfc/nemo4.2.0/BSFS/", "local": "../../data/", "mask": "mesh_mask.nc_new59_CMCC_noAzov"}
