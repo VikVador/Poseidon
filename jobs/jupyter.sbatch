@@ -26,7 +26,6 @@
 #SBATCH --mem=120G
 #SBATCH --partition=ia
 #SBATCH --output=../logs/jupiter_notebook.log
-#SBATCH --error=../logs/jupiter_notebook.err
 #SBATCH --mail-user=vmangeleer@uliege.be
 #SBATCH --mail-type=FAIL
 #

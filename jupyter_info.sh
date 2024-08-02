@@ -1,22 +1,17 @@
-#!/bin/bash
-# -------------------------------------------------------
+# -------------------------------------------------------------
 #
 #        |
-#       / \
-#      / _ \                  ESA - PROJECT
-#     |.o '.|
-#     |'._.'|          BLACK SEA DEOXYGENATION EMULATOR
-#     |     |
-#   ,'|  |  |`.             BY VICTOR MANGELEER
-#  /  |  |  |  \
-#  |,-'--|--'-.|                2023-2024
+#       / \                 ESA - MITHO PROJECT
+#      / _ \
+#     |.o '.|      "GENERATIVE MODELS FOR HYPOXIA FORECASTING"
+#     |'._.'|
+#     |     |               by VICTOR MANGELEER
+#   ,'|  |  |`.
+#  /  |  |  |  \                2023-2024
+#  |,-'--|--'-.|
 #
-#
-# -------------------------------------------------------
-#
-# Documentation
-# -------------
-# A script to extract (for me because I am lazy) the jupyter notebook access link
+# --------------------------------------------------------------
+# https://eo4society.esa.int/projects/mitho/
 #
 # Prints the link to the jupyter notebook
 grep "http://localhost:8888/lab?token=" logs/jupiter_notebook.log | awk '{print $NF}'

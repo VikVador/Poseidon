@@ -1,9 +1,8 @@
 # Garbage
 *.DS_Store
 *.zarr
-
-# Keeping DAGWZ on cluster
-src/debs/.dawgz/
+logs/*.err
+logs/*.log
 
 # Data folder is available only to work locally
 data/
@@ -21,8 +20,8 @@ __pycache__/
 *.gif
 
 # Weight and biases
-src/debs/wandb/
-notebooks/wandb/
+poseidon/wandb/
+poseidon/.dawgz/
 
 # Distribution / packaging
 .Python
