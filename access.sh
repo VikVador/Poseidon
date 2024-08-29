@@ -14,7 +14,7 @@
 # https://eo4society.esa.int/projects/mitho/
 #
 # Prints the link to the jupyter notebook
-grep "http://localhost:8888/lab?token=" logs/jupiter_notebook.log | awk '{print $NF}'
+grep "http://localhost:8888/lab?token=" cluster/logs/jupiter_notebook.log | awk '{print $NF}'
 
 # Print the ssh command to connect to the jupyter notebook
 node=$(squeue --me | awk 'NR>1 {print $8}')
