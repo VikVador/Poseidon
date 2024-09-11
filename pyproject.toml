@@ -1,0 +1,45 @@
+[project]
+name = "poseidon"
+version = "0.0.0"
+dependencies = [
+  "bottleneck==1.4.0",
+  "dask==2024.6.2",
+  "einops==0.8.0",
+  "numpy==1.26.4",
+  "torch==2.3.1",
+  "torchvision==0.18.1",
+  "tqdm==4.66.4",
+  "xarray==2024.6.0",
+  "zarr==2.18.2",
+]
+
+[project.optional-dependencies]
+all = [
+  "dawgz==0.5.2",
+  "jupyterlab==4.2.2",
+  "ipykernel==6.29.5",
+  "matplotlib==3.9.0",
+  "pre-commit==3.7.1",
+  "pytest==8.2.2",
+  "ruff==0.4.8",
+  "wandb==0.17.1",
+]
+
+[tool.ruff]
+extend-include = ["*.ipynb"]
+line-length = 99
+
+[tool.ruff.lint]
+extend-select = ["B", "I", "W"]
+ignore = ["E731", "E741"]
+
+[tool.ruff.lint.isort]
+lines-between-types = 1
+no-sections = true
+relative-imports-order = "closest-to-furthest"
+
+[tool.ruff.format]
+preview = true
+
+[tool.setuptools.packages.find]
+include = ["poseidon*"]

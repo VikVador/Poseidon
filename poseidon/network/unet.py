@@ -310,7 +310,11 @@ class UNet(nn.Module):
             else:
                 do.insert(0, ConvNd(in_channels, hid_channels[i], **kwargs))
                 up.append(
-                    ConvNd(hid_channels[i], out_channels, kernel_size=(1,) * len(kernel_size))
+                    ConvNd(
+                        hid_channels[i],
+                        out_channels,
+                        kernel_size=(1,) * len(kernel_size),
+                    )
                 )
 
             if i + 1 < len(hid_blocks):

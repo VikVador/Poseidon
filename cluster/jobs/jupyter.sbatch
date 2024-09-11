@@ -36,4 +36,4 @@
 module purge
 
 # Creating an instance of the jupyter notebook
-jupyter lab --ip='*' --notebook-dir=~/ESA---Black-Sea-Deoxygenation/ --no-browser --port 8888
+jupyter lab --ip='*' --notebook-dir=~/poseidon/ --no-browser --port 8888
