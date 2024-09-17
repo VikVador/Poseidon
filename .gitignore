@@ -4,6 +4,11 @@
 logs/*.err
 logs/*.log
 
+# Macbook
+scripts/.dawgz/
+scripts/wandb
+wandb/
+
 # Data folder is available only to work locally
 data/
 
@@ -14,6 +19,7 @@ __pycache__/
 
 # C extensions
 *.so
+
 
 # Images
 *.png

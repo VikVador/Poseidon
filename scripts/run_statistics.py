@@ -6,16 +6,17 @@ from dawgz import Job, schedule
 
 # isort: split
 from poseidon.config import POSEIDON_STAT
-from poseidon.data.statistics import compute_statistics
 from poseidon.data.const import (
     DATASET_TRAINING_DATE_END,
     DATASET_TRAINING_DATE_START,
     DATASET_VARIABLES,
 )
-
+from poseidon.data.statistics import compute_statistics
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Pre-compute statistics over a Black Sea dataset.")
+    parser = argparse.ArgumentParser(
+        description="Pre-compute statistics over a Black Sea dataset."
+    )
 
     parser.add_argument(
         "--output_path",
@@ -78,7 +79,7 @@ if __name__ == "__main__":
             cpus=4,
             mem="128GB",
             name="POSEIDON-STATS",
-            time="00-00:10:00",
+            time="00-04:00:00",
             account="bsmfc",
             partition="batch",
         ),

@@ -11,10 +11,6 @@ dependencies = [
   "tqdm==4.66.4",
   "xarray==2024.6.0",
   "zarr==2.18.2",
-]
-
-[project.optional-dependencies]
-all = [
   "dawgz==0.5.2",
   "jupyterlab==4.2.2",
   "ipykernel==6.29.5",
