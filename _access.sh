@@ -1,18 +1,3 @@
-# -------------------------------------------------------------
-#
-#        |
-#       / \                 ESA - MITHO PROJECT
-#      / _ \
-#     |.o '.|      "GENERATIVE MODELS FOR HYPOXIA FORECASTING"
-#     |'._.'|
-#     |     |               by VICTOR MANGELEER
-#   ,'|  |  |`.
-#  /  |  |  |  \                2023-2024
-#  |,-'--|--'-.|
-#
-# --------------------------------------------------------------
-# https://eo4society.esa.int/projects/mitho/
-#
 # Prints the link to the jupyter notebook
 grep "http://localhost:8888/lab?token=" cluster/logs/jupiter_notebook.log | awk '{print $NF}'
 

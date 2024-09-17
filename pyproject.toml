@@ -19,6 +19,7 @@ dependencies = [
   "pytest==8.2.2",
   "ruff==0.4.8",
   "wandb==0.17.1",
+  "netCDF4==1.7.0",
 ]
 
 [tool.ruff]
