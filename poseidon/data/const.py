@@ -1,0 +1,21 @@
+r"""Custom Black Sea dataset information (1980 to 2022)."""
+
+
+DATASET_TRAINING_DATE_START   = "1995-01"
+DATASET_TRAINING_DATE_END     = "2015-12"
+
+DATASET_VALIDATION_DATE_START = "2016-01"
+DATASET_VALIDATION_DATE_END   = "2019-12"
+
+DATASET_TESTING_DATE_START    = "2020-01"
+DATASET_TESTING_DATE_END      = "2022-12"
+
+
+DATASET_VARIABLES = [
+    "DOX",
+    "CHL",
+    "ssh",
+    "votemper",
+    "vosaline",
+    "rho",
+]
