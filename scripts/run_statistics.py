@@ -10,6 +10,7 @@ from poseidon.data.const import (
     DATASET_TRAINING_DATE_END,
     DATASET_TRAINING_DATE_START,
     DATASET_VARIABLES,
+    DATASET_VARIABLES_CLIPPING,
 )
 from poseidon.data.statistics import compute_statistics
 
@@ -71,18 +72,18 @@ if __name__ == "__main__":
             end_date=args.date_end,
             wandb_mode="online" if args.use_wandb else "disabled",
             variables=args.variables,
+            variables_clipping=DATASET_VARIABLES_CLIPPING,
         )
 
     schedule(
         Job(
             dawgz_statistics,
-            cpus=4,
+            cpus=8,
             mem="128GB",
-            gpus=1,
             name="POSEIDON-STATS",
-            time="00-01:00:00",
+            time="01-00:00:00",
             account="bsmfc",
-            partition="ia",
+            partition="shared",
         ),
         name="POSEIDON-STATS",
         export="ALL",

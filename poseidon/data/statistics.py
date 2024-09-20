@@ -3,11 +3,12 @@ import wandb
 import xarray as xr
 
 from pathlib import Path
-from poseidon.utils import generate_paths
-from typing import Optional, Sequence
+from typing import Dict, Optional, Sequence, Tuple
 
 # isort: split
 from poseidon.config import POSEIDON_MASK
+from poseidon.data.preprocessing import preprocess_sample
+from poseidon.utils import generate_paths
 
 
 class PoseidonStatistics:
@@ -16,73 +17,41 @@ class PoseidonStatistics:
     one-pass algorithm."""
 
     def __init__(self):
-        self.ds_sum = None
-        self.ds_sum_squared = None
+        self.mu = None
+        self.mu_squared = None
         self.total_count = None
+        self.eps = 1e-32
 
     def update(self, dataset: xr.Dataset) -> None:
         r"""Update the current statistics with new data."""
 
-        # Compute sums for the current dataset over the time dimension
-        current_sum = dataset.sum(dim="time", skipna=True)
-        current_sum_squared = (dataset**2).sum(dim="time", skipna=True)
-        current_count = dataset.count(dim=["time", "latitude", "longitude"])
+        # Computing current batch statistics
+        dimensions = ["time", "latitude", "longitude"]
+        batch_mu = dataset.mean(dim=dimensions, skipna=True)
+        batch_mu_squared = (dataset**2).mean(dim=dimensions, skipna=True)
+        batch_count = dataset.count(dim=dimensions)
 
-        # Initialize or update the statistics
-        if self.ds_sum is None:
-            self.ds_sum = current_sum
-            self.ds_sum_squared = current_sum_squared
-            self.total_count = current_count
+        # Initialization
+        if self.mu is None:
+            self.mu = batch_mu
+            self.mu_squared = batch_mu_squared
+            self.total_count = batch_count
+
+        # Update
         else:
-            self.ds_sum += current_sum
-            self.ds_sum_squared += current_sum_squared
-            self.total_count += current_count
+            const_1 = self.total_count / (self.total_count + batch_count)
+            const_2 = batch_count / (self.total_count + batch_count)
+            self.mu = const_1 * self.mu + const_2 * batch_mu
+            self.mu_squared = const_1 * self.mu_squared + const_2 * batch_mu_squared
+            self.total_count += batch_count
 
     def get_mean(self) -> xr.Dataset:
         r"""Compute the mean of the accumulated dataset."""
-        return (self.ds_sum.sum(dim=["latitude", "longitude"], skipna=True) / self.total_count).fillna(0)
+        return self.mu.fillna(0)
 
     def get_standard_deviation(self) -> xr.Dataset:
         r"""Compute the standard deviation of the accumulated dataset."""
-        return np.sqrt(
-            (
-                self.ds_sum_squared.sum(dim=["latitude", "longitude"], skipna=True)
-                / self.total_count
-            )
-            - (self.get_mean() ** 2)
-        ).fillna(1)
-
-def _preprocess_sample_for_statistics(
-    dataset: xr.Dataset, mask: xr.Dataset, variables: Optional[Sequence[str]] = None
-) -> xr.Dataset:
-    r"""Filters an xarray dataset by retaining specific variables,
-        removing unused variables, renaming dimensions, and setting
-        appropriate attributes.
-
-    Arguments:
-        dataset: The input xarray dataset to be filtered.
-        mask: Mask to apply to the dataset.
-        variables: A list of variable names to retain.
-
-    Returns:
-        xr.Dataset: A new filtered dataset with renamed dimensions and updated attributes.
-    """
-
-    if variables is not None:
-        dataset = dataset[variables]
-    unused_vars = ["time_centered", "time_instant", "nav_lat", "nav_lon"]
-    dataset = dataset.drop_vars(unused_vars)
-    dataset = dataset.rename({
-        "x": "longitude",
-        "y": "latitude",
-        "deptht": "level",
-        "time_counter": "time",
-    })
-
-    # Broadcast the mask to the dataset time dimension
-    mask = mask.expand_dims(dim="time", axis=0)
-    mask = xr.concat([mask for _ in range(dataset.time.size)], dim="time")
-    return dataset.where(mask["mask"] != 0)
+        return np.sqrt(self.mu_squared - self.mu**2).fillna(1).clip(min=self.eps)
 
 
 def compute_statistics(
@@ -91,6 +60,7 @@ def compute_statistics(
     end_date: str,
     wandb_mode: str,
     variables: Optional[Sequence[str]] = None,
+    variables_clipping: Optional[Dict[str, Tuple[int, int]]] = None,
 ) -> None:
     r"""Computes mean and standard deviation for a dataset and saves the results to Zarr format.
 
@@ -100,6 +70,8 @@ def compute_statistics(
         end_date: End date for the data range in 'YYYY-MM' format.
         wandb_mode: Mode for wandb (e.g., 'online', 'offline').
         variables: List of variable names to retain from the dataset.
+        variables_clipping: Dictionary of variables and their respective min and max values.
+
     """
 
     wandb.init(project="Poseidon-Statistics", mode=wandb_mode)
@@ -108,24 +80,25 @@ def compute_statistics(
     processing_data = False
 
     for date, path in paths.items():
-        # Temporal Checking (1)
+        # -- Temporal Check (1) --
         if date == start_date:
             processing_data = True
         if not processing_data:
             continue
 
         # Load and preprocess dataset
-        dataset = _preprocess_sample_for_statistics(
+        dataset = preprocess_sample(
             dataset=xr.open_mfdataset(path, combine="by_coords", engine="netcdf4"),
             mask=xr.open_zarr(POSEIDON_MASK),
             variables=variables,
+            variables_clipping=variables_clipping,
         )
 
         # Update statistics with current dataset
         stats_calculator.update(dataset)
         wandb.log({"Progress/Year": int(date[:4]), "Progress/Month": int(date[5:])})
 
-        # Temporal Checking (2)
+        # -- Temporal Check (2) --
         if date == end_date:
             break
 
@@ -138,5 +111,8 @@ def compute_statistics(
     )
     stats_ds = stats_ds.assign_coords(statistic=["mean", "std"])
     stats_ds.attrs.update({"Date (Start)": start_date, "Date (End)": end_date})
+
+    # Fixing chuncks for better performance
+    stats_ds = stats_ds.chunk({"level": 1})
     stats_ds.to_zarr(output_path, mode="w")
     wandb.finish()

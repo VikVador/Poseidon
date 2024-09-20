@@ -9,8 +9,6 @@ scripts/.dawgz/
 scripts/wandb
 wandb/
 
-# Data folder is available only to work locally
-data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
