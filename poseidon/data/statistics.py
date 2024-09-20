@@ -111,8 +111,5 @@ def compute_statistics(
     )
     stats_ds = stats_ds.assign_coords(statistic=["mean", "std"])
     stats_ds.attrs.update({"Date (Start)": start_date, "Date (End)": end_date})
-
-    # Fixing chuncks for better performance
-    stats_ds = stats_ds.chunk({"level": 1})
     stats_ds.to_zarr(output_path, mode="w")
     wandb.finish()

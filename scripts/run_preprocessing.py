@@ -10,6 +10,8 @@ from poseidon.config import (
     POSEIDON_STAT,
 )
 from poseidon.data.const import (
+    DATASET_TESTING_DATE_END,
+    DATASET_TRAINING_DATE_START,
     DATASET_VARIABLES,
     DATASET_VARIABLES_CLIPPING,
     DATASET_VARIABLES_SURFACE,
@@ -37,12 +39,14 @@ if __name__ == "__main__":
         "--date_start",
         "-ds",
         type=str,
+        default=DATASET_TRAINING_DATE_START,
         help="Start date (YYYY-MM).",
     )
     parser.add_argument(
         "--date_end",
         "-de",
         type=str,
+        default=DATASET_TESTING_DATE_END,
         help="End date (YYYY-MM).",
     )
     parser.add_argument(
@@ -85,10 +89,10 @@ if __name__ == "__main__":
     schedule(
         Job(
             dawgz_preprocessing_data,
-            cpus=8,
-            mem="128GB",
+            cpus=16,
+            mem="256GB",
             name="POSEIDON-PREPROCESSING",
-            time="00-00:10:00",
+            time="05-00:00:00",
             account="bsmfc",
             partition="shared",
         ),

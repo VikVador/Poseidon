@@ -14,7 +14,7 @@ PROJECT_FILE_MASK = PROJECT / "BSFS" / "mesh_mask.nc_new59_CMCC_noAzov"
 SCRATCH = Path("/gpfs/scratch/acad/bsmfc/victor/")
 POSEIDON = SCRATCH / "poseidon"
 
-POSEIDON_DATA = SCRATCH / "data" / "deep_learning_black_sea_3D.zarr"
+POSEIDON_DATA = SCRATCH / "data" / "deep_learning_black_sea_3D_1995_2022.zarr"
 POSEIDON_STAT = POSEIDON / "statistics" / "statistics.zarr"
 POSEIDON_PTRC = POSEIDON / "paths" / "ptrc_T.txt"
 POSEIDON_GRID = POSEIDON / "paths" / "grid_T.txt"
