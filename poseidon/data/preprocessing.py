@@ -116,6 +116,7 @@ def compute_preprocessed_dataset(
         dataset.to_zarr(
             output_path, mode=xarray_mode, append_dim="time"
         ) if xarray_mode == "a" else dataset.to_zarr(output_path, mode=xarray_mode)
+        dataset.close()
         wandb.log({"Progress/Year": int(date[:4]), "Progress/Month": int(date[5:])})
 
         # -- Temporal Check (2) --

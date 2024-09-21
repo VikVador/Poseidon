@@ -45,6 +45,11 @@ class PoseidonStatistics:
             self.mu_squared = const_1 * self.mu_squared + const_2 * batch_mu_squared
             self.total_count += batch_count
 
+        # Loading into memory
+        self.mu.load()
+        self.mu_squared.load()
+        self.total_count.load()
+
     def get_mean(self) -> xr.Dataset:
         r"""Compute the mean of the accumulated dataset."""
         return self.mu.fillna(0)
@@ -97,6 +102,7 @@ def compute_statistics(
         # Update statistics with current dataset
         stats_calculator.update(dataset)
         wandb.log({"Progress/Year": int(date[:4]), "Progress/Month": int(date[5:])})
+        dataset.close()
 
         # -- Temporal Check (2) --
         if date == end_date:
