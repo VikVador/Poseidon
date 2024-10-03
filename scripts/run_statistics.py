@@ -1,4 +1,4 @@
-r"""Script to compute statistics over a dataset."""
+r"""Scripts - Computes statistics over a dataset."""
 
 import argparse
 

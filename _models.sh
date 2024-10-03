@@ -1,0 +1,1 @@
+rm -r /gpfs/scratch/acad/bsmfc/victor/poseidon/models/*

@@ -1,6 +1,6 @@
-r"""Custom Black Sea dataset information (1980 to 2022)."""
+r"""Data - Custom Black Sea dataset information (1980 to 2022)."""
 
-# -- Information --
+# -- Global Information --
 #
 DATASET_TRAINING_DATE_START = "1995-01"
 DATASET_TRAINING_DATE_END = "2015-12"
@@ -32,3 +32,24 @@ DATASET_VARIABLES_CLIPPING = {
 DATASET_VARIABLES_SURFACE = [
     "ssh",
 ]
+
+# -- Datasets & Dataloader --
+#
+# Dimensions:
+# - Level = 59
+# - Latitude = 258
+# - Longitude = 578
+#
+DATASET_NAN_FILL = 0
+
+DATASET_REGION = {
+    "latitude": slice(0, 256),
+    "longitude": slice(0, 576),
+    "level": slice(0, 56),
+}
+
+TOY_DATASET_REGION = {
+    "latitude": slice(0, 128),
+    "longitude": slice(50, 178),
+    "level": slice(0, 16),
+}

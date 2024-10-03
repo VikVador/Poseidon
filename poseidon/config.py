@@ -1,4 +1,4 @@
-r"""Configs for the project."""
+r"""Poseidon - Complete path library."""
 
 from pathlib import Path
 
@@ -20,3 +20,4 @@ POSEIDON_PTRC = POSEIDON / "paths" / "ptrc_T.txt"
 POSEIDON_GRID = POSEIDON / "paths" / "grid_T.txt"
 POSEIDON_MASK = POSEIDON / "mask.zarr"
 POSEIDON_MESH = POSEIDON / "mesh.zarr"
+POSEIDON_MODEL = POSEIDON / "models"

@@ -1,4 +1,4 @@
-r"""A script to preprocess the data (standardization, fixing nans, ...)."""
+r"""Scripts - Preprocess the data (standardization, fixing nans, ...)."""
 
 import argparse
 

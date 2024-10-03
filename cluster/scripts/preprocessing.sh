@@ -3,7 +3,7 @@
 #               DON'T FORGET TO ACTIVATE ENVIRONMENT
 #
 # Moving to source code directory
-cd ../poseidon
+cd ../../scripsposeidon
 
 # Preprocessing data
 python preprocessing.py  --year_start 2010 --year_end 2014 --foldername training   --dawgz 1 --useWandb 1 --useCustomRegion 1 --saveMask 1

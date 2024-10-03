@@ -1,0 +1,36 @@
+# A config file for training a model
+
+Problem:
+  Toy_problem: true
+
+Dataloader:
+  batch_size: 1
+  shuffle_training: true
+  trajectory_size: 4
+
+Backbone:
+  k: 1
+
+# --- Training Config ---
+#
+Training:
+  Learning Rate: 0.0001
+  Number of Epochs: 100
+  Save Frequency: 10
+
+Neural Network:
+  dropout: null
+  emb_features: 64
+  heads:
+    3: 6
+  hid_blocks: !!python/tuple
+  - 3
+  - 3
+  - 3
+  hid_channels: !!python/tuple
+  - 256
+  - 512
+  - 1024
+  kernel_size: !!python/tuple
+  - 3
+  - 3

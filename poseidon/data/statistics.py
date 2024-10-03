@@ -1,3 +1,5 @@
+r"""Data -  Class to compute statistics incrementally over a dataset."""
+
 import numpy as np
 import wandb
 import xarray as xr
@@ -76,7 +78,6 @@ def compute_statistics(
         wandb_mode: Mode for wandb (e.g., 'online', 'offline').
         variables: List of variable names to retain from the dataset.
         variables_clipping: Dictionary of variables and their respective min and max values.
-
     """
 
     wandb.init(project="Poseidon-Statistics", mode=wandb_mode)

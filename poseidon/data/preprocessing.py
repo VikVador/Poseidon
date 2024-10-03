@@ -1,3 +1,5 @@
+r"""Data - Tools to perfom specific preprocessing steps over a dataset."""
+
 import wandb
 import xarray as xr
 
@@ -12,13 +14,12 @@ from poseidon.utils import generate_paths
 def cliping(
     dataset: xr.Dataset, variables_clipping: Optional[Dict[str, Tuple[int, int]]] = None
 ) -> xr.Dataset:
-    """Helper function to clip values in a dataset.
+    r"""Helper function to clip values in a dataset.
 
     Arguments:
         dataset: Dataset whose variables must be clipped.
         variables_clipping: Dictionary of variables and their respective min and max values.
     """
-
     if variables_clipping is None:
         return dataset
     for variable, (min_value, max_value) in variables_clipping.items():
