@@ -22,15 +22,15 @@ def generate_mesh_mask(region: Dict) -> torch.Tensor:
         region: Contains information about the region of interest.
 
     Returns:
-        Spatial information with shape (4, level, lattitude, longitude).
+        Normalized spatial information with shape (4, level, lattitude, longitude).
     """
     mask = xr.open_zarr(POSEIDON_MASK).sel(**region).mask.values
     mesh = xr.open_zarr(POSEIDON_MESH).sel(**region)
 
-    # Convert mesh data (x, y, z) to PyTorch tensors
-    mx = torch.from_numpy(mesh.x_mesh.values)
-    my = torch.from_numpy(mesh.y_mesh.values)
-    mz = torch.from_numpy(mesh.z_mesh.values)
+    # Convert normalized mesh data (x, y, z) to PyTorch tensors
+    mx = torch.from_numpy(mesh.x_mesh.values) / (region["longitude"].stop - 1)
+    my = torch.from_numpy(mesh.y_mesh.values) / (region["latitude"].stop - 1)
+    mz = torch.from_numpy(mesh.z_mesh.values) / (region["level"].stop - 1)
     mesh = torch.cat([mx.unsqueeze(0), my.unsqueeze(0), mz.unsqueeze(0)], dim=0)
 
     # Convert the mask to a PyTorch tensor and concatenate with the mesh
