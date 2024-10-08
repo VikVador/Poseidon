@@ -32,16 +32,14 @@ def generate_mesh_mask(region: Dict) -> torch.Tensor:
     my = torch.from_numpy(mesh.y_mesh.values) / (region["latitude"].stop - 1)
     mz = torch.from_numpy(mesh.z_mesh.values) / (region["level"].stop - 1)
     mesh = torch.cat([mx.unsqueeze(0), my.unsqueeze(0), mz.unsqueeze(0)], dim=0)
-
-    # Convert the mask to a PyTorch tensor and concatenate with the mesh
     return torch.cat([torch.from_numpy(mask).unsqueeze(0), mesh], dim=0)
 
 
 class PoseidonBackbone(nn.Module):
     r"""A helper module used to preprocess data for the Poseidon neural network.
 
-    It is responsible for preparing the input data and temporal embeddings
-    to condition the neural network, based on a spatial mask, time embeddings (hour, day, month),
+    It is responsible for preparing the input data and temporal embeddings to condition
+    the neural network, based on a spatial mask, time embeddings (hour, day, month),
     and a neighborhood blanket size.
 
     References:
@@ -87,18 +85,19 @@ class PoseidonBackbone(nn.Module):
 
         Arguments:
             x: Noisy input tensor with shape (B, D).
-            sigma: Represents the noise level of a specific diffusion step (B, 1).
+            sigma: Noise level of a specific diffusion step (B, 1).
             c: Tokenized time-based conditioning (B, 3), i.e. month, day, hour.
 
         Returns:
-            The denoised tensor (B, D).
+            Denoised tensor (B, D).
         """
 
-        # Channels contains blanket and variables
+        # Mixing blanket and variables
         x = rearrange(
             x,
-            "N (C H W) -> N C H W",
-            C=self.channels * self.blanket_size,
+            "B (K C H W) -> B (K C) H W",
+            K=self.blanket_size,
+            C=self.channels,
             H=self.latitude,
             W=self.longitude,
         )
@@ -110,12 +109,12 @@ class PoseidonBackbone(nn.Module):
             self.embedding_hour(c[:, 2]),
         )
         embd_month, embd_day, embd_hour = (
-            rearrange(embd_month, "N (C H W) -> N C H W", C=1, H=self.latitude, W=self.longitude),
-            rearrange(embd_day, "N (C H W) -> N C H W", C=1, H=self.latitude, W=self.longitude),
-            rearrange(embd_hour, "N (C H W) -> N C H W", C=1, H=self.latitude, W=self.longitude),
+            rearrange(embd_month, "B (C H W) -> B C H W", C=1, H=self.latitude, W=self.longitude),
+            rearrange(embd_day, "B (C H W) -> B C H W", C=1, H=self.latitude, W=self.longitude),
+            rearrange(embd_hour, "B (C H W) -> B C H W", C=1, H=self.latitude, W=self.longitude),
         )
 
-        # Broadcasting the spatial mask
+        # Broadcasting the spatial mask to batch size
         embd_spatial = self.spatial.repeat(x.shape[0], 1, 1, 1)
 
         # Conditioning the input (converting mask to float)
@@ -123,6 +122,5 @@ class PoseidonBackbone(nn.Module):
 
         # Forward pass ('t' used to be diffusion step, now it's the noise level)
         x = self.neural_network(x=x, t=sigma)
-
-        # Reshaping for diffusion
-        return rearrange(x, "N ... -> N (...)")
+        x = rearrange(x, "B ... -> B (...)")
+        return x

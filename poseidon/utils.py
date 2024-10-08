@@ -14,12 +14,14 @@ def generate_paths() -> Dict[tuple, Sequence[str]]:
     r"""Generate paths to physical and biogeochemical datasets (1980 to 2022).
 
     Returns:
-        A dictionary containing, given a key "YEAR-MONTH", returns paths to fetch data.
+        A dictionary which, given a key "YEAR-MONTH", returns paths to fetch data.
     """
     with open(POSEIDON_GRID, "r") as file:
         physics_data = ast.literal_eval(file.read())
     with open(POSEIDON_PTRC, "r") as file:
         biogeochemistry_data = ast.literal_eval(file.read())
+
+    # Creating the complete dictionnary of path mappings to data
     dataset_paths = {}
     for date_key in physics_data:
         combined_paths = physics_data[date_key] + biogeochemistry_data[date_key]

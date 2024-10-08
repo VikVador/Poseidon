@@ -1,4 +1,4 @@
-r"""Network - Tools to save and load (backbone) models."""
+r"""Network - Tools to save and load backbones."""
 
 import os
 import random
@@ -15,20 +15,35 @@ from poseidon.data.const import DATASET_REGION, TOY_DATASET_REGION
 from poseidon.diffusion.backbone import PoseidonBackbone
 
 
-def generate_model_name(length: int = 8) -> str:
-    r"""Generates a random alphanumeric string.
+def generate_model_name(length: int) -> str:
+    r"""Helper tool to generate a random alphanumeric string.
 
     Arguments:
-        length: Length of the random model names
+        length: Length of the name
     """
     characters = string.ascii_letters + string.digits
     return "".join(random.choice(characters) for _ in range(length))
 
 
-def save_model(
+def save_configuration(path: Path, configs: Dict, verbose: bool = True) -> None:
+    r"""Saves a configuration as a .yml file.
+
+    Arguments:
+        path: Path to save the configuration.
+        configs: Dictionary containing a given configuration.
+        verbose: Whether or not display information.
+    """
+    config_file = path / "training_config.yml"
+    with open(config_file, "w") as file:
+        yaml.dump(configs, file)
+    if verbose:
+        print(f"Configuration Saved | File: {config_file}")
+
+
+def save_backbone(
     path: Path, model: PoseidonBackbone, optimizer: torch.optim, epoch: int, verbose: bool = True
 ) -> None:
-    r"""Saves a backbone model and its optimizer state.
+    r"""Saves a backbone model.
 
     Arguments:
         path: Path to save the model.
@@ -48,33 +63,15 @@ def save_model(
         print(f"Model Saved | Epoch: {epoch} - File: {save_file}")
 
 
-def save_configurations(path: Path, configs: Dict, verbose: bool = True) -> None:
-    r"""Saves the configuration as a .yml file.
+def load_backbone(name: str, checkpoint: int) -> PoseidonBackbone:
+    r"""Loads a backbone model from a given checkpoint.
 
     Arguments:
-        path: Path to save the configurations.
-        configs: Dictionary containing the configurations needed to load the model.
-        verbose: Whether or not display information about the saved configuration.
-    """
-    config_file = path / "training_config.yml"
-    with open(config_file, "w") as file:
-        yaml.dump(configs, file)
-    if verbose:
-        print(f"Configuration Saved | File: {config_file}")
-
-
-def load_model(neural_network_name: str, checkpoint: int) -> PoseidonBackbone:
-    r"""Loads a **backbone** model from a checkpoint.
-
-    Arguments:
-        neural_network_name: Name of the neural network to load.
-        checkpoint: Epoch checkpoint to load.
-
-    Returns:
-        A Poseidon backbone model loaded from a checkpoint.
+        name: Name of the backbone to load.
+        checkpoint: Index of backbone state to load.
     """
 
-    folder = os.path.join(POSEIDON_MODEL, neural_network_name)
+    folder = os.path.join(POSEIDON_MODEL, name)
     file_config = os.path.join(folder, "training_config.yml")
     file_checkpoint = os.path.join(folder, f"checkpoint_{checkpoint}.pth")
     with open(file_config, "r") as file:

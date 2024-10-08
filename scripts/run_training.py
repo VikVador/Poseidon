@@ -1,11 +1,11 @@
 r"""Scripts - Train a denoiser model."""
 
 import argparse
-import yaml
 
-from dawgz import Job, schedule
+from dawgz import job, schedule
 
 # isort: split
+from poseidon.parser import load_configuration
 from poseidon.training import training
 
 if __name__ == "__main__":
@@ -17,40 +17,53 @@ if __name__ == "__main__":
         help="Path to the .yml configuration file.",
     )
     parser.add_argument(
-        "--backend",
-        "-b",
-        type=str,
-        default="slurm",
-        choices=["slurm", "async"],
-        help="Computation backend.",
+        "--use_wandb",
+        "-w",
+        action="store_true",
+        help="Use Weights & Biases for logging advancement of the training.",
     )
-    args = parser.parse_args()
-    with open(args.config, "r") as file:
-        config = yaml.load(file, Loader=yaml.Loader)
 
-    def dawgz_training():
+    # Parse the command-line arguments
+    args = parser.parse_args()
+
+    # Load the configuration from the specified YAML file
+    config_list = load_configuration(args.config)
+
+    # Extract the cluster configuration from the loaded config
+    config_cluster = config_list[0]["Cluster"]
+
+    # Check if training should be done locally
+    if not config_cluster["Dawgz"]:
         training(
-            config_dataloader=config["Dataloader"],
-            config_backbone=config["Backbone"],
-            config_nn=config["Neural Network"],
-            config_training=config["Training"],
-            toy_problem=config["Problem"]["Toy_problem"],
+            config_dataloader=config_list[0]["Dataloader"],
+            config_backbone=config_list[0]["Backbone"],
+            config_nn=config_list[0]["Neural Network"],
+            config_training=config_list[0]["Training"],
+            toy_problem=config_list[0]["Problem"]["Toy_problem"],
+            wandb_mode="online" if args.use_wandb else "disabled",
         )
 
-    # TO BE CHANGED
+    # Proceed with cluster training if Dawgz is enabled
+    else:
 
-    schedule(
-        Job(
-            dawgz_training,
-            cpus=8,
-            gpus=1,
-            mem="128GB",
-            name="POSEIDON-TRAINING",
-            time="00-00:30:00",
+        @job(
+            array=len(config_list),
+            cpus=config_cluster["CPUS"],
+            gpus=config_cluster["GPUS"],
+            ram=config_cluster["RAM"],
+            time=config_cluster["TIME"],
+            partition=config_cluster["PARTITION"],
             account="bsmfc",
-            partition="ia",
-        ),
-        name="POSEIDON-TRAINING",
-        export="ALL",
-        backend=args.backend,
-    )
+        )
+        def training_neural_network(i: int):
+            training(
+                config_dataloader=config_list[i]["Dataloader"],
+                config_backbone=config_list[i]["Backbone"],
+                config_nn=config_list[i]["Neural Network"],
+                config_training=config_list[i]["Training"],
+                toy_problem=config_list[i]["Problem"]["Toy_problem"],
+                wandb_mode="online" if args.use_wandb else "disabled",
+            )
+
+        # Schedule the defined jobs for execution on the cluster
+        schedule(training_neural_network, name="POSEIDON-TRAINING", backend="slurm", export="ALL")

@@ -43,5 +43,10 @@ class PoseidonDenoiser(nn.Module):
         c_in    = 1       / torch.sqrt(sigma_t**2 + 1)  # Modulates the input tensor to account for noise level
         c_out   = sigma_t / torch.sqrt(sigma_t**2 + 1)  # Scales the denoised output
         c_skip  = 1       / (sigma_t**2 + 1)            # Retains part of the original noisy signal
-        c_noise = 0.25 * torch.log(sigma_t).squeeze(1)  # Logarithmic noise level used in conditioning
-        return c_skip * x_t + c_out * self.backbone(x = c_in * x_t, sigma = c_noise, c = c)
+        c_noise = torch.log(sigma_t).squeeze(1)         # Logarithmic noise level used in conditioning
+
+        # Denoising a blanket
+        x_t_denoised = self.backbone(x = c_in * x_t, sigma = c_noise, c = c)
+
+        # EDM-style preconditioning
+        return c_skip * x_t + c_out * x_t_denoised

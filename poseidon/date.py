@@ -30,7 +30,7 @@ def get_date_features(date: np.datetime64) -> torch.Tensor:
         date: Anobject representing a specific date and time.
 
     Returns:
-        A tensor containing the year, month, day, and hour extracted from the input date.
+        A tensor containing the month, day, and hour extracted from the input date.
     """
     timestamp = pd.to_datetime(date)
     return torch.as_tensor([timestamp.month, timestamp.day, timestamp.hour])

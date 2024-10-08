@@ -1,36 +1,35 @@
-# A config file for training a model
+# Configs - A configuration file to launch multiple trainings
 
 Problem:
-  Toy_problem: true
+  Toy_problem: [True]
 
 Dataloader:
-  batch_size: 1
-  shuffle_training: true
-  trajectory_size: 4
+  batch_size: [8]
+  shuffle_training: [True]
+  trajectory_size: [12]
 
 Backbone:
-  k: 1
+  k: [1, 2]
 
-# --- Training Config ---
-#
 Training:
-  Learning Rate: 0.0001
-  Number of Epochs: 100
-  Save Frequency: 10
+  Learning Rate (Start): [0.001]
+  Learning Rate (End): [0.0001]
+  Number of Epochs: [1000]
+  Save Frequency: [25]
 
 Neural Network:
-  dropout: null
-  emb_features: 64
-  heads:
-    3: 6
-  hid_blocks: !!python/tuple
-  - 3
-  - 3
-  - 3
-  hid_channels: !!python/tuple
-  - 256
-  - 512
-  - 1024
-  kernel_size: !!python/tuple
-  - 3
-  - 3
+  dropout: [null]
+  emb_features: [64]
+  heads: [{3: 6}]
+  hid_blocks: [[3, 3, 3]]
+  hid_channels: [[64, 128, 256]]
+  kernel_size: [[3, 3]]
+
+Cluster:
+  "Dawgz"    : [True]
+  "CPUS"     : [8]
+  "GPUS"     : [1]
+  "RAM"      : ["120GB"]
+  "TIME"     : ["00:05:00"]
+  "PARTITION": ["gpu"]
+  "PROJECT"  : ["bsmfc"]

@@ -1,8 +1,13 @@
 r"""Poseidon - Tools to perform the training of a denoiser."""
 
+import matplotlib.pyplot as plt
 import torch
+import torch.optim.lr_scheduler as lr_scheduler
+import wandb
 
+from einops import rearrange
 from torch.optim import Adam
+from tqdm import tqdm
 from typing import Dict, Tuple
 
 # isort: split
@@ -13,66 +18,19 @@ from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.loss import PoseidonLoss
 from poseidon.diffusion.noise import PoseidonNoiseSchedule
-from poseidon.network.save import generate_model_name, save_configurations, save_model
-
-
-def time_tokenizer(data: torch.Tensor) -> torch.Tensor:
-    r"""Tokenizes a tensor containing temporal information.
-
-    Arguments:
-        data: Time tensor of shape (batch_size, 3), i.e. month, day, and hour.
-    """
-    months = data[:, 0] - 1
-    days = data[:, 1] - 1
-    hour_mapping = {6: 0, 12: 1, 18: 2, 24: 3}
-    hours = torch.tensor([hour_mapping[int(hour)] for hour in data[:, 2]], dtype=torch.long)
-    return torch.stack([months, days, hours], dim=1)
-
-
-def extract_blankets_in_trajectories(
-    x: torch.Tensor, blanket_idx: Tuple[torch.Tensor, torch.Tensor]
-) -> torch.Tensor:
-    r"""Extracts various blankets from a given batch of trajectories.
-
-    Arguments:
-        x: Input tensor (B, T, C, H, W).
-        blanket_idx: Tuple containing the starting and ending indices of the blankets.
-
-    Returns:
-        blankets: Blanket tensor of shape (B, 2k+1, C, H, W).
-    """
-    idx_start, idx_end = blanket_idx
-    blankets = [x[i, start:end, :, :, :] for i, (start, end) in enumerate(zip(idx_start, idx_end))]
-    return torch.stack(blankets, dim=0)
-
-
-def compute_blanket_indices(
-    indices: torch.Tensor, k: int, trajectory_size: int
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    r"""Given a set of random indexes, determines the blanket position around it.
-
-    Arguments:
-        indices: Random indices for the blanket's center (B).
-        k: Number of neighbors to consider on each side to define the "blanket".
-        trajectory_size: Total length of the trajectory.
-
-    Returns:
-        idx_start: Starting indices for the blankets (B).
-        idx_end: Ending indices for the blankets (B).
-    """
-    idx_start = torch.clip(indices - k, min=0)
-    idx_end = torch.clip(indices + k + 1, max=trajectory_size)
-    pad_start = torch.clip(k - indices, min=0)
-    pad_end = torch.clip(indices + k + 1 - trajectory_size, min=0)
-    idx_start -= pad_end
-    idx_end += pad_start
-    return idx_start, idx_end
+from poseidon.diffusion.sampler import PoseidonSampler
+from poseidon.diffusion.tools import (
+    compute_blanket_indices,
+    extract_blankets_in_trajectories,
+    time_tokenizer,
+)
+from poseidon.network.save import generate_model_name, save_backbone, save_configuration
 
 
 def preprocess_for_training(
     x: torch.Tensor, time: torch.Tensor, k: int
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    r"""Preprocesses input tensors for training.
+    r"""Helper tool to preprocess data for training.
 
     Arguments:
         x: Input tensor (B, T, C, H, W).
@@ -83,24 +41,23 @@ def preprocess_for_training(
         blankets: Tensor (B, 2k+1, C, H, W), representing the extracted blankets of each trajectory.
         time: Tokenized time tensor (B, 3), containing the time of the center state of each blanket.
     """
-
     # Security
-    batch_size, trajectory_size = x.shape[0], x.shape[1]
+    batch_size, trajectory_size, _, _, _ = x.shape
     assert (
         trajectory_size > 2 * k + 1
     ), f"ERROR () - Trajectory size must be greater than complete blanket ({trajectory_size} > {2 * k + 1})"
 
     # Preprocessing
     indice_center_blankets = torch.randint(0, trajectory_size, (batch_size,))
-    idx_start, idx_end = compute_blanket_indices(
+    idx_start, idx_end, _ = compute_blanket_indices(
         indices=indice_center_blankets, k=k, trajectory_size=trajectory_size
     )
     x = extract_blankets_in_trajectories(x=x, blanket_idx=(idx_start, idx_end))
+    x = rearrange(x, "B ... -> B (...)")
     time = [time[b, center] for b, center in enumerate(indice_center_blankets)]
     time = torch.stack(time, dim=0)
-
-    # Flattening input tensor for diffusion and tokenizing time
-    return x.flatten(1), time_tokenizer(time)
+    time = time_tokenizer(time)
+    return x, time
 
 
 def training(
@@ -108,22 +65,23 @@ def training(
     config_backbone: Dict,
     config_nn: Dict,
     config_training: Dict,
+    wandb_mode: str,
     toy_problem: bool = False,
 ) -> None:
-    r"""Perform training of the Poseidon model.
+    r"""Performs the training of a denoiser.
 
     Arguments:
-        config_dataloader: Dictionary containing dataloader settings (e.g., batch size, shuffle, dataset path).
-        config_backbone: Dictionary specifying the backbone architecture settings (e.g., layer sizes, activation functions).
-        config_nn: Configuration for the neural network (e.g., optimizer parameters, architecture options).
+        config_dataloader: Dataloader settings (e.g., batch size, shuffle, parallel, ...).
+        config_backbone: Backbone architecture settings (e.g., blanket size, ...).
+        config_nn: Neural network (e.g., architecture options, ...).
         config_training: Configuration for the training loop (e.g., number of epochs, learning rate, save frequency).
+        wandb_mode: Mode for wandb (e.g., 'online', 'offline').
         toy_problem: Indicates whether or not use the toy dataset.
     """
 
     # --- Initialization ---
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # Load dataset based on whether we're using a toy problem or real data
     if toy_problem:
         dl_train, _, _ = get_toy_dataloaders(**config_dataloader)
     else:
@@ -132,8 +90,7 @@ def training(
     # Peek at a single batch to determine input dimensions
     data, _ = next(iter(dl_train))
     channels, latitudes, longitudes = data.shape[2:]
-
-    # Initialize backbone, denoiser, and noise scheduler
+    nb_epochs = config_training["Number of Epochs"]
     backbone = PoseidonBackbone(
         **config_backbone,
         dimensions=(channels, latitudes, longitudes),
@@ -142,61 +99,107 @@ def training(
     )
     denoiser = PoseidonDenoiser(backbone)
     noise_scheduler = PoseidonNoiseSchedule()
-
     backbone.to(device)
     denoiser.to(device)
+    optimizer = Adam(denoiser.parameters(), lr=config_training["Learning Rate (Start)"])
+    scheduler = lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=nb_epochs, eta_min=config_training["Learning Rate (End)"]
+    )
 
-    # Initialize optimizer
-    optimizer = Adam(denoiser.parameters(), lr=config_training["Learning Rate"])
-
-    # --- Setup for saving ---
-    nn_name = generate_model_name()
-    save_dir = POSEIDON_MODEL / nn_name
-    save_dir.mkdir(parents=True, exist_ok=True)
-
-    # Save configurations and problem information
-    save_configurations(
-        path=save_dir,
-        configs={
-            "config_dataloader": config_dataloader,
-            "config_backbone": config_backbone,
-            "config_nn": config_nn,
-            "config_training": config_training,
-            "config_problem": {
-                "Toy_problem": toy_problem,
-                "Channels": channels,
-                "Latitudes": latitudes,
-                "Longitudes": longitudes,
-            },
+    # --- Saving ---
+    nn_name = generate_model_name(length=8)
+    nn_save_dir = POSEIDON_MODEL / nn_name
+    nn_save_dir.mkdir(parents=True, exist_ok=True)
+    configs = {
+        "config_dataloader": config_dataloader,
+        "config_backbone": config_backbone,
+        "config_nn": config_nn,
+        "config_training": config_training,
+        "config_problem": {
+            "Name": nn_name,
+            "Toy_problem": toy_problem,
+            "Channels": channels,
+            "Latitudes": latitudes,
+            "Longitudes": longitudes,
         },
+    }
+    save_configuration(path=nn_save_dir, configs=configs)
+    wandb.init(
+        project="Poseidon-Training",
+        mode=wandb_mode,
+        name=nn_name,
+        config={k: v for d in configs for k, v in configs[d].items()},
     )
 
     # --- Training Loop ---
     # fmt:off
-    for epoch in range(1, config_training["Number of Epochs"] + 1):
+    for epoch in range(1, nb_epochs + 1):
 
-        for data, time in dl_train:
+        averaged_loss = []
+        pbar = tqdm(dl_train, desc=f"EPOCH {epoch}/{nb_epochs}")
 
-            # Preprocess the input data
+        for _, (data, time) in enumerate(pbar):
+
+            # Preprocessing data: blanket extraction, flattening, and time tokenization
             x, time = preprocess_for_training(data, time, **config_backbone)
 
-            # Compute noise for denoising
+            # Generate noise for denoising process
             noise = noise_scheduler(size=x.shape[0])
 
-            # Move data, noise, and time to GPU/CPU
+            # Move data to the device (GPU/CPU)
             x, time, noise = x.to(device), time.to(device), noise.to(device)
 
-            # Compute loss using the denoiser
+            # Compute the loss and backpropagate
             loss = PoseidonLoss(denoiser, x, noise, time)
-            if not loss.isnan().any():
-                loss.backward()
-                optimizer.step()
-                optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
 
-            # Display loss and monitor memory usage
-            print(f"Info | EPOCH: {epoch} | LOSS: {loss.item()}")
+            # Accumulate loss and update progress bar
+            averaged_loss.append(loss.item())
+            pbar.set_postfix({"| LOSS": loss.item()})
 
-        # Save backbone model at specified intervals
+        # --- Checkpointing & Logging ---
         if epoch % config_training["Save Frequency"] == 0:
-            save_model(save_dir, backbone, optimizer, epoch)
-            print(f"Model saved for epoch {epoch} at {save_dir}")
+            save_backbone(nn_save_dir, backbone, optimizer, epoch)
+
+        scheduler.step()
+        averaged_loss = torch.tensor(averaged_loss).detach()
+
+        wandb.log({
+            "Training/Loss (Averaged Over Batch)": torch.mean(averaged_loss),
+            "Training/Learning Rate": scheduler.get_last_lr()[0],
+            "Training/Epoch": epoch,
+            "Training/Status [%]": 100 * epoch / nb_epochs
+        })
+
+        # --- Sampling ---
+        if epoch % 10 == 0:
+
+            # Initialization of sampler
+            sampler = PoseidonSampler(denoiser=denoiser, steps=256)
+
+            # Dates for evaluation
+            dates = ["2019-07-01", "2019-08-01", "2019-09-01"]
+            for d in dates:
+
+                # Generates a trajectory
+                x = sampler(trajectory_size=7, date=d)
+                traj_size = x.shape[0]
+
+                # Displaying a full trajectory
+                for index in [0, -1]:
+                    fig = plt.figure(figsize=(20, 20))
+                    plt.subplot(1, traj_size, 1)
+                    for i in range(traj_size):
+                        plt.subplot(1, traj_size, i + 1)
+                        plt.imshow(x[i, index], cmap="viridis")
+                        if i == 0:
+                            plt.title(d)
+                        plt.axis("off")
+
+                    # Send to Wandb
+                    wandb.log({f"Trajectory {index}": [wandb.Image(fig)]})
+                    plt.close(fig)
+
+    wandb.finish()

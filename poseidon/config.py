@@ -1,4 +1,4 @@
-r"""Poseidon - Complete path library."""
+r"""Poseidon - Library of paths."""
 
 from pathlib import Path
 
