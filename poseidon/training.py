@@ -199,7 +199,7 @@ def training(
                         plt.axis("off")
 
                     # Send to Wandb
-                    wandb.log({f"Trajectory {index}": [wandb.Image(fig)]})
+                    wandb.log({f"Trajectory - {d} : {index}": [wandb.Image(fig)]})
                     plt.close(fig)
 
     wandb.finish()
