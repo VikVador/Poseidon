@@ -31,7 +31,7 @@ def extract_blankets_in_trajectories(
         blankets: Blanket tensor of shape (B, C, 2k+1, H, W).
     """
     idx_start, idx_end = blanket_idx
-    blankets = [x[i, : , start:end] for i, (start, end) in enumerate(zip(idx_start, idx_end))]
+    blankets = [x[i, :, start:end] for i, (start, end) in enumerate(zip(idx_start, idx_end))]
     return torch.stack(blankets, dim=0)
 
 

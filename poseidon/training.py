@@ -18,14 +18,17 @@ from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.loss import PoseidonLoss
 from poseidon.diffusion.noise import PoseidonNoiseSchedule
-from poseidon.network.save import load_backbone
 from poseidon.diffusion.sampler import PoseidonSampler
 from poseidon.diffusion.tools import (
     compute_blanket_indices,
     extract_blankets_in_trajectories,
     time_tokenizer,
 )
-from poseidon.network.save import generate_model_name, save_backbone, save_configuration
+from poseidon.network.save import (
+    generate_model_name,
+    save_backbone,
+    save_configuration,
+)
 
 
 def plot_images_from_tensor(tensor, index):
@@ -38,15 +41,17 @@ def plot_images_from_tensor(tensor, index):
         index (int): The index to slice the first dimension (batch dimension)
     """
     # Select the images for the given index
-    images = tensor[:,index]
+    images = tensor[:, index]
 
     # Create the figure with a grid of 33 subplots (you can adjust the grid size as needed)
-    fig, axes = plt.subplots(6, 6, figsize=(15, 15))  # 6x6 grid for 33 images, adjust figsize as needed
+    fig, axes = plt.subplots(
+        6, 6, figsize=(15, 15)
+    )  # 6x6 grid for 33 images, adjust figsize as needed
 
     for i in range(33):
         ax = axes[i // 6, i % 6]
-        ax.imshow(images[i].cpu().numpy(), cmap='viridis', vmin=-3, vmax=3)
-        ax.axis('off')
+        ax.imshow(images[i].cpu().numpy(), cmap="viridis", vmin=-3, vmax=3)
+        ax.axis("off")
     plt.tight_layout()
     return fig
 

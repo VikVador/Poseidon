@@ -110,9 +110,15 @@ class PoseidonBackbone(nn.Module):
             self.embedding_hour(c[:, 2]),
         )
         embd_month, embd_day, embd_hour = (
-            rearrange(embd_month, "B (C K H W) -> B C K H W", C=1,K=1, H=self.latitude, W=self.longitude),
-            rearrange(embd_day, "B (C K H W) -> B C K H W", C=1,K=1, H=self.latitude, W=self.longitude),
-            rearrange(embd_hour, "B (C K H W) -> B C K H W", C=1,K=1, H=self.latitude, W=self.longitude),
+            rearrange(
+                embd_month, "B (C K H W) -> B C K H W", C=1, K=1, H=self.latitude, W=self.longitude
+            ),
+            rearrange(
+                embd_day, "B (C K H W) -> B C K H W", C=1, K=1, H=self.latitude, W=self.longitude
+            ),
+            rearrange(
+                embd_hour, "B (C K H W) -> B C K H W", C=1, K=1, H=self.latitude, W=self.longitude
+            ),
         )
 
         # Broadcasting the temporal mask to the blanket size
