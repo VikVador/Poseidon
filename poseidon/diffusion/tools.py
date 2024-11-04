@@ -24,14 +24,14 @@ def extract_blankets_in_trajectories(
     r"""Extract various blankets from a given batch of trajectories.
 
     Arguments:
-        x: Input tensor (B, T, C, H, W).
+        x: Input tensor (B, C, T, H, W).
         blanket_idx: Tuple containing the starting and ending indices of the blankets.
 
     Returns:
-        blankets: Blanket tensor of shape (B, 2k+1, C, H, W).
+        blankets: Blanket tensor of shape (B, C, 2k+1, H, W).
     """
     idx_start, idx_end = blanket_idx
-    blankets = [x[i, start:end, :, :, :] for i, (start, end) in enumerate(zip(idx_start, idx_end))]
+    blankets = [x[i, : , start:end] for i, (start, end) in enumerate(zip(idx_start, idx_end))]
     return torch.stack(blankets, dim=0)
 
 

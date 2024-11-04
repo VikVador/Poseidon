@@ -1,0 +1,35 @@
+# Configs - A configuration file to launch multiple trainings
+
+Problem:
+  Toy_problem: [True]
+
+Dataloader:
+  batch_size: [16]
+  shuffle_training: [True]
+  trajectory_size: [12]
+
+Backbone:
+  k: [1, 3]
+
+Training:
+  Learning Rate (Start): [0.001]
+  Learning Rate (End): [0.00005]
+  Number of Epochs: [1000]
+  Save Frequency: [25]
+
+Neural Network:
+  dropout: [null]
+  emb_features: [64, 128]
+  heads: [{2: 4, 3: 4}]
+  hid_blocks: [[3, 3, 3]]
+  hid_channels: [[64, 128, 256], [128, 256, 512]]
+  kernel_size: [[3, 3, 3], [5, 5, 5]]
+
+Cluster:
+  "Dawgz"    : [True]
+  "CPUS"     : [8]
+  "GPUS"     : [1]
+  "RAM"      : ["60GB"]
+  "TIME"     : ["48:00:00"]
+  "PARTITION": ["ia"]
+  "PROJECT"  : ["bsmfc"]

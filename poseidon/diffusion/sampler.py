@@ -86,22 +86,25 @@ class PoseidonSampler(nn.Module):
         score_blankets = (
             self.denoiser(x_i.cuda(), noise_i.cuda(), time.cuda()).cpu() - x_i
         ) / noise_i**2
+
         score_blankets = rearrange(
             score_blankets,
-            "N (K C H W) -> N K C H W",
+            "N (C K H W) -> N C K H W",
             K=self.blanket_size,
             C=self.channels,
             H=self.latitude,
             W=self.longitude,
         )
+        s = torch.stack([score_blankets[i, :, idx] for i, idx in enumerate(idx[2])])
+        s = rearrange(s, "K C H W -> C K H W")
 
         # Score (individual states)
-        return torch.stack([score_blankets[i, idx, :, :, :] for i, idx in enumerate(idx[2])])
+        return s
 
     def _initialize_state(self, trajectory_size: int) -> torch.Tensor:
         """Initializes the state for the diffusion process."""
         return (
-            torch.randn(trajectory_size, self.channels, self.latitude, self.longitude)
+            torch.randn(self.channels, trajectory_size, self.latitude, self.longitude)
             * self.timesteps[0]
         )
 

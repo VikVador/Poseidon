@@ -82,6 +82,7 @@ def load_backbone(name: str, checkpoint: int) -> PoseidonBackbone:
         **configs["config_backbone"],
         dimensions=(
             configs["config_problem"]["Channels"],
+            configs["config_problem"]["Trajectory Size"],
             configs["config_problem"]["Latitudes"],
             configs["config_problem"]["Longitudes"],
         ),

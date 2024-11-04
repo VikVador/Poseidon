@@ -54,14 +54,15 @@ class PoseidonBackbone(nn.Module):
     """
 
     def __init__(
-        self, k: int, dimensions: Tuple[int, int, int], config_nn: Dict, config_region: Dict
+        self, k: int, dimensions: Tuple[int, int, int, int], config_nn: Dict, config_region: Dict
     ):
         super().__init__()
         self.k = k
         self.blanket_size = k * 2 + 1
         self.channels = dimensions[0]
-        self.latitude = dimensions[1]
-        self.longitude = dimensions[2]
+        self.traj_size = dimensions[1]
+        self.latitude = dimensions[2]
+        self.longitude = dimensions[3]
         nb_pixels = self.latitude * self.longitude
         self.register_buffer(
             "spatial", generate_mesh_mask(config_region).flatten(start_dim=0, end_dim=1)
@@ -71,11 +72,11 @@ class PoseidonBackbone(nn.Module):
         self.embedding_month = nn.Embedding(12, nb_pixels)
         # Composed of: Blanket * Channels + Time (3) + Spatial (Mesh x,y,z and mask)(4)
         self.in_channels = (
-            self.blanket_size * self.channels
+            self.channels
             + 3
             + 4 * config_region["level"].stop  # Total number of levels in dataset
         )
-        self.out_channels = self.blanket_size * self.channels
+        self.out_channels = self.channels
         self.neural_network = UNet(
             in_channels=self.in_channels, out_channels=self.out_channels, **config_nn
         )
@@ -95,9 +96,9 @@ class PoseidonBackbone(nn.Module):
         # Mixing blanket and variables
         x = rearrange(
             x,
-            "B (K C H W) -> B (K C) H W",
-            K=self.blanket_size,
+            "B (C K H W) -> B C K H W",
             C=self.channels,
+            K=self.blanket_size,
             H=self.latitude,
             W=self.longitude,
         )
@@ -109,13 +110,21 @@ class PoseidonBackbone(nn.Module):
             self.embedding_hour(c[:, 2]),
         )
         embd_month, embd_day, embd_hour = (
-            rearrange(embd_month, "B (C H W) -> B C H W", C=1, H=self.latitude, W=self.longitude),
-            rearrange(embd_day, "B (C H W) -> B C H W", C=1, H=self.latitude, W=self.longitude),
-            rearrange(embd_hour, "B (C H W) -> B C H W", C=1, H=self.latitude, W=self.longitude),
+            rearrange(embd_month, "B (C K H W) -> B C K H W", C=1,K=1, H=self.latitude, W=self.longitude),
+            rearrange(embd_day, "B (C K H W) -> B C K H W", C=1,K=1, H=self.latitude, W=self.longitude),
+            rearrange(embd_hour, "B (C K H W) -> B C K H W", C=1,K=1, H=self.latitude, W=self.longitude),
+        )
+
+        # Broadcasting the temporal mask to the blanket size
+        embd_month, embd_day, embd_hour = (
+            embd_month.repeat(1, 1, self.blanket_size, 1, 1),
+            embd_day.repeat(1, 1, self.blanket_size, 1, 1),
+            embd_hour.repeat(1, 1, self.blanket_size, 1, 1),
         )
 
         # Broadcasting the spatial mask to batch size
-        embd_spatial = self.spatial.repeat(x.shape[0], 1, 1, 1)
+        embd_spatial = self.spatial.repeat(x.shape[0], self.blanket_size, 1, 1, 1)
+        embd_spatial = rearrange(embd_spatial, "B K C H W -> B C K H W")
 
         # Conditioning the input (converting mask to float)
         x = torch.cat([x, embd_spatial, embd_month, embd_day, embd_hour], dim=1).float()

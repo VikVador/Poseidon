@@ -91,7 +91,7 @@ class PoseidonDataset(Dataset):
             time = torch.stack(time, dim=0)
             sample = sample.to_stacked_array(
                 new_dim="z_total", sample_dims=("time", "longitude", "latitude")
-            ).transpose("time", "z_total", ...)
+            ).transpose("z_total", "time", ...)
 
         return torch.as_tensor(sample.load().data), time
 
