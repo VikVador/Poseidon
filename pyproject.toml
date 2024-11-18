@@ -5,13 +5,20 @@ dependencies = [
   "bottleneck==1.4.0",
   "dask==2024.6.2",
   "einops==0.8.0",
-  "numpy==1.26.4",
-  "torch==2.3.1",
-  "torchvision==0.18.1",
+  "numpy==1.24.4",
+  "torch==2.4.1",
+  "torch_harmonics==0.7.2",
+  "torchvision==0.19.1",
   "tqdm==4.66.4",
   "xarray==2024.6.0",
+  "xformers==0.0.28",
   "zarr==2.18.2",
-  "dawgz==0.5.2",
+  "netCDF4==1.7.0",
+]
+
+[project.optional-dependencies]
+all = [
+  "dawgz==1.0.0",
   "jupyterlab==4.2.2",
   "ipykernel==6.29.5",
   "matplotlib==3.9.0",
@@ -19,9 +26,7 @@ dependencies = [
   "pytest==8.2.2",
   "ruff==0.4.8",
   "wandb==0.17.1",
-  "netCDF4==1.7.0",
 ]
-
 
 [tool.ruff]
 extend-include = ["*.ipynb"]

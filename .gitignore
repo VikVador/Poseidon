@@ -8,7 +8,7 @@ logs/*.log
 scripts/.dawgz/
 scripts/wandb
 wandb/
-
+*.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
