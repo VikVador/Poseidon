@@ -4,9 +4,11 @@ repos:
   hooks:
     - id: ruff
       types_or: [python, jupyter]
+      files: ^poseidon/.*\.py$
     - id: ruff-format
       args: [--diff]
       types_or: [python, jupyter]
+      files: ^src/.*\.py$
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v4.5.0
   hooks:
