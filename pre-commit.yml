@@ -8,7 +8,7 @@ repos:
     - id: ruff-format
       args: [--diff]
       types_or: [python]
-      files: ^src/.*\.py$
+      files: ^poseidon/.*\.py$
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v4.5.0
   hooks:
