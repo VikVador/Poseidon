@@ -1,55 +1,57 @@
-r"""Data - Custom Black Sea dataset information (1980 to 2022)."""
+r"""Information about our custom datasets"""
 
-# -- Global Information --
+# fmt: off
 #
-DATASET_TRAINING_DATE_START = "1995-01"
-DATASET_TRAINING_DATE_END = "2015-12"
+# ----- Global Information
+#
+DATASET_TRAINING   = ("1995-01", "2015-12")
+DATASET_VALIDATION = ("2016-01", "2019-12")
+DATASET_TEST       = ("2020-01", "2022-12")
 
-DATASET_VALIDATION_DATE_START = "2016-01"
-DATASET_VALIDATION_DATE_END = "2019-12"
-
-DATASET_TESTING_DATE_START = "2020-01"
-DATASET_TESTING_DATE_END = "2022-12"
-
-DATASET_VARIABLES = [
+DATASET_VARIABLES_ATMOSPHERE = [
     "DOX",
     "CHL",
     "vosaline",
     "rho",
-    "ssh",
     "votemper",
 ]
-
-# -- Preprocessing --
-#
-DATASET_VARIABLES_CLIPPING = {
-    "DOX": (0, None),
-    "CHL": (0, None),
-    "vosaline": (0, None),
-    "rho": (0, None),
-}
 
 DATASET_VARIABLES_SURFACE = [
     "ssh",
 ]
 
-# -- Datasets & Dataloader --
+DATASET_VARIABLES = \
+    DATASET_VARIABLES_ATMOSPHERE + DATASET_VARIABLES_SURFACE
+
+# ----- Preprocessing
 #
-# Dimensions:
-# - Level = 59
-# - Latitude = 258
-# - Longitude = 578
+# Defining values domain for each variable
+DATASET_VARIABLES_CLIPPING = {
+    "DOX":      (0, None),
+    "CHL":      (0, None),
+    "vosaline": (0, None),
+    "rho":      (0, None),
+}
+
+# ----- Datasets
 #
+# In case of missing values
 DATASET_NAN_FILL = 0
 
+# Black Sea
 DATASET_REGION = {
-    "latitude": slice(0, 256),
+    "latitude":  slice(0, 256),
     "longitude": slice(0, 576),
-    "level": slice(0, 56),
+    "level":     slice(0, 56),
 }
 
+# Black Sea Continental Shelf (32, 128, 256)
 TOY_DATASET_REGION = {
-    "latitude": slice(0, 128),
-    "longitude": slice(50, 178),
-    "level": slice(0, 16),
+    "latitude":  slice(104, 232),
+    "longitude": slice(25, 281),
+    "level":     slice(0, 32),
 }
+
+# ----- Note
+#
+# 1. Level 32 is located at ~144.83 [m]

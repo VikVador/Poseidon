@@ -1,4 +1,4 @@
-r"""Poseidon - Library of paths."""
+r"""Global paths and configuration helpers."""
 
 from pathlib import Path
 

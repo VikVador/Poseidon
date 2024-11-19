@@ -1,4 +1,4 @@
-<img  src="assets/header_readme.gif"  />
+<img  src="assets/header.gif"  />
 <hr>
 <p  align="center">
 <b  style="font-size:30vw;">Understanding Ocean Deoxygenation</b>
