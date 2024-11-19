@@ -11,7 +11,6 @@ dependencies = [
   "torchvision==0.19.1",
   "tqdm==4.66.4",
   "xarray==2024.6.0",
-  "xformers==0.0.28",
   "zarr==2.18.2",
   "netCDF4==1.7.0",
 ]
