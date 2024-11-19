@@ -13,10 +13,17 @@ repos:
   rev: v4.5.0
   hooks:
     - id: check-added-large-files
+      files: ^poseidon/
     - id: check-merge-conflict
+      files: ^poseidon/
     - id: check-toml
+      files: ^poseidon/.*\.toml$
     - id: check-yaml
+      files: ^poseidon/.*\.ya?ml$
     - id: end-of-file-fixer
+      files: ^poseidon/
     - id: mixed-line-ending
       args: [--fix=lf]
+      files: ^poseidon/
     - id: trailing-whitespace
+      files: ^poseidon/
