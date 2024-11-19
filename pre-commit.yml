@@ -3,11 +3,11 @@ repos:
   rev: v0.4.8
   hooks:
     - id: ruff
-      types_or: [python, jupyter]
+      types_or: [python]
       files: ^poseidon/.*\.py$
     - id: ruff-format
       args: [--diff]
-      types_or: [python, jupyter]
+      types_or: [python]
       files: ^src/.*\.py$
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v4.5.0
