@@ -1,4 +1,4 @@
-name: Continuous integration
+name: Continuous Integration Pipeline
 
 on:
   pull_request:
@@ -25,9 +25,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install dependencies
+      - name: Installing project dependencies
         run: |
           pip install pytest
           pip install . --extra-index-url https://download.pytorch.org/whl/cpu
-      - name: Run tests
+      - name: Running tests
         run: pytest tests
