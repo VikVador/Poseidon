@@ -3,18 +3,27 @@ repos:
   rev: v0.4.8
   hooks:
     - id: ruff
-      types_or: [python, jupyter]
+      types_or: [python]
+      files: ^(poseidon/|scripts/).*\.py$
     - id: ruff-format
       args: [--diff]
-      types_or: [python, jupyter]
+      types_or: [python]
+      files: ^(poseidon/|scripts/).*\.py$
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v4.5.0
   hooks:
     - id: check-added-large-files
+      files: ^(poseidon/|scripts/)
     - id: check-merge-conflict
-    - id: check-toml
-    - id: check-yaml
+      files: ^(poseidon/|scripts/)
     - id: end-of-file-fixer
+      files: ^(poseidon/|scripts/)
     - id: mixed-line-ending
       args: [--fix=lf]
+      files: ^(poseidon/|scripts/)
     - id: trailing-whitespace
+      files: ^(poseidon/|scripts/)
+    - id: check-toml
+      files: pyproject.toml
+    - id: check-yaml
+      files: ^scripts/.*\.ya?ml$
