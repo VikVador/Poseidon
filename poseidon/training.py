@@ -11,7 +11,7 @@ from tqdm import tqdm
 from typing import Dict, Tuple
 
 # isort: split
-from poseidon.config import POSEIDON_MODEL
+from poseidon.config import PATH_MODEL
 from poseidon.data.const import DATASET_REGION, TOY_DATASET_REGION
 from poseidon.data.dataloaders import get_dataloaders, get_toy_dataloaders
 from poseidon.diffusion.backbone import PoseidonBackbone
@@ -137,7 +137,7 @@ def training(
 
     # --- Saving ---
     nn_name = generate_model_name(length=8)
-    nn_save_dir = POSEIDON_MODEL / nn_name
+    nn_save_dir = PATH_MODEL / nn_name
     nn_save_dir.mkdir(parents=True, exist_ok=True)
     configs = {
         "config_dataloader": config_dataloader,

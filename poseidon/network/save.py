@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict
 
 # isort: split
-from poseidon.config import POSEIDON_MODEL
+from poseidon.config import PATH_MODEL
 from poseidon.data.const import DATASET_REGION, TOY_DATASET_REGION
 from poseidon.diffusion.backbone import PoseidonBackbone
 
@@ -71,7 +71,7 @@ def load_backbone(name: str, checkpoint: int) -> PoseidonBackbone:
         checkpoint: Index of backbone state to load.
     """
 
-    folder = os.path.join(POSEIDON_MODEL, name)
+    folder = os.path.join(PATH_MODEL, name)
     file_config = os.path.join(folder, "training_config.yml")
     file_checkpoint = os.path.join(folder, f"checkpoint_{checkpoint}.pth")
     with open(file_config, "r") as file:

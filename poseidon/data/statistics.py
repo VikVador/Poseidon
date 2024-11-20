@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, Optional, Sequence, Tuple
 
 # isort: split
-from poseidon.config import POSEIDON_MASK
+from poseidon.config import PATH_MASK
 from poseidon.data.preprocessing import preprocess_sample
 from poseidon.utils import generate_paths
 
@@ -95,7 +95,7 @@ def compute_statistics(
         # Load and preprocess dataset
         dataset = preprocess_sample(
             dataset=xr.open_mfdataset(path, combine="by_coords", engine="netcdf4"),
-            mask=xr.open_zarr(POSEIDON_MASK),
+            mask=xr.open_zarr(PATH_MASK),
             variables=variables,
             variables_clipping=variables_clipping,
         )

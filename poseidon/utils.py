@@ -7,7 +7,7 @@ import torch
 from typing import Dict, Sequence
 
 # isort: split
-from poseidon.config import POSEIDON_GRID, POSEIDON_PTRC, PROJECT_FOLDER_DATA
+from poseidon.config import PATH_GRID, PATH_PTRC, SIMULATION_DATA
 
 
 def generate_paths() -> Dict[tuple, Sequence[str]]:
@@ -16,16 +16,16 @@ def generate_paths() -> Dict[tuple, Sequence[str]]:
     Returns:
         A dictionary which, given a key "YEAR-MONTH", returns paths to fetch data.
     """
-    with open(POSEIDON_GRID, "r") as file:
+    with open(PATH_GRID, "r") as file:
         physics_data = ast.literal_eval(file.read())
-    with open(POSEIDON_PTRC, "r") as file:
+    with open(PATH_PTRC, "r") as file:
         biogeochemistry_data = ast.literal_eval(file.read())
 
     # Creating the complete dictionnary of path mappings to data
     dataset_paths = {}
     for date_key in physics_data:
         combined_paths = physics_data[date_key] + biogeochemistry_data[date_key]
-        dataset_paths[date_key] = [str(PROJECT_FOLDER_DATA) + path for path in combined_paths]
+        dataset_paths[date_key] = [str(SIMULATION_DATA) + path for path in combined_paths]
     return dataset_paths
 
 

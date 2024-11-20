@@ -6,8 +6,8 @@ from dawgz import Job, schedule
 
 # isort: split
 from poseidon.config import (
-    POSEIDON_DATA,
-    POSEIDON_STAT,
+    PATH_DATA,
+    PATH_STAT,
 )
 from poseidon.data.const import (
     DATASET_TESTING_DATE_END,
@@ -25,14 +25,14 @@ if __name__ == "__main__":
         "--output_path",
         "-o",
         type=str,
-        default=POSEIDON_DATA,
+        default=PATH_DATA,
         help="Output .zarr file path.",
     )
     parser.add_argument(
         "--statistics_path",
         "-s",
         type=str,
-        default=POSEIDON_STAT,
+        default=PATH_STAT,
         help="Output .zarr file path.",
     )
     parser.add_argument(

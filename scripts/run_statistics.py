@@ -5,7 +5,7 @@ import argparse
 from dawgz import Job, schedule
 
 # isort: split
-from poseidon.config import POSEIDON_STAT
+from poseidon.config import PATH_STAT
 from poseidon.data.const import (
     DATASET_TRAINING_DATE_END,
     DATASET_TRAINING_DATE_START,
@@ -23,7 +23,7 @@ if __name__ == "__main__":
         "--output_path",
         "-o",
         type=str,
-        default=POSEIDON_STAT,
+        default=PATH_STAT,
         help="Output .zarr file path.",
     )
     parser.add_argument(
