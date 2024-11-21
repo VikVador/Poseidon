@@ -50,7 +50,6 @@ class PoseidonDataset(Dataset):
 
         assert_date_format(start_date)
         assert_date_format(end_date)
-
         self.dataset = xr.open_zarr(path).sel(time=slice(start_date, end_date))
         self.dataset = self.dataset[variables] if variables else self.dataset
         self.dataset = self.dataset.isel(**region) if region else self.dataset
