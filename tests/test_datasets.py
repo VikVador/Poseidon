@@ -11,7 +11,7 @@ from pathlib import Path
 from poseidon.data.datasets import PoseidonDataset
 
 TOY_REGION = {
-    "latitude": slice(0, 2),
+    "latitude": slice(0, 1),
     "longitude": slice(0, 3),
     "level": slice(0, 4),
 }
