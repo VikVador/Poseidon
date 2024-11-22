@@ -17,6 +17,7 @@ FAKE_REGION = {
 }
 
 
+# fmt: off
 @pytest.fixture
 def fake_black_sea_dataset(tmp_path) -> Path:
     r"""Create a fake Black Sea dataset.
@@ -78,19 +79,32 @@ def test_PoseidonDataset(fake_black_sea_dataset, trajectory_size, variables, reg
         region=region,
     )
 
-    x, time = ds[0]
-    z_total, t, lat, lon = x.shape
-    lt, ln = (4, 4) if region is None else (2, 3)
-    zt = (5 * 4 + 1) if variables is None else (1 * 4 + 1)
+    # Dataset
+    SAMPLES   = len(ds)
+    SAMPLES_E = ds.dataset.time.size - trajectory_size + 1
 
-    assert t == trajectory_size, f"Expected {trajectory_size} but got {t}"
-    assert lat == lt, f"Expected {lt} but got {lat}"
-    assert lon == ln, f"Expected {ln} but got {lon}"
-    assert z_total == zt, f"Expected {zt} but got {z_total}"
-    assert len(ds) == ds.dataset.time.size - trajectory_size + 1, (
-        f"Expected {ds.dataset.time.size - trajectory_size + 1} " f"but got {len(ds)}"
-    )
-    assert time.shape == (
-        trajectory_size,
-        3,
-    ), f"Expected ({trajectory_size}, 3) but got {time.shape}"
+    # Sample
+    x, time = ds[0]
+
+    Z, T, LAT, LON = x.shape
+
+    Z_E   = 21 if variables is None else 5
+    T_E   = trajectory_size
+    LAT_E = 4 if region is None else 2
+    LON_E = 4 if region is None else 3
+
+    # Time
+    TIME_T     = time.shape[0]
+    TIME_DATES = time.shape[1]
+
+    TIME_T_E     = trajectory_size
+    TIME_DATES_E = 3
+
+    # Assertion
+    assert Z == Z_E,                   f"ERROR - Wrong number of total levels ({Z_E} != {Z})"
+    assert T == T_E,                   f"ERROR - Wrong number of time steps ({T_E} != {T})"
+    assert LAT == LAT_E,               f"ERROR - Wrong number of latitude points ({LAT_E} != {LAT})"
+    assert LON == LON_E,               f"ERROR - Wrong number of longitude points ({LON_E} != {LON})"
+    assert TIME_T == TIME_T_E,         f"ERROR - Wrong number of time steps ({TIME_T_E} != {TIME_T})"
+    assert TIME_DATES == TIME_DATES_E, f"ERROR - Wrong number of dates elements({TIME_DATES_E} != {TIME_DATES})"
+    assert SAMPLES == SAMPLES_E,       f"ERROR - Wrong number of samples in dataset ({SAMPLES_E} != {SAMPLES})"
