@@ -1,4 +1,4 @@
-r"""Tools to perfom specific preprocessing steps over a dataset."""
+r"""Tools to perfom preprocessing of a dataset."""
 
 import wandb
 import xarray as xr
@@ -8,7 +8,7 @@ from typing import Dict, Optional, Sequence, Tuple
 
 # isort: split
 from poseidon.config import PATH_MASK
-from poseidon.utils import generate_paths
+from poseidon.data.tools import generate_paths
 
 
 def cliping(

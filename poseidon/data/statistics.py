@@ -1,7 +1,6 @@
-r"""Tools to compute statistics over a dataset."""
+r"""Tools to compute statistics of a dataset."""
 
 import numpy as np
-import wandb
 import xarray as xr
 
 from pathlib import Path
@@ -10,7 +9,7 @@ from typing import Dict, Optional, Sequence, Tuple
 # isort: split
 from poseidon.config import PATH_MASK
 from poseidon.data.preprocessing import preprocess_sample
-from poseidon.utils import generate_paths
+from poseidon.data.tools import generate_paths
 
 
 class PoseidonStatistics:
@@ -63,60 +62,64 @@ class PoseidonStatistics:
 
 def compute_statistics(
     output_path: Path,
-    start_date: str,
-    end_date: str,
+    date_start: str,
+    date_end: str,
     wandb_mode: str,
     variables: Optional[Sequence[str]] = None,
-    variables_clipping: Optional[Dict[str, Tuple[int, int]]] = None,
+    clipping: Optional[Dict[str, Tuple[int, int]]] = None,
 ) -> None:
-    r"""Computes mean and standard deviation for a dataset and saves the results to Zarr format.
+    r"""Computes statistics of a Black Sea dataset and saves them.
 
-    Args:
+    Statistics:
+        The mean and standard deviation are computed for each variable. Additionally,
+        statistics are computed independently for each level, reflecting the fact that
+        dynamics at different levels may differ (e.g., surface vs. higher atmospheric levels).
+
+    Arguments:
         output_path: Path where the output .zarr file will be saved.
-        start_date: Start date for the data range in 'YYYY-MM' format.
-        end_date: End date for the data range in 'YYYY-MM' format.
-        wandb_mode: Mode for wandb (e.g., 'online', 'offline').
-        variables: List of variable names to retain from the dataset.
-        variables_clipping: Dictionary of variables and their respective min and max values.
+        date_start: Start date for the data range in 'YYYY-MM' format.
+        date_end: End date for the data range in 'YYYY-MM' format.
+        wandb_mode: Wether to use Weights & Biases for logging or not.
+        variables: Variable for which statistics are computed.
+        clipping: Physical limits for each variable, i.e. domain of definition.
     """
+    import wandb
 
     wandb.init(project="Poseidon-Statistics", mode=wandb_mode)
+
+    # Initialization
     paths = generate_paths()
+    mask = xr.open_zarr(PATH_MASK).load()
     stats_calculator = PoseidonStatistics()
-    processing_data = False
 
     for date, path in paths.items():
-        # -- Temporal Check (1) --
-        if date == start_date:
-            processing_data = True
-        if not processing_data:
+        # Temporal Filtering
+        if date < date_start or date_end < date:
             continue
 
-        # Load and preprocess dataset
+        # Do not load until variables are selected
         dataset = preprocess_sample(
             dataset=xr.open_mfdataset(path, combine="by_coords", engine="netcdf4"),
-            mask=xr.open_zarr(PATH_MASK),
+            mask=mask,
             variables=variables,
-            variables_clipping=variables_clipping,
+            variables_clipping=clipping,
         )
 
-        # Update statistics with current dataset
         stats_calculator.update(dataset)
-        wandb.log({"Progress/Year": int(date[:4]), "Progress/Month": int(date[5:])})
         dataset.close()
 
-        # -- Temporal Check (2) --
-        if date == end_date:
-            break
+        wandb.log({"Progress/Year": int(date[:4]), "Progress/Month": int(date[5:])})
 
-    # Compute and save the final statistics dataset
-    mean = stats_calculator.get_mean().load()
-    std = stats_calculator.get_standard_deviation().load()
-    stats_ds = xr.concat(
-        [mean, std],
+    # Load and save the final statistics dataset
+    dataset_statistics = xr.concat(
+        [
+            stats_calculator.get_mean().load(),
+            stats_calculator.get_standard_deviation().load(),
+        ],
         dim="statistic",
     )
-    stats_ds = stats_ds.assign_coords(statistic=["mean", "std"])
-    stats_ds.attrs.update({"Date (Start)": start_date, "Date (End)": end_date})
-    stats_ds.to_zarr(output_path, mode="w")
+    dataset_statistics = dataset_statistics.assign_coords(statistic=["mean", "std"])
+    dataset_statistics.attrs.update({"Date (Start)": date_start, "Date (End)": date_end})
+    dataset_statistics.to_zarr(output_path, mode="w")
+
     wandb.finish()
