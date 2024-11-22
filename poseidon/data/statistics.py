@@ -1,6 +1,7 @@
 r"""Tools to compute statistics of a dataset."""
 
 import numpy as np
+import wandb
 import xarray as xr
 
 from pathlib import Path
@@ -83,8 +84,6 @@ def compute_statistics(
         variables: Variable for which statistics are computed.
         clipping: Physical limits for each variable, i.e. domain of definition.
     """
-    import wandb
-
     wandb.init(project="Poseidon-Statistics", mode=wandb_mode)
 
     # Initialization
