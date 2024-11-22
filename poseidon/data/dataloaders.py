@@ -70,8 +70,7 @@ def _get_dataloaders_from_datasets(
     r"""Helper tool to generate dataloaders from datasets.
 
     Arguments:
-        get_datasets: A function that returns training, validation and test datasets.
-        others: check arguments passed to :func:`get_dataloaders`.
+        get_datasets: A function that returns datasets.
     """
 
     datasets = get_datasets(

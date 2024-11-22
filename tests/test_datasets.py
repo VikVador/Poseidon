@@ -1,4 +1,4 @@
-r"""Tests for the aang.data.dataset module."""
+r"""Tests for the aang.data.datasets module."""
 
 import numpy as np
 import pandas as pd
@@ -106,5 +106,5 @@ def test_PoseidonDataset(fake_black_sea_dataset, trajectory_size, variables, reg
     assert LAT == LAT_E,               f"ERROR - Wrong number of latitude points ({LAT_E} != {LAT})"
     assert LON == LON_E,               f"ERROR - Wrong number of longitude points ({LON_E} != {LON})"
     assert TIME_T == TIME_T_E,         f"ERROR - Wrong number of time steps ({TIME_T_E} != {TIME_T})"
-    assert TIME_DATES == TIME_DATES_E, f"ERROR - Wrong number of dates elements({TIME_DATES_E} != {TIME_DATES})"
+    assert TIME_DATES == TIME_DATES_E, f"ERROR - Wrong number of elements in date({TIME_DATES_E} != {TIME_DATES})"
     assert SAMPLES == SAMPLES_E,       f"ERROR - Wrong number of samples in dataset ({SAMPLES_E} != {SAMPLES})"
