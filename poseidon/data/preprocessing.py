@@ -1,4 +1,4 @@
-r"""Data - Tools to perfom specific preprocessing steps over a dataset."""
+r"""Tools to perfom specific preprocessing steps over a dataset."""
 
 import wandb
 import xarray as xr

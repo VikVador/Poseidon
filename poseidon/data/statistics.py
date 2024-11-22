@@ -1,4 +1,4 @@
-r"""Data -  Class to compute statistics incrementally over a dataset."""
+r"""Tools to compute statistics over a dataset."""
 
 import numpy as np
 import wandb
