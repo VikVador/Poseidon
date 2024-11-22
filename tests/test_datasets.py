@@ -10,7 +10,7 @@ from pathlib import Path
 # isort: split
 from poseidon.data.datasets import PoseidonDataset
 
-TOY_REGION = {
+FAKE_REGION = {
     "latitude": slice(0, 2),
     "longitude": slice(0, 3),
     "level": slice(0, 4),
@@ -65,7 +65,7 @@ def fake_black_sea_dataset(tmp_path) -> Path:
 
 @pytest.mark.parametrize("trajectory_size", [1, 3])
 @pytest.mark.parametrize("variables", [None, ["ssh", "votemper"]])
-@pytest.mark.parametrize("region", [None, TOY_REGION])
+@pytest.mark.parametrize("region", [None, FAKE_REGION])
 def test_PoseidonDataset(fake_black_sea_dataset, trajectory_size, variables, region):
     r"""Testing PoseidonDataset class."""
 
