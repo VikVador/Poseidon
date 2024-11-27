@@ -30,8 +30,8 @@ class PoseidonDataset(Dataset):
 
     Arguments:
         path: Path to the Zarr dataset.
-        start_date: Start date of the data split (format: 'YYYY-MM-DD').
-        end_date: End date of the data split (format: 'YYYY-MM-DD').
+        date_start: Start date of the data split (format: 'YYYY-MM-DD').
+        date_end: End date of the data split (format: 'YYYY-MM-DD').
         trajectory_size: Number of time steps in each sample.
         variables: Variable names to retain from the preprocessed dataset.
         region: Region of interest to extract from the dataset.
@@ -40,17 +40,17 @@ class PoseidonDataset(Dataset):
     def __init__(
         self,
         path: Path,
-        start_date: str,
-        end_date: str,
+        date_start: str,
+        date_end: str,
         trajectory_size: int = 1,
         variables: Optional[Sequence[str]] = None,
         region: Optional[Dict[str, Tuple[int, int]]] = None,
     ):
         super().__init__()
 
-        assert_date_format(start_date)
-        assert_date_format(end_date)
-        self.dataset = xr.open_zarr(path).sel(time=slice(start_date, end_date))
+        assert_date_format(date_start)
+        assert_date_format(date_end)
+        self.dataset = xr.open_zarr(path).sel(time=slice(date_start, date_end))
         self.dataset = self.dataset[variables] if variables else self.dataset
         self.dataset = self.dataset.isel(**region) if region else self.dataset
         self.trajectory_size = trajectory_size
@@ -112,12 +112,12 @@ def get_datasets(**kwargs) -> Tuple[PoseidonDataset, PoseidonDataset, PoseidonDa
     datasets = [
         PoseidonDataset(
             path=PATH_DATA,
-            start_date=start_date,
-            end_date=end_date,
+            date_start=date_start,
+            date_end=date_end,
             region=DATASET_REGION,
             **kwargs,
         )
-        for start_date, end_date in [
+        for date_start, date_end in [
             DATASET_DATES_TRAINING,
             DATASET_DATES_VALIDATION,
             DATASET_DATES_TEST,
@@ -152,13 +152,13 @@ def get_toy_datasets(
     datasets = [
         PoseidonDataset(
             path=PATH_DATA,
-            start_date=start_date,
-            end_date=end_date,
+            date_start=date_start,
+            date_end=date_end,
             variables=variables,
             region=TOY_DATASET_REGION,
             **kwargs,
         )
-        for start_date, end_date in [
+        for date_start, date_end in [
             TOY_DATASET_DATES_TRAINING,
             TOY_DATASET_DATES_VALIDATION,
             TOY_DATASET_DATES_TEST,
