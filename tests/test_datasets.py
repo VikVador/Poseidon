@@ -72,8 +72,8 @@ def test_PoseidonDataset(fake_black_sea_dataset, trajectory_size, variables, reg
 
     ds = PoseidonDataset(
         path=fake_black_sea_dataset,
-        start_date="1995-01-01",
-        end_date="1995-01-10",
+        date_start="1995-01-01",
+        date_end="1995-01-10",
         trajectory_size=trajectory_size,
         variables=variables,
         region=region,

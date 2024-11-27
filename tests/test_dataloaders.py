@@ -76,8 +76,8 @@ def test_get_dataloaders(fake_black_sea_dataset, trajectory_size, variables, bat
         return [
             PoseidonDataset(
                 path=fake_black_sea_dataset,
-                start_date=ds,
-                end_date=de,
+                date_start=ds,
+                date_end=de,
                 trajectory_size=trajectory_size,
                 variables=variables,
             )
