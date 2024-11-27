@@ -9,7 +9,7 @@ from typing import Dict, Optional, Sequence, Tuple
 
 # isort: split
 from poseidon.config import PATH_MASK
-from poseidon.data.preprocessing import preprocess_sample
+from poseidon.data.preprocessing import dataset_preprocessing
 from poseidon.data.tools import generate_paths
 
 
@@ -22,7 +22,7 @@ class PoseidonStatistics:
         self.mu = None
         self.mu_squared = None
         self.total_count = None
-        self.eps = 1e-32
+        self.eps = 1e-8
 
     def update(self, dataset: xr.Dataset) -> None:
         r"""Update the current statistics with new data."""
@@ -62,7 +62,7 @@ class PoseidonStatistics:
 
 
 def compute_statistics(
-    output_path: Path,
+    path_output: Path,
     date_start: str,
     date_end: str,
     wandb_mode: str,
@@ -77,7 +77,7 @@ def compute_statistics(
         dynamics at different levels may differ (e.g., surface vs. higher atmospheric levels).
 
     Arguments:
-        output_path: Path where the output .zarr file will be saved.
+        path_output: Path where the output .zarr file will be saved.
         date_start: Start date for the data range in 'YYYY-MM' format.
         date_end: End date for the data range in 'YYYY-MM' format.
         wandb_mode: Wether to use Weights & Biases for logging or not.
@@ -97,11 +97,11 @@ def compute_statistics(
             continue
 
         # Do not load until variables are selected
-        dataset = preprocess_sample(
+        dataset = dataset_preprocessing(
             dataset=xr.open_mfdataset(path, combine="by_coords", engine="netcdf4"),
             mask=mask,
             variables=variables,
-            variables_clipping=clipping,
+            clipping=clipping,
         )
 
         stats_calculator.update(dataset)
@@ -119,6 +119,6 @@ def compute_statistics(
     )
     dataset_statistics = dataset_statistics.assign_coords(statistic=["mean", "std"])
     dataset_statistics.attrs.update({"Date (Start)": date_start, "Date (End)": date_end})
-    dataset_statistics.to_zarr(output_path, mode="w")
+    dataset_statistics.to_zarr(path_output, mode="w")
 
     wandb.finish()
