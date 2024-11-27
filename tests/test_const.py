@@ -1,4 +1,4 @@
-r"""Tests for the poseidon.data.dataset module."""
+r"""Tests for the poseidon.data.const module."""
 
 from poseidon.data.const import DATASET_VARIABLES
 

@@ -1,4 +1,4 @@
-r"""Data - Tools to perfom specific preprocessing steps over a dataset."""
+r"""Tools to perform dataset preprocessing."""
 
 import wandb
 import xarray as xr
@@ -7,121 +7,154 @@ from pathlib import Path
 from typing import Dict, Optional, Sequence, Tuple
 
 # isort: split
-from poseidon.config import POSEIDON_MASK
-from poseidon.utils import generate_paths
+from poseidon.config import PATH_MASK
+from poseidon.data.tools import generate_paths
 
 
-def cliping(
-    dataset: xr.Dataset, variables_clipping: Optional[Dict[str, Tuple[int, int]]] = None
+def dataset_clipping(
+    dataset: xr.Dataset,
+    clipping: Optional[Dict[str, Tuple[int, int]]] = None,
 ) -> xr.Dataset:
-    r"""Helper function to clip values in a dataset.
+    r"""Bounds variables to their physical limits.
+
+    Information
+        Numerical errors can lead to values outside the physical limits of the variables.
 
     Arguments:
-        dataset: Dataset whose variables must be clipped.
-        variables_clipping: Dictionary of variables and their respective min and max values.
+        dataset: Dataset whose variables must be physically bounded.
+        clipping: Dictionary where keys are variable names, and values are tuples defining
+                  the minimum and maximum bounds for each variable. If both are `None`,
+                  no clipping is applied for that variable.
     """
-    if variables_clipping is None:
-        return dataset
-    for variable, (min_value, max_value) in variables_clipping.items():
-        dataset[variable] = dataset[variable].clip(min=min_value, max=max_value)
+
+    if clipping:
+        # Loop through subset of variables and their physical limits
+        for variable, (min_value, max_value) in clipping.items():
+            # Unbounded domain is not handled by clip (issue)
+            if min_value is None and max_value is None:
+                continue
+
+            # Clip the variable to its physical limits
+            dataset[variable] = dataset[variable].clip(
+                min=min_value,
+                max=max_value,
+            )
+
     return dataset
 
 
-def preprocess_sample(
+def dataset_preprocessing(
     dataset: xr.Dataset,
-    mask: xr.Dataset,
+    mask: Optional[xr.Dataset] = None,
     variables: Optional[Sequence[str]] = None,
-    variables_clipping: Optional[Dict[str, Tuple[int, int]]] = None,
+    clipping: Optional[Dict[str, Tuple[int, int]]] = None,
 ) -> xr.Dataset:
-    r"""Filters an xarray dataset by retaining specific variables,
-        removing unused variables, renaming dimensions, and setting
-        appropriate attributes.
+    r"""Preprocess a raw Black Sea xarray dataset of any dimension.
+
+    Preprocessing:
+        1. Drop unused variables.
+        2. Rename coordinates.
+        3. Physical bounds clipping.
+        4. Masking land values.
 
     Arguments:
-        dataset: The input xarray dataset to be filtered.
-        mask: Mask to apply to the dataset.
-        variables: A list of variable names to retain.
-        variables_clipping: Dictionary of variables and their respective min and max values.
+        dataset: Unprocessed input xarray dataset.
+        mask: Mask to apply to the dataset (with same dimensions).
+        variables: List of variable names to retain from the original dataset.
+        clipping: Dictionary where keys are variable names, and values are tuples defining
+                  the minimum and maximum bounds for each variable. If both are `None`,
+                  no clipping is applied for that variable.
     """
 
     if variables is not None:
         dataset = dataset[variables]
-    unused_vars = ["time_centered", "time_instant", "nav_lat", "nav_lon"]
-    dataset = dataset.drop_vars(unused_vars)
+
+    dataset = dataset.drop_vars([
+        "time_centered",
+        "time_instant",
+        "nav_lat",
+        "nav_lon",
+    ])
+
     dataset = dataset.rename({
         "x": "longitude",
         "y": "latitude",
         "deptht": "level",
         "time_counter": "time",
     })
-    dataset = cliping(dataset=dataset, variables_clipping=variables_clipping)
 
-    # Broadcast the mask to the dataset time dimension
-    mask = mask.expand_dims(dim="time", axis=0)
-    mask = xr.concat([mask for _ in range(dataset.time.size)], dim="time")
-    return dataset.where(mask["mask"] != 0)
+    dataset = dataset_clipping(
+        dataset=dataset,
+        clipping=clipping,
+    )
+
+    if mask:
+        # Broadcast the mask to the dataset time dimension
+        mask = mask.expand_dims(dim="time", axis=0)
+        mask = xr.concat([mask for _ in range(dataset.time.size)], dim="time")
+        dataset = dataset.where(mask["mask"] != 0)
+
+    return dataset
 
 
-def compute_preprocessed_dataset(
-    output_path: Path,
-    statistics_path: Path,
-    start_date: str,
-    end_date: str,
+def compute_preprocessing(
+    path_output: Path,
+    path_statistics: Path,
+    date_start: str,
+    date_end: str,
     wandb_mode: str,
     variables: Optional[Sequence[str]] = None,
-    variables_clipping: Optional[Dict[str, Tuple[int, int]]] = None,
+    clipping: Optional[Dict[str, Tuple[int, int]]] = None,
     variables_surface: Optional[Sequence[str]] = None,
 ) -> None:
-    r"""Preprocess raw data using feature extraction, clipping, standardization, ...
+    r"""Launch a preprocessing pipeline for a Black Sea dataset.
 
     Arguments:
-        output_path: Path where the output .zarr file will be saved.
-        statistics_path: Path to the statistics file.
-        start_date: Start date for the data range in 'YYYY-MM' format.
-        end_date: End date for the data range in 'YYYY-MM' format.
-        wandb_mode: Mode for wandb (e.g., 'online', 'offline').
-        variables: List of variable names to retain from the dataset.
-        variables_clipping: Dictionary of variables and their respective min and max values.
-        variables_surface: List of variables to retain only the surface level.
+        path_output: Path where the output .zarr file will be saved.
+        path_statistics: Path to the (pre-computed) statistics file.
+        date_start: Start date for the data range in 'YYYY-MM' format.
+        date_end: End date for the data range in 'YYYY-MM' format.
+        wandb_mode: Wether to use Weights & Biases for logging or not.
+        variables: Variable for which are retained in the final dataset.
+        variables_surface: Variables only defined at the surface.
+        clipping: Physical limits for each variable, i.e. domain of definition.
     """
-
-    # Initialization
     wandb.init(project="Poseidon-Preprocessing", mode=wandb_mode)
-    mask = xr.open_zarr(POSEIDON_MASK)
+
     paths = generate_paths()
-    stat = xr.open_zarr(statistics_path)
-    mean = stat.sel(statistic="mean").load()
-    std = stat.sel(statistic="std").load()
-    preprocessing_state = False
+    mask = xr.open_zarr(PATH_MASK)
+    stat = xr.open_zarr(path_statistics)
+    mean, std = (
+        stat.sel(statistic="mean").load(),
+        stat.sel(statistic="std").load(),
+    )
 
     for date, path in paths.items():
-        # Xarray is badly designed for appending data (bug if nothing initialy exists)
-        xarray_mode = "a"
-
-        # -- Temporal Check (1) --
-        if date == start_date:
-            preprocessing_state = True
-            xarray_mode = "w"
-        if not preprocessing_state:
+        # Temporal Filtering
+        if date < date_start or date_end < date:
             continue
 
-        # -- Preprocessing --
         dataset = xr.open_mfdataset(path)
-        dataset = preprocess_sample(dataset, mask, variables, variables_clipping)
+        dataset = dataset_preprocessing(dataset, mask, variables, clipping)
         dataset = (dataset - mean) / std
-        for var in variables_surface:
-            dataset[var] = dataset[var].isel(level=0)
 
-        # Fixing chuncks for better performance
+        if variables_surface:
+            for var in variables_surface:
+                if var in dataset:
+                    dataset[var] = dataset[var].isel(level=0)
+
+        # Chunk dataset for performance
         dataset = dataset.chunk({"time": 1})
-        dataset.to_zarr(
-            output_path, mode=xarray_mode, append_dim="time"
-        ) if xarray_mode == "a" else dataset.to_zarr(output_path, mode=xarray_mode)
-        dataset.close()
-        wandb.log({"Progress/Year": int(date[:4]), "Progress/Month": int(date[5:])})
 
-        # -- Temporal Check (2) --
-        if date == end_date:
-            break
+        # Determine the mode for writing to Zarr (solve Xarray bug)
+        xarray_mode = "w" if date == date_start else "a"
+
+        # Write dataset to output .zarr file
+        dataset.to_zarr(
+            path_output, mode=xarray_mode, append_dim="time"
+        ) if xarray_mode == "a" else dataset.to_zarr(path_output, mode=xarray_mode)
+        dataset.close()
+
+        wandb.log({"Progress/Year": int(date[:4]), "Progress/Month": int(date[5:])})
 
     wandb.finish()

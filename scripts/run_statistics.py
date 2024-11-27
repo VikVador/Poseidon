@@ -1,44 +1,42 @@
-r"""Scripts - Computes statistics over a dataset."""
+r"""Script to perform statistical analysis of a dataset."""
 
 import argparse
 
-from dawgz import Job, schedule
+from dawgz import job, schedule
+from functools import partial
 
 # isort: split
-from poseidon.config import POSEIDON_STAT
 from poseidon.data.const import (
-    DATASET_TRAINING_DATE_END,
-    DATASET_TRAINING_DATE_START,
+    DATASET_DATES_TRAINING,
     DATASET_VARIABLES,
     DATASET_VARIABLES_CLIPPING,
 )
 from poseidon.data.statistics import compute_statistics
+from poseidon.date import assert_date_format
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Pre-compute statistics over a Black Sea dataset."
-    )
+    parser = argparse.ArgumentParser(description="Compute statistics of a dataset.")
 
     parser.add_argument(
-        "--output_path",
+        "--path_output",
         "-o",
         type=str,
-        default=POSEIDON_STAT,
+        required=True,
         help="Output .zarr file path.",
     )
     parser.add_argument(
         "--date_start",
         "-ds",
         type=str,
-        default=DATASET_TRAINING_DATE_START,
-        help="Start date (YYYY-MM).",
+        default=DATASET_DATES_TRAINING[0],
+        help="Start date (YYYY-MM-DD).",
     )
     parser.add_argument(
         "--date_end",
         "-de",
         type=str,
-        default=DATASET_TRAINING_DATE_END,
-        help="End date (YYYY-MM).",
+        default=DATASET_DATES_TRAINING[1],
+        help="End date (YYYY-MM-DD).",
     )
     parser.add_argument(
         "--variables",
@@ -46,13 +44,13 @@ if __name__ == "__main__":
         type=str,
         nargs="+",
         default=DATASET_VARIABLES,
-        help="Variables to keep in dataset.",
+        help="List of variables for which compute statistics.",
     )
     parser.add_argument(
         "--use_wandb",
         "-w",
         action="store_true",
-        help="Use Weights & Biases for logging advancement of the computation.",
+        help="Use Weights & Biases for logging advancement.",
     )
     parser.add_argument(
         "--backend",
@@ -60,23 +58,25 @@ if __name__ == "__main__":
         type=str,
         default="slurm",
         choices=["slurm", "async"],
-        help="Computation backend.",
+        help="Computation backend, 'slurm' for cluster-based scheduling and 'async' for local execution.",
     )
 
     args = parser.parse_args()
+    assert_date_format(args.date_start)
+    assert_date_format(args.date_end)
 
-    def dawgz_statistics():
-        compute_statistics(
-            output_path=args.output_path,
-            start_date=args.date_start,
-            end_date=args.date_end,
-            wandb_mode="online" if args.use_wandb else "disabled",
-            variables=args.variables,
-            variables_clipping=DATASET_VARIABLES_CLIPPING,
-        )
+    dawgz_statistics = partial(
+        compute_statistics,
+        args.path_output,
+        args.date_start,
+        args.date_end,
+        "online" if args.use_wandb else "disabled",
+        args.variables,
+        DATASET_VARIABLES_CLIPPING,
+    )
 
     schedule(
-        Job(
+        job(
             dawgz_statistics,
             cpus=8,
             mem="128GB",

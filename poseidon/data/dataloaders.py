@@ -1,14 +1,21 @@
-r"""Data - Tools to create dataloaders."""
+r"""Dataloaders."""
 
 from torch.utils.data import DataLoader
 from typing import Any, Callable, Optional, Sequence, Tuple
 
 # isort: split
-from poseidon.data.datasets import PoseidonDataset, get_datasets, get_toy_datasets
+from poseidon.data.datasets import (
+    PoseidonDataset,
+    get_datasets,
+    get_toy_datasets,
+)
 
 
 def get_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
     r"""Returns the training, validation, and test dataloaders.
+
+    Shuffling:
+        Only the training dataset is shuffled (by default).
 
     Splits:
         Training: 1995-01-01 to 2015-12-31.
@@ -18,10 +25,9 @@ def get_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
     Arguments:
         trajectory_size: Number of time steps in each sample.
         variables: Variable names to retain from the dataset.
-        shuffle_training: Whether to shuffle the training dataset or not.
+        shuffle: List of booleans defining which dataset to shuffle
         kwargs: Keyword arguments passed to the dataloader.
     """
-
     return _get_dataloaders_from_datasets(
         get_datasets=get_datasets,
         **kwargs,
@@ -34,18 +40,20 @@ def get_toy_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
     Variables:
         Only the sea surface height, temperature and oyxgen fields.
 
+    Shuffling:
+        Only the training dataset is shuffled (by default).
+
     Splits:
-        Training: 2015-07-01 to 2015-09-30.
-        Validation: 2019-07-01 to 2019-09-30.
-        Test: 2022-07-01 to 2022-09-30.
+        Training: 2014-01-01 to 2015-12-31.
+        Validation: 2019-01-01 to 2019-12-31.
+        Test: 2022-01-01 to 2022-12-31.
 
     Arguments:
         trajectory_size: Number of time steps in each sample.
         variables: Variable names to retain from the dataset.
-        shuffle_training: Whether to shuffle the training dataset or not.
+        shuffle: List of booleans defining which dataset to shuffle.
         kwargs: Keyword arguments passed to the dataloader.
     """
-
     return _get_dataloaders_from_datasets(
         get_datasets=get_toy_datasets,
         **kwargs,
@@ -56,14 +64,13 @@ def _get_dataloaders_from_datasets(
     get_datasets: Callable[..., Tuple[PoseidonDataset, PoseidonDataset, PoseidonDataset]],
     trajectory_size: int = 1,
     variables: Optional[Sequence[str]] = None,
-    shuffle_training: bool = True,
+    shuffle: Tuple[bool, bool, bool] = (True, False, False),
     **kwargs: Any,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    r"""Returns dataloaders from a dataset getter.
+    r"""Helper tool to generate dataloaders from datasets.
 
     Arguments:
-        get_datasets: A function that returns training, validation and test datasets.
-        others: check arguments passed to :func:`get_dataloaders`.
+        get_datasets: A function that returns datasets.
     """
 
     datasets = get_datasets(
@@ -74,7 +81,7 @@ def _get_dataloaders_from_datasets(
     dataloaders = [
         DataLoader(
             dataset,
-            shuffle=shuffle_training if i == 0 else False,
+            shuffle=shuffle[i],
             **kwargs,
         )
         for i, dataset in enumerate(datasets)

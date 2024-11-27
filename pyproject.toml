@@ -13,6 +13,7 @@ dependencies = [
   "xarray==2024.6.0",
   "zarr==2.18.2",
   "netCDF4==1.7.0",
+  "wandb==0.17.1",
 ]
 
 [project.optional-dependencies]
@@ -24,7 +25,6 @@ all = [
   "pre-commit==3.7.1",
   "pytest==8.2.2",
   "ruff==0.4.8",
-  "wandb==0.17.1",
 ]
 
 [tool.ruff]

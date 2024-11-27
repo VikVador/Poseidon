@@ -1,4 +1,4 @@
-r"""Data - Tools to create datasets."""
+r"""Datasets."""
 
 import dask
 import torch
@@ -10,10 +10,16 @@ from torch.utils.data import Dataset
 from typing import Dict, Optional, Sequence, Tuple
 
 # isort: split
-from poseidon.config import POSEIDON_DATA
+from poseidon.config import PATH_DATA
 from poseidon.data.const import (
+    DATASET_DATES_TEST,
+    DATASET_DATES_TRAINING,
+    DATASET_DATES_VALIDATION,
     DATASET_NAN_FILL,
     DATASET_REGION,
+    TOY_DATASET_DATES_TEST,
+    TOY_DATASET_DATES_TRAINING,
+    TOY_DATASET_DATES_VALIDATION,
     TOY_DATASET_REGION,
 )
 from poseidon.date import assert_date_format, get_date_features
@@ -24,38 +30,33 @@ class PoseidonDataset(Dataset):
 
     Arguments:
         path: Path to the Zarr dataset.
-        start_date: Start date of the data split (format: 'YYYY-MM-DD').
-        end_date: End date of the data split (format: 'YYYY-MM-DD').
+        date_start: Start date of the data split (format: 'YYYY-MM-DD').
+        date_end: End date of the data split (format: 'YYYY-MM-DD').
         trajectory_size: Number of time steps in each sample.
         variables: Variable names to retain from the preprocessed dataset.
-        region: The region of interest to extract from the dataset.
+        region: Region of interest to extract from the dataset.
     """
 
     def __init__(
         self,
         path: Path,
-        start_date: str,
-        end_date: str,
+        date_start: str,
+        date_end: str,
         trajectory_size: int = 1,
         variables: Optional[Sequence[str]] = None,
         region: Optional[Dict[str, Tuple[int, int]]] = None,
     ):
         super().__init__()
 
-        assert_date_format(start_date)
-        assert_date_format(end_date)
-
-        self.dataset = xr.open_zarr(path).sel(time=slice(start_date, end_date))
-        if variables:
-            self.dataset = self.dataset[variables]
-        if region:
-            self.dataset = self.dataset.isel(**region)
-
+        assert_date_format(date_start)
+        assert_date_format(date_end)
+        self.dataset = xr.open_zarr(path).sel(time=slice(date_start, date_end))
+        self.dataset = self.dataset[variables] if variables else self.dataset
+        self.dataset = self.dataset.isel(**region) if region else self.dataset
         self.trajectory_size = trajectory_size
 
     def __len__(self) -> int:
         r"""Return the total number of samples in the dataset."""
-
         return self.dataset.time.size - self.trajectory_size + 1
 
     def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
@@ -71,7 +72,7 @@ class PoseidonDataset(Dataset):
 
         return self.preprocess(idx, idx + self.trajectory_size)
 
-    def preprocess(self, step_start: int, step_end: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def preprocess(self, step_start: int, step_end: int) -> Tuple[Tensor, Tensor]:
         r"""Extract and reshape a sample from the dataset.
 
         Arguments:
@@ -108,21 +109,19 @@ def get_datasets(**kwargs) -> Tuple[PoseidonDataset, PoseidonDataset, PoseidonDa
         kwargs: Keyword arguments passed to :class:`PoseidonDataset`.
     """
 
-    splits = [
-        ("1995-01-01", "2015-12-31"),
-        ("2016-01-01", "2019-12-31"),
-        ("2020-01-01", "2022-12-31"),
-    ]
-
     datasets = [
         PoseidonDataset(
-            path=POSEIDON_DATA,
-            start_date=start_date,
-            end_date=end_date,
+            path=PATH_DATA,
+            date_start=date_start,
+            date_end=date_end,
             region=DATASET_REGION,
             **kwargs,
         )
-        for start_date, end_date in splits
+        for date_start, date_end in [
+            DATASET_DATES_TRAINING,
+            DATASET_DATES_VALIDATION,
+            DATASET_DATES_TEST,
+        ]
     ]
 
     return tuple(datasets)
@@ -138,9 +137,9 @@ def get_toy_datasets(
         Only the sea surface height, temperature and oyxgen fields.
 
     Splits:
-        Training: 2015-07-01 to 2015-09-30.
-        Validation: 2019-07-01 to 2019-09-30.
-        Test: 2022-07-01 to 2022-09-30.
+        Training: 2014-01-01 to 2015-12-31.
+        Validation: 2019-01-01 to 2019-12-31.
+        Test: 2022-01-01 to 2022-12-31.
 
     Arguments:
         variables: Variable names to retain from the dataset.
@@ -150,22 +149,20 @@ def get_toy_datasets(
     if variables is None:
         variables = ["ssh", "votemper", "DOX"]
 
-    splits = [
-        ("2015-07-01", "2015-09-30"),
-        ("2019-07-01", "2019-09-30"),
-        ("2022-07-01", "2022-09-30"),
-    ]
-
     datasets = [
         PoseidonDataset(
-            path=POSEIDON_DATA,
-            start_date=start_date,
-            end_date=end_date,
+            path=PATH_DATA,
+            date_start=date_start,
+            date_end=date_end,
             variables=variables,
             region=TOY_DATASET_REGION,
             **kwargs,
         )
-        for start_date, end_date in splits
+        for date_start, date_end in [
+            TOY_DATASET_DATES_TRAINING,
+            TOY_DATASET_DATES_VALIDATION,
+            TOY_DATASET_DATES_TEST,
+        ]
     ]
 
     return tuple(datasets)

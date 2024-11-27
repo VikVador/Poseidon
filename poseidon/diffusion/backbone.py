@@ -9,8 +9,8 @@ from typing import Dict, Tuple
 
 # isort: split
 from poseidon.config import (
-    POSEIDON_MASK,
-    POSEIDON_MESH,
+    PATH_MASK,
+    PATH_MESH,
 )
 from poseidon.network.unet import UNet
 
@@ -24,8 +24,8 @@ def generate_mesh_mask(region: Dict) -> torch.Tensor:
     Returns:
         Normalized spatial information with shape (4, level, lattitude, longitude).
     """
-    mask = xr.open_zarr(POSEIDON_MASK).sel(**region).mask.values
-    mesh = xr.open_zarr(POSEIDON_MESH).sel(**region)
+    mask = xr.open_zarr(PATH_MASK).sel(**region).mask.values
+    mesh = xr.open_zarr(PATH_MESH).sel(**region)
 
     # Convert normalized mesh data (x, y, z) to PyTorch tensors
     mx = torch.from_numpy(mesh.x_mesh.values) / (region["longitude"].stop - 1)
