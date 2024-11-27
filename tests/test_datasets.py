@@ -1,4 +1,4 @@
-r"""Tests for the aang.data.datasets module."""
+r"""Tests for the poseidon.data.datasets module."""
 
 import numpy as np
 import pandas as pd

@@ -1,4 +1,4 @@
-"""Tests for the aang.data.statistics module."""
+"""Tests for the poseidon.data.statistics module."""
 
 import numpy as np
 import pandas as pd
