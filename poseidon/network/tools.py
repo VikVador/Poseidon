@@ -1,4 +1,4 @@
-r"""A collection of tools used by different architecture blocks."""
+r"""A collection of tools used by different blocks."""
 
 from einops import rearrange
 from torch import Tensor
@@ -6,61 +6,76 @@ from typing import Optional, Tuple
 
 
 def reshape(
-    convolution: str,
+    hide: str,
     x: Tensor,
     mod: Optional[Tensor] = None,
-) -> Tuple[Tensor, Tensor, Tuple[int]]:
-    """Reshape a 5D input before a 1D/2D convolution.
+) -> Tuple[Tensor, Optional[Tensor], Tuple[int]]:
+    """Reshape a 5-dimensional tensor for convolutional operations.
 
     Information:
-        Temporal: B, C, T, X, Y -> (B * X * Y), C, T
-        Spatial:  B, C, T, X, Y -> (B * T), C, X, Y
+        Reshapes an input tensor by "hiding" either the spatial dimensions (`H`, `W`)
+        or the temporal dimension (`T`) within the batch dimension. This facilitates
+        applying 2D or 1D convolutional operations.
 
     Arguments:
-        convolution: Type of reshaping.
-        x: Input tensor, with shape (B, C, T, H, W).
-        mod: Modulation vector, with shape (B, D).
+        hide: Dimension to hide in the batch. Options are "space" or "time".
+        x: Input tensor of shape (B, C, T, H, W).
+        mod: Optional modulation vector of shape (B, D).
+
+    Returns:
+        x: Reshaped tensor, where the batch includes the hidden dimensions.
+        mod: Reshaped modulation vector, or `None` if not provided.
+        original_shape: Original shape of the input tensor (B, C, T, H, W).
     """
     B, C, T, H, W = x.shape
 
-    if convolution == "spatial":
-        x = rearrange(x, "b c t h w -> (b t) c h w")
-    elif convolution == "temporal":
-        x = rearrange(x, "b c t h w -> (b h w) c t")
-    else:
-        raise NotImplementedError()
+    # Define reshaping rules
+    reshape_rules = {
+        "space": "b c t h w -> (b h w) c t",
+        "time": "b c t h w -> (b t) c h w",
+    }
+    if hide not in reshape_rules:
+        raise ValueError(
+            f"ERROR (reshape) - Invalid hide option '{hide}'. Choose 'space' or 'time'."
+        )
 
+    # Handle modulation vector if provided
     if mod is not None:
-        s = H * W if convolution == "spatial" else T
-        mod = mod.unsqueeze(1).expand(-1, s, -1)
-        mod = rearrange(mod, "b s d -> (b s) d")
+        s = H * W if hide == "space" else T
+        mod = rearrange(mod.unsqueeze(1).expand(-1, s, -1), "b s d -> (b s) d")
 
-    return x, mod, (B, C, T, H, W)
+    return rearrange(x, reshape_rules[hide]), mod, (B, C, T, H, W)
 
 
 def unshape(
-    convolution: str,
+    extract: str,
     x: Tensor,
     shape: Tuple[int],
 ) -> Tensor:
-    """Unshape a 5D input after a 1D/2D convolution.
+    """Restore the original shape of a 5-dimensional tensor.
 
-    Information:
-        Temporal: (B * X * Y), C, T -> B, C, T, X, Y
-        Spatial:  (B * T), C, X, Y -> B, C, T, X, Y
+    Information
+        Reverses a reshaping operation where the spatial or temporal dimensions
+        were hidden within the batch dimension. The restored tensor returns to
+        its original shape.
 
     Arguments:
-        convolution: Type of reshaping.
-        x: Input tensor, with shape (B, C, T, H, W).
-        shape: Shape of the input tensor before reshaping.
+        extract: Dimension to extract from the batch. Options are "space" or "time".
+        x: Input tensor.
+        shape: Original shape of the tensor before reshaping (B, C, T, H, W).
+
+    Returns:
+        Tensor of shape (B, C, T, H, W), restored to its original layout.
     """
     B, C, T, H, W = shape
 
-    if convolution == "spatial":
-        x = rearrange(x, "(b t) c h w -> b c t h w", b=B, t=T)
-    elif convolution == "temporal":
-        x = rearrange(x, "(b h w) c t -> b c t h w", b=B, h=H, w=W)
-    else:
-        raise NotImplementedError()
-
-    return x
+    # Define unshaping rules
+    unshape_rules = {
+        "space": "(b h w) c t -> b c t h w",
+        "time": "(b t) c h w -> b c t h w",
+    }
+    if extract not in unshape_rules:
+        raise ValueError(
+            f"ERROR (unshape) - Invalid hide option '{extract}'. Choose 'space' or 'time'."
+        )
+    return rearrange(x, unshape_rules[extract], b=B, t=T, h=H, w=W)
