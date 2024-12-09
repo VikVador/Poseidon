@@ -10,6 +10,10 @@ SIMULATION      = Path("/gpfs/projects/acad/bsmfc/nemo4.2.0/")
 SIMULATION_DATA = SIMULATION / "BSFS_BIO" / "output_HR001"
 SIMULATION_MASK = SIMULATION / "BSFS"     / "mesh_mask.nc_new59_CMCC_noAzov"
 
+# ----- MAST (Database)
+#
+PATH_MASTDB = Path("/gpfs/scratch/acad/bsmfc/mastdb/")
+
 # ----- Poseidon
 #
 SCRATCH    = Path("/gpfs/scratch/acad/bsmfc/victor/")
