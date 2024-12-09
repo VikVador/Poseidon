@@ -4,13 +4,13 @@ r"""Information about our datasets"""
 #
 # ----- Global Information
 #
-TOY_DATASET_DATES_TRAINING   = ("2014-01-01", "2015-12-31")
-TOY_DATASET_DATES_VALIDATION = ("2019-01-01", "2019-12-31")
-TOY_DATASET_DATES_TEST       = ("2022-01-01", "2022-12-31")
+TOY_DATASET_DATES_TRAINING   = ("1995-01-01", "2017-12-31")
+TOY_DATASET_DATES_VALIDATION = ("2018-01-01", "2020-12-31")
+TOY_DATASET_DATES_TEST       = ("2021-01-01", "2022-12-31")
 
-DATASET_DATES_TRAINING       = ("1995-01-01", "2015-12-31")
-DATASET_DATES_VALIDATION     = ("2016-01-01", "2019-12-31")
-DATASET_DATES_TEST           = ("2020-01-01", "2022-12-31")
+DATASET_DATES_TRAINING       = ("1995-01-01", "2017-12-31")
+DATASET_DATES_VALIDATION     = ("2018-01-01", "2020-12-31")
+DATASET_DATES_TEST           = ("2021-01-01", "2022-12-31")
 
 DATASET_VARIABLES_ATMOSPHERE = [
     "DOX",
@@ -30,7 +30,7 @@ DATASET_VARIABLES = \
 TOY_DATASET_REGION = {
     "latitude":  slice(104, 232),
     "longitude": slice(25, 281),
-    "level":     slice(0, 32), # ~144.83 [m]
+    "level":     slice(0, 56),
 }
 
 DATASET_REGION = {
