@@ -7,7 +7,7 @@ from typing import Optional, Sequence, Union
 # isort: split
 from poseidon.network.convolution import Convolution2DBlock
 from poseidon.network.normalization import LayerNorm
-from poseidon.network.residuals import (
+from poseidon.network.residual import (
     SpatialModulatedResidualBlock,
     TemporalModulatedResidualBlock,
 )

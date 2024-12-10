@@ -46,7 +46,7 @@ class Convolution2DBlock(nn.Module):
         **kwargs,
     ):
         super().__init__()
-        self.block = ConvNd(
+        self.convolution_block = ConvNd(
             in_channels=in_channels,
             out_channels=out_channels,
             spatial=2,
@@ -55,10 +55,9 @@ class Convolution2DBlock(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         x, _, original_shape = reshape(hide="time", x=x)
-        x = self.block(x)
-        x = unshape(
+        x = self.convolution_block(x)
+        return unshape(
             extract="time",
             x=x,
             shape=original_shape[:3] + x.shape[-2:],
         )
-        return x

@@ -1,8 +1,4 @@
-r"""Modulated Residual Convolutional blocks.
-
-Inspired by: https://github.com/probabilists/azula
-
-"""
+r"""Modulated Residual Convolutional blocks."""
 
 import torch
 import torch.nn as nn
@@ -20,12 +16,20 @@ from poseidon.network.tools import reshape, unshape
 class ModulatedResidualBlock(nn.Module):
     r"""Base class for a modulated residual convolutional block.
 
+    Information:
+        The input tensor has shape (B, C, T, H, W), where T is the temporal dimension,
+        and H, W are the spatial dimensions.
+
+    Spatial:
+        If `spatial=1`, the convolution is applied along the temporal dimension (T).
+        If `spatial=2`, the convolution is applied along the spatial dimensions (H, W).
+
     Arguments:
-        channels: Number of channels.
+        channels: Number of input channels (C).
         mod_features: Number of features (D) in the modulating vector (B, D).
-        spatial: Number of spatial dimensions (used for convolution) in the target signal.
+        spatial: Number of spatial dimensions on which the convolution is applied.
         dropout: Dropout rate [0, 1].
-        kwargs: Keyword arguments passed to :class:`torch.nn.Conv1d` or :class:`torch.nn.Conv2d`.
+        kwargs: Keyword arguments passed to :class:`torch.nn.ConvXd`.
     """
 
     def __init__(
@@ -38,15 +42,15 @@ class ModulatedResidualBlock(nn.Module):
     ):
         super().__init__()
 
-        self.convolution_type = "temporal" if spatial == 1 else "spatial"
+        self.hidden_dimension = "space" if spatial == 1 else "time"
 
-        self.ada_zero = Modulator(
+        self.modulator = Modulator(
             channels=channels,
             mod_features=mod_features,
             spatial=spatial,
         )
 
-        self.block = nn.Sequential(
+        self.convolution_block = nn.Sequential(
             LayerNorm(dim=1),
             ConvNd(
                 in_channels=channels,
@@ -55,7 +59,7 @@ class ModulatedResidualBlock(nn.Module):
                 **kwargs,
             ),
             nn.SiLU(),
-            nn.Identity() if dropout is None else nn.Dropout(dropout),
+            nn.Dropout(dropout) if dropout is not None else nn.Identity(),
             ConvNd(
                 in_channels=channels,
                 out_channels=channels,
@@ -65,39 +69,30 @@ class ModulatedResidualBlock(nn.Module):
         )
 
     def forward(self, x: Tensor, mod: Tensor) -> Tensor:
-        r"""Computes the output of the modulated residual convolutional block.
-
+        r"""
         Arguments:
-            x: Input tensor, with shape (B, C, T, H, W).
-            mod: Modulation vector, with shape (B, D).
+            x: Input tensor (B, C, T, H, W).
+            mod: Modulation vector (B, D).
+
+        Returns:
+            Tensor: Output tensor (B, C, T, H, W).
         """
+        x, mod, original_shape = reshape(hide=self.hidden_dimension, x=x, mod=mod)
 
-        # Hidding dimension(s)
-        x, mod, original_shape = reshape(
-            convolution=self.convolution_type,
-            x=x,
-            mod=mod,
-        )
-
-        # Modulated Residual Convolutional Block
-        a, b, c = self.ada_zero(mod)
-        y = (a + 1) * x + b
-        y = self.block(y)
-        y = x + c * y
-        y = y / torch.sqrt(1 + c * c)
-
-        # Restoring dimension(s)
-        y = unshape(
-            convolution=self.convolution_type,
+        mod_factor, mod_bias, mod_scaling = self.modulator(mod)
+        y = (mod_factor + 1) * x + mod_bias
+        y = self.convolution_block(y)
+        y = x + mod_scaling * y
+        y = y / torch.sqrt(1 + mod_scaling * mod_scaling)
+        return unshape(
+            extract=self.hidden_dimension,
             x=x,
             shape=original_shape,
         )
 
-        return y
-
 
 class SpatialModulatedResidualBlock(ModulatedResidualBlock):
-    r"""Creates a modulated residual 2D convolutional block, independent of the temporal dimension."""
+    r"""A residual convolutional block with 2D spatial modulation."""
 
     def __init__(
         self,
@@ -110,7 +105,7 @@ class SpatialModulatedResidualBlock(ModulatedResidualBlock):
 
 
 class TemporalModulatedResidualBlock(ModulatedResidualBlock):
-    r"""Creates a modulated residual 1D convolutional block, independent of the spatial dimensions."""
+    r"""A residual convolutional block with 1D temporal modulation."""
 
     def __init__(
         self,
