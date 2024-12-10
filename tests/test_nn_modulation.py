@@ -63,8 +63,8 @@ def test_modulator_differentiability(modulator, fake_modulating_vector):
     output = modulator(fake_modulating_vector)
     loss = output.sum()
     loss.backward()
-    for param in modulator.parameters():
-        assert param.grad is not None, f"ERROR - Gradient not computed for parameter: {param}"
+    for name, param in modulator.named_parameters():
+        assert param.grad is not None, f"ERROR - Gradient not computed for {name} : {param}"
 
 
 def test_modulator_invalid_input_shape(modulator):

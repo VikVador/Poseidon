@@ -114,6 +114,40 @@ def test_temporal_modulated_block_with_invalid_input_shape(temporal_modulated_bl
         temporal_modulated_block(invalid_input, invalid_modulation)
 
 
+def test_modulated_residual_block_differentiability(
+    spatial_modulated_block, fake_input, fake_modulation
+):
+    """Testing if the Modulated Residual Block is differentiable."""
+    output = spatial_modulated_block(fake_input, fake_modulation)
+    loss = output.sum()
+    loss.backward()
+    for name, param in spatial_modulated_block.named_parameters():
+        if param.requires_grad:
+            assert param.grad is not None, f"ERROR - Gradient not computed for {name} : {param}"
+        else:
+            assert (
+                param.grad is None
+            ), f"ERROR - Unexpected gradient for non-learnable parameter: {name}"
+
+
+def test_temporal_modulated_residual_block_differentiability(
+    temporal_modulated_block, fake_input, fake_modulation
+):
+    """Testing if the Temporal Modulated Residual Block is differentiable."""
+    output = temporal_modulated_block(fake_input, fake_modulation)
+    loss = output.sum()
+    loss.backward()
+
+    # Check gradients for each parameter
+    for name, param in temporal_modulated_block.named_parameters():
+        if param.requires_grad:
+            assert param.grad is not None, f"ERROR - Gradient not computed for {name} : {param}"
+        else:
+            assert (
+                param.grad is None
+            ), f"ERROR - Unexpected gradient for non-learnable parameter: {name}"
+
+
 def test_forward_with_dropout(modulated_block, fake_input, fake_modulation):
     """Testing that ModulatedResidualBlock with dropout works."""
     modulated_block_with_dropout = ModulatedResidualBlock(

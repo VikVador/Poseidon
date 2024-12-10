@@ -67,13 +67,13 @@ def test_conv2d_block_invalid_input_shape(conv2d_block):
         conv2d_block(invalid_input)
 
 
-def test_conv2d_block_gradient_computation(conv2d_block, fake_input):
-    """Testing that Convolution2DBlock properly computes gradients during backpropagation."""
+def test_conv2d_block_differentiability(conv2d_block, fake_input):
+    """Testing that Convolution2DBlock is differentiable."""
     output = conv2d_block(fake_input)
     loss = output.sum()
     loss.backward()
-    for param in conv2d_block.parameters():
-        assert param.grad is not None, f"ERROR - Gradient not computed for parameter: {param}"
+    for name, param in conv2d_block.named_parameters():
+        assert param.grad is not None, f"ERROR - Gradient not computed for {name} : {param}"
 
 
 @pytest.mark.parametrize(

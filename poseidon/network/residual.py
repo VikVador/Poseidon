@@ -28,7 +28,7 @@ class ModulatedResidualBlock(nn.Module):
         channels: Number of input channels (C).
         mod_features: Number of features (D) in the modulating vector (B, D).
         spatial: Number of spatial dimensions on which the convolution is applied.
-        dropout: Dropout rate [0, 1].
+        dropout: Dropout probability for regularization [0, 1].
         kwargs: Keyword arguments passed to :class:`torch.nn.ConvXd`.
     """
 
@@ -84,9 +84,10 @@ class ModulatedResidualBlock(nn.Module):
         y = self.convolution_block(y)
         y = x + mod_scaling * y
         y = y / torch.sqrt(1 + mod_scaling * mod_scaling)
+
         return unshape(
             extract=self.hidden_dimension,
-            x=x,
+            x=y,
             shape=original_shape,
         )
 

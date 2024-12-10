@@ -56,8 +56,8 @@ def test_upsample_block_differentiability(upsample_block, fake_input):
     output = upsample_block(fake_input)
     loss = output.sum()
     loss.backward()
-    for param in upsample_block.parameters():
-        assert param.grad is not None, f"ERROR - Gradient not computed for parameter: {param}"
+    for name, param in upsample_block.named_parameters():
+        assert param.grad is not None, f"ERROR - Gradient not computed for {name} : {param}"
 
 
 def test_upsample_block_invalid_input_shape(upsample_block):
