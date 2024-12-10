@@ -1,8 +1,4 @@
-r"""Convolutional blocks.
-
-Inspired by: https://github.com/probabilists/azula
-
-"""
+r"""Convolutional blocks."""
 
 import torch.nn as nn
 
@@ -30,11 +26,12 @@ def ConvNd(in_channels: int, out_channels: int, spatial: int, **kwargs) -> nn.Mo
 
 
 class Convolution2DBlock(nn.Module):
-    r"""A 2D convolutional block for 3D spatial input.
+    r"""A spatial convolutional block for a 5-dimensional input.
 
     Information
-        This block reshapes a 3D spatial input into a format suitable for 2D convolutions,
-        applies the convolution, and then restores the original input shape.
+        This block reshapes a 5-dimensional input (B, C, T, X, Y) into a format
+        suitable for 2-dimensional convolutions (B * T, C, X, Y) along the
+        spatial dimensions.
 
     Arguments:
         in_channels: Number of input channels.
@@ -57,7 +54,11 @@ class Convolution2DBlock(nn.Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:
-        x, _, original_shape = reshape("spatial", x)
+        x, _, original_shape = reshape(hide="time", x=x)
         x = self.block(x)
-        x = unshape("spatial", x, original_shape)
+        x = unshape(
+            extract="time",
+            x=x,
+            shape=original_shape[:3] + x.shape[-2:],
+        )
         return x

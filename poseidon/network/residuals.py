@@ -11,7 +11,7 @@ from torch import Tensor
 from typing import Optional
 
 # isort: split
-from poseidon.network.convolutions import ConvNd
+from poseidon.network.convolution import ConvNd
 from poseidon.network.modulation import Modulator
 from poseidon.network.normalization import LayerNorm
 from poseidon.network.tools import reshape, unshape
