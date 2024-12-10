@@ -1,3 +1,5 @@
+r"""Tests for the poseidon.network.normalization module."""
+
 import pytest
 import random
 import torch
