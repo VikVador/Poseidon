@@ -1,304 +1,234 @@
-r"""Network - A beautifully modular U-NET."""
+r"""UNet Architecture for 3-dimensional convolutions.
+
+This UNet performs 3D convolutions via a combination of 2D spatial
+and 1D temporal convolutions, optimizing efficiency for diffusion tasks.
+
+References:
+    Inspired by the implementation in:
+    https://github.com/probabilists/azula
+"""
 
 import torch
 import torch.nn as nn
 
-from einops import rearrange
-from einops.layers.torch import Rearrange
 from torch import Tensor
-from typing import Dict, Sequence, Tuple
+from typing import Optional, Sequence
 
 # isort: split
-from poseidon.network.layers import LayerNorm, PosEmbedding
+from poseidon.network.convolution import Convolution2DBlock
+from poseidon.network.normalization import LayerNorm
+from poseidon.network.residual import (
+    SpatialModulatedResidualBlock,
+    TemporalModulatedResidualBlock,
+)
+from poseidon.network.upsample import UpsampleBlock
 
 
-def ConvNd(in_channels: int, out_channels: int, kernel_size: Sequence[int], **kwargs) -> nn.Module:
-    r"""Creates a N-dimensional convolutional layer.
-
-    The number of spatial dimensions is inferred from kernel size.
-
-    Arguments:
-        in_channels: Number of input channels.
-        out_channels: Number of output channels.
-        kernel_size: The size of the kernel along each dimension.
-        kwargs: Keyword arguments passed to :class:`nn.ConvNd.
-    """
-
-    if len(kernel_size) == 1:
-        return nn.Conv1d(in_channels, out_channels, kernel_size, **kwargs)
-    elif len(kernel_size) == 2:
-        return nn.Conv2d(in_channels, out_channels, kernel_size, **kwargs)
-    elif len(kernel_size) == 3:
-        return nn.Conv3d(in_channels, out_channels, kernel_size, **kwargs)
-    else:
-        raise NotImplementedError()
-
-
-class ModulationNd(nn.Module):
-    r"""Creates an adaptive N-dimensional modulation module.
+class UNetBlock(nn.Module):
+    r"""A UNet block combining spatial and temporal residual convolutions.
 
     Arguments:
-        channels: The number of channels C.
-        emb_features: The number of time embedding features F.
-        spatial: The number of spatial dimensions S.
-    """
-
-    def __init__(self, channels: int, emb_features: int, spatial: int = 2):
-        super().__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(emb_features, emb_features),
-            nn.SiLU(),
-            nn.Linear(emb_features, 3 * channels),
-            Rearrange("... C -> ... C" + " 1" * spatial),
-        )
-
-        layer = self.mlp[-2]
-        layer.weight = nn.Parameter(layer.weight * 1e-1)
-
-        self.spatial = spatial
-
-    def forward(self, t: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
-        r"""
-        Arguments:
-            t : The time embedding tensor, with shape (*, F).
-
-        Returns:
-            Three modulation tensors, each with shape (*, C, 1, ..., 1).
-        """
-
-        return torch.tensor_split(self.mlp(t), 3, dim=-(self.spatial + 1))
-
-
-class ResBlock(nn.Module):
-    r"""Creates a convolutional residual block.
-
-    Arguments:
-        channels: The number of input/output channels of the block.
-        emb_features: The number of time embedding features.
-        dropout: The training dropout rate.
-        spatial: The number of spatial dimensions S.
-        kwargs: Keyword arguments passed to :class:`ConvNd.
+        channels: Number of channels (C) in the input tensor.
+        mod_features: Number of features (D) in the modulation vector.
+        dropout: Dropout probability for regularization [0, 1].
+        **kwargs: Additional arguments passed to the residual blocks.
     """
 
     def __init__(
         self,
         channels: int,
-        emb_features: int,
-        dropout: float = None,
-        spatial: int = 2,
+        mod_features: int,
+        dropout: Optional[float] = None,
         **kwargs,
     ):
         super().__init__()
-        self.modulation = ModulationNd(channels, emb_features, spatial=spatial)
-        self.block = nn.Sequential(
-            LayerNorm(1),
-            ConvNd(channels, channels, **kwargs),
-            nn.SiLU(),
-            nn.Identity() if dropout is None else nn.Dropout(dropout),
-            ConvNd(channels, channels, **kwargs),
+
+        self.block_spatial = SpatialModulatedResidualBlock(
+            channels=channels,
+            mod_features=mod_features,
+            dropout=dropout,
+            **kwargs,
+        )
+        self.block_temporal = TemporalModulatedResidualBlock(
+            channels=channels,
+            mod_features=mod_features,
+            dropout=dropout,
+            **kwargs,
         )
 
-    def forward(self, x: Tensor, t: Tensor) -> Tensor:
-        r"""
+    def forward(self, x: Tensor, mod: Tensor) -> Tensor:
+        """
         Arguments:
-            x: The input tensor, with shape (N, C, L_1, ..., L_S).
-            t: The time embedding tensor, with shape (F)` or (N, F).
+            x: Input tensor with shape (B, C, T, H, W).
+            mod: Modulation vector with shape (B, D).
 
         Returns:
-            The residual block output, with shape (N, C, L_1, ..., L_S).
+            Tensor: Convoluted tensor (B, C, T, H, W).
         """
-
-        a, b, c = self.modulation(t)
-
-        y = (a + 1) * x + b
-        y = self.block(y)
-        y = x + c * y
-
-        return y / torch.sqrt(1 + c**2)
-
-
-class AttBlock(nn.Module):
-    r"""Creates a residual self-attention block.
-
-    Arguments:
-        channels: The number of input/output channels of the block.
-        emb_features: The number of time embedding features.
-        heads: The number of heads of the self-attention block.
-        spatial: The number of spatial dimensions S.
-    """
-
-    def __init__(self, channels: int, emb_features: int, heads: int = 1, spatial: int = 2):
-        super().__init__()
-        self.modulation = ModulationNd(channels, emb_features, spatial=spatial)
-        self.norm = LayerNorm(1)
-        self.attn = nn.MultiheadAttention(
-            num_heads=heads,
-            embed_dim=channels,
-            batch_first=True,
-        )
-
-    def forward(self, x: Tensor, t: Tensor) -> Tensor:
-        r"""
-        Arguments:
-            x: The input tensor, with shape (N, C, L_1, ..., L_S).
-            t: The time embedding tensor, with shape (F)` or (N, F).
-
-        Returns:
-            The block output, with shape (N, C, L_1, ..., L_S).
-        """
-
-        a, b, c = self.modulation(t)
-
-        y = (a + 1) * x + b
-        y = self.norm(y)
-        y = rearrange(y, "N C ... -> N (...) C")
-        y, _ = self.attn(y, y, y)
-        y = rearrange(y, "N L C -> N C L").reshape(x.shape)
-        y = x + c * y
-
-        return y / torch.sqrt(1 + c**2)
+        x = self.block_temporal(x, mod)
+        x = self.block_spatial(x, mod)
+        return x
 
 
 class UNet(nn.Module):
-    r"""Creates a time conditional UNet.
+    r"""Creates a U-Net model for 3-dimensional convolutions.
+
+    Example:
+        >>> unet = UNet(in_channels=64,
+                        out_channels=64,
+                        mod_features=128,
+                        hid_channels=[64, 128, 256],
+                        hid_blocks=[2, 3, 3],
+                        kernel_size=3,
+                        stride=2,
+                        dropout=0.1)
 
     Arguments:
-        in_channels: Number of input channels.
-        out_channels: Number of output channels.
-        hid_channels: Number of channels of each intermediate depth.
-        hid_blocks: Number of hidden blocks at each depth.
-        kernel_size: The shared kernel size for all blocks.
-        emb_features: Number of time embedding features.
-        heads: A dictionary of pairs {depth: heads} to add self-attention at specific depth.
-        dropout: The dropout rate for residual blocks.
+        in_channels: Number of input channels (C_i)
+        out_channels: Number of output channels (C_o).
+        mod_features: Number of features (D) in the modulating vector (B, D).
+        hid_channels: Numbers of channels at each depth.
+        hid_blocks: Numbers of hidden blocks at each depth.
+        kernel_size: Kernel size of all convolutions.
+        stride: Stride of the downsampling convolutions.
+        dropout: Dropout probability for regularization [0, 1].
     """
 
     def __init__(
         self,
         in_channels: int,
         out_channels: int,
+        mod_features: int,
         hid_channels: Sequence[int] = (64, 128, 256),
-        hid_blocks: Sequence[int] = (3, 3, 3),
-        kernel_size: Sequence[int] = (3, 3),
-        emb_features: int = 64,
-        heads: Dict[int, int] = {},  # noqa: B006
-        dropout: float = None,
+        hid_blocks: Sequence[int] = (2, 3, 3),
+        kernel_size: int = 3,
+        stride: int = 2,
+        dropout: Optional[float] = None,
     ):
         super().__init__()
 
         assert len(hid_blocks) == len(hid_channels)
-
-        spatial = len(kernel_size)
-        stride = tuple(2 for k in kernel_size)
         kwargs = dict(
             kernel_size=kernel_size,
-            padding=[k // 2 for k in kernel_size],
+            padding=kernel_size // 2,
         )
 
-        self.embedding = PosEmbedding(emb_features)
+        # Contains the blocks for the descent and ascent of the UNet
         self.descent, self.ascent = nn.ModuleList(), nn.ModuleList()
 
+        # Creation of the UNet
         for i, blocks in enumerate(hid_blocks):
+            # Contains blocks at a stage of the UNet
             do, up = nn.ModuleList(), nn.ModuleList()
 
+            # Filling the stage with blocks
             for _ in range(blocks):
                 do.append(
-                    ResBlock(
+                    UNetBlock(
                         hid_channels[i],
-                        emb_features,
+                        mod_features,
                         dropout=dropout,
-                        spatial=spatial,
                         **kwargs,
                     )
                 )
+
                 up.append(
-                    ResBlock(
+                    UNetBlock(
                         hid_channels[i],
-                        emb_features,
+                        mod_features,
                         dropout=dropout,
-                        spatial=spatial,
                         **kwargs,
                     )
                 )
 
-                if i in heads:
-                    do.append(AttBlock(hid_channels[i], emb_features, heads[i], spatial=spatial))
-                    up.append(AttBlock(hid_channels[i], emb_features, heads[i], spatial=spatial))
-
+            # Adding blocks for downsampling and upsampling
             if i > 0:
                 do.insert(
-                    0,
-                    nn.Sequential(
-                        ConvNd(
+                    index=0,
+                    module=nn.Sequential(
+                        Convolution2DBlock(
                             hid_channels[i - 1],
                             hid_channels[i],
                             stride=stride,
                             **kwargs,
                         ),
-                        LayerNorm(1),
+                        LayerNorm(dim=1),
                     ),
                 )
 
                 up.append(
                     nn.Sequential(
-                        LayerNorm(1),
-                        nn.Upsample(scale_factor=stride, mode="nearest"),
+                        LayerNorm(dim=1),
+                        UpsampleBlock(scale_factor=float(stride)),
                     )
                 )
+
+            # Adding first and last projection blocks
             else:
-                do.insert(0, ConvNd(in_channels, hid_channels[i], **kwargs))
+                do.insert(
+                    index=0,
+                    module=Convolution2DBlock(
+                        in_channels,
+                        hid_channels[i],
+                        **kwargs,
+                    ),
+                )
                 up.append(
-                    ConvNd(hid_channels[i], out_channels, kernel_size=(1,) * len(kernel_size))
+                    Convolution2DBlock(
+                        hid_channels[i],
+                        out_channels,
+                        kernel_size=1,  # Remove aliasing
+                    )
                 )
 
+            # Adding projection for concatenated tensors (beginning of each ascent stage)
             if i + 1 < len(hid_blocks):
                 up.insert(
-                    0,
-                    ConvNd(
+                    index=0,
+                    module=Convolution2DBlock(
                         hid_channels[i] + hid_channels[i + 1],
                         hid_channels[i],
                         **kwargs,
                     ),
                 )
 
+            # Updating the descent and ascent stages
             self.descent.append(do)
-            self.ascent.insert(0, up)
+            self.ascent.insert(index=0, module=up)
 
-    def forward(self, x: Tensor, t: Tensor) -> Tensor:
+    def forward(self, x: Tensor, mod: Tensor) -> Tensor:
         r"""
         Arguments:
-            x: The input tensor, with shape (N, C, L_1, ..., L_S).
-            t: The time tensor, with shape () or (N).
+            x: Input tensor (B, Ci, T, H, W).
+            mod: Modulation vector (B, D).
 
         Returns:
-            The output tensor, with shape (N, C, L_1, ..., L_S).
+            Tensor: Output tensor (B, Co, T, H, W).
         """
-
-        t = self.embedding(t)
-
+        # Saves end stage tensors
         memory = []
 
+        # Descent
         for blocks in self.descent:
             for block in blocks:
-                if isinstance(block, (ResBlock, AttBlock)):
-                    x = block(x, t)
+                if isinstance(block, UNetBlock):
+                    x = block(x, mod)
                 else:
                     x = block(x)
-
             memory.append(x)
 
+        # Ascent
         for blocks in self.ascent:
             y = memory.pop()
             if x is not y:
                 for i in range(2, x.ndim):
                     if x.shape[i] > y.shape[i]:
                         x = torch.narrow(x, i, 0, y.shape[i])
-
                 x = torch.cat((x, y), dim=1)
 
             for block in blocks:
-                if isinstance(block, (ResBlock, AttBlock)):
-                    x = block(x, t)
+                if isinstance(block, UNetBlock):
+                    x = block(x, mod)
                 else:
                     x = block(x)
 
