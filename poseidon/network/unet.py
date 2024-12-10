@@ -1,8 +1,18 @@
+r"""UNet Architecture for 3-dimensional convolutions.
+
+This UNet performs 3D convolutions via a combination of 2D spatial
+and 1D temporal convolutions, optimizing efficiency for diffusion tasks.
+
+References:
+    Inspired by the implementation in:
+    https://github.com/probabilists/azula
+"""
+
 import torch
 import torch.nn as nn
 
 from torch import Tensor
-from typing import Optional, Sequence, Union
+from typing import Optional, Sequence
 
 # isort: split
 from poseidon.network.convolution import Convolution2DBlock
@@ -15,6 +25,15 @@ from poseidon.network.upsample import UpsampleBlock
 
 
 class UNetBlock(nn.Module):
+    r"""A UNet block combining spatial and temporal residual convolutions.
+
+    Arguments:
+        channels: Number of channels (C) in the input tensor.
+        mod_features: Number of features (D) in the modulation vector.
+        dropout: Dropout probability for regularization [0, 1].
+        **kwargs: Additional arguments passed to the residual blocks.
+    """
+
     def __init__(
         self,
         channels: int,
@@ -24,7 +43,6 @@ class UNetBlock(nn.Module):
     ):
         super().__init__()
 
-        # Spatial and temporal processing blocks
         self.block_spatial = SpatialModulatedResidualBlock(
             channels=channels,
             mod_features=mod_features,
@@ -39,25 +57,41 @@ class UNetBlock(nn.Module):
         )
 
     def forward(self, x: Tensor, mod: Tensor) -> Tensor:
-        x = self.block_spatial(x, mod)
+        """
+        Arguments:
+            x: Input tensor with shape (B, C, T, H, W).
+            mod: Modulation vector with shape (B, D).
+
+        Returns:
+            Tensor: Convoluted tensor (B, C, T, H, W).
+        """
         x = self.block_temporal(x, mod)
+        x = self.block_spatial(x, mod)
         return x
 
 
 class UNet(nn.Module):
-    r"""Creates a modulated U-Net module.
+    r"""Creates a U-Net model for 3-dimensional convolutions.
+
+    Example:
+        >>> unet = UNet(in_channels=64,
+                        out_channels=64,
+                        mod_features=128,
+                        hid_channels=[64, 128, 256],
+                        hid_blocks=[2, 3, 3],
+                        kernel_size=3,
+                        stride=2,
+                        dropout=0.1)
 
     Arguments:
-        in_channels: The number of input channels :math:`C_i`.
-        out_channels: The number of output channels :math:`C_o`.
-        mod_features: The number of modulating features :math:`D`.
-        hid_channels: The numbers of channels at each depth.
-        hid_blocks: The numbers of hidden blocks at each depth.
-        kernel_size: The kernel size of all convolutions.
-        stride: The stride of the downsampling convolutions.
-        attention_heads: The number of attention heads at each depth.
-        dropout: The dropout rate in :math:`[0, 1]`.
-        spatial: The number of spatial dimensions.
+        in_channels: Number of input channels (C_i)
+        out_channels: Number of output channels (C_o).
+        mod_features: Number of features (D) in the modulating vector (B, D).
+        hid_channels: Numbers of channels at each depth.
+        hid_blocks: Numbers of hidden blocks at each depth.
+        kernel_size: Kernel size of all convolutions.
+        stride: Stride of the downsampling convolutions.
+        dropout: Dropout probability for regularization [0, 1].
     """
 
     def __init__(
@@ -66,26 +100,28 @@ class UNet(nn.Module):
         out_channels: int,
         mod_features: int,
         hid_channels: Sequence[int] = (64, 128, 256),
-        hid_blocks: Sequence[int] = (3, 3, 3),
-        kernel_size: Union[int, Sequence[int]] = 3,
-        stride: Union[int, Sequence[int]] = 2,
+        hid_blocks: Sequence[int] = (2, 3, 3),
+        kernel_size: int = 3,
+        stride: int = 2,
         dropout: Optional[float] = None,
     ):
         super().__init__()
 
         assert len(hid_blocks) == len(hid_channels)
-
         kwargs = dict(
             kernel_size=kernel_size,
             padding=kernel_size // 2,
         )
 
+        # Contains the blocks for the descent and ascent of the UNet
         self.descent, self.ascent = nn.ModuleList(), nn.ModuleList()
 
+        # Creation of the UNet
         for i, blocks in enumerate(hid_blocks):
+            # Contains blocks at a stage of the UNet
             do, up = nn.ModuleList(), nn.ModuleList()
 
-            # BLOCKS INSIDE A STAGE OF THE UNET
+            # Filling the stage with blocks
             for _ in range(blocks):
                 do.append(
                     UNetBlock(
@@ -95,6 +131,7 @@ class UNet(nn.Module):
                         **kwargs,
                     )
                 )
+
                 up.append(
                     UNetBlock(
                         hid_channels[i],
@@ -104,11 +141,11 @@ class UNet(nn.Module):
                     )
                 )
 
-            # ADDING BLOCKS FOR DOWNSAMPLING AND UPSAMPLING
+            # Adding blocks for downsampling and upsampling
             if i > 0:
                 do.insert(
-                    0,
-                    nn.Sequential(
+                    index=0,
+                    module=nn.Sequential(
                         Convolution2DBlock(
                             hid_channels[i - 1],
                             hid_channels[i],
@@ -122,57 +159,71 @@ class UNet(nn.Module):
                 up.append(
                     nn.Sequential(
                         LayerNorm(dim=1),
-                        UpsampleBlock(scale_factor=tuple(stride)),
+                        UpsampleBlock(scale_factor=float(stride)),
                     )
                 )
 
-            # ADDING FIST EVER BLOCK FOR PROJECTION ON CORRECT STRATING CHANNELS AND FINAL BLOCK FOR OUTPUT
+            # Adding first and last projection blocks
             else:
-                do.insert(0, Convolution2DBlock(in_channels, hid_channels[i], **kwargs))
-                up.append(Convolution2DBlock(hid_channels[i], out_channels, kernel_size=1))
+                do.insert(
+                    index=0,
+                    module=Convolution2DBlock(
+                        in_channels,
+                        hid_channels[i],
+                        **kwargs,
+                    ),
+                )
+                up.append(
+                    Convolution2DBlock(
+                        hid_channels[i],
+                        out_channels,
+                        kernel_size=1,  # Remove aliasing
+                    )
+                )
 
-            # CONVOLUTION ON THE CONCATENATED CHANNELS TO GET BACK TO CHANNEL PER STAGE
+            # Adding projection for concatenated tensors (beginning of each ascent stage)
             if i + 1 < len(hid_blocks):
                 up.insert(
-                    0,
-                    Convolution2DBlock(
+                    index=0,
+                    module=Convolution2DBlock(
                         hid_channels[i] + hid_channels[i + 1],
                         hid_channels[i],
                         **kwargs,
                     ),
                 )
 
+            # Updating the descent and ascent stages
             self.descent.append(do)
-            self.ascent.insert(0, up)
+            self.ascent.insert(index=0, module=up)
 
     def forward(self, x: Tensor, mod: Tensor) -> Tensor:
         r"""
         Arguments:
-            x: The input tensor, with shape :math:`(B, C_i, H_1, ..., H_N)`.
-            mod: The modulation vector, with shape :math:`(D)` or :math:`(B, D)`.
+            x: Input tensor (B, Ci, T, H, W).
+            mod: Modulation vector (B, D).
 
         Returns:
-            The output tensor, with shape :math:`(B, C_o, H_1, ..., H_N)`.
+            Tensor: Output tensor (B, Co, T, H, W).
         """
-
+        # Saves end stage tensors
         memory = []
 
+        # Descent
         for blocks in self.descent:
             for block in blocks:
                 if isinstance(block, UNetBlock):
                     x = block(x, mod)
                 else:
                     x = block(x)
-
             memory.append(x)
 
+        # Ascent
         for blocks in self.ascent:
             y = memory.pop()
             if x is not y:
                 for i in range(2, x.ndim):
                     if x.shape[i] > y.shape[i]:
                         x = torch.narrow(x, i, 0, y.shape[i])
-
                 x = torch.cat((x, y), dim=1)
 
             for block in blocks:
