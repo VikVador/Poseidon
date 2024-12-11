@@ -10,7 +10,7 @@ def reshape(
     x: Tensor,
     mod: Optional[Tensor] = None,
 ) -> Tuple[Tensor, Optional[Tensor], Tuple[int]]:
-    """Reshape a 5-dimensional tensor for convolutional operations.
+    r"""Reshape a 5-dimensional tensor for convolutional operations.
 
     Information:
         Reshapes an input tensor by "hiding" either the spatial dimensions (`H`, `W`)
@@ -52,7 +52,7 @@ def unshape(
     x: Tensor,
     shape: Tuple[int],
 ) -> Tensor:
-    """Restore the original shape of a 5-dimensional tensor.
+    r"""Restore the original shape of a 5-dimensional tensor.
 
     Information
         Reverses a reshaping operation where the spatial or temporal dimensions

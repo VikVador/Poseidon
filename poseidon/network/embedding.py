@@ -65,9 +65,22 @@ class SirenEmbedding(nn.Module):
     def __init__(self, in_features: int, out_features: int, n_layers: int, omega_0: float = 30.0):
         super().__init__()
         layers = []
-        layers.append(SineLayer(in_features, out_features, is_first=True))
+        layers.append(
+            SineLayer(
+                in_features,
+                out_features,
+                is_first=True,
+                omega_0=omega_0,
+            )
+        )
         layers.extend([
-            SineLayer(out_features, out_features, is_first=False) for _ in range(n_layers)
+            SineLayer(
+                out_features,
+                out_features,
+                is_first=False,
+                omega_0=omega_0,
+            )
+            for _ in range(n_layers)
         ])
         layers.append(nn.Linear(out_features, out_features))
         self.siren = nn.Sequential(*layers)
