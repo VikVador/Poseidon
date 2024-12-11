@@ -133,5 +133,5 @@ def test_get_dataloaders(fake_black_sea_dataset, trajectory_size, variables, bat
 
         # Since dataset is small, we need to fix the seed to check for shuffling
         if s:
-            assert not torch.allclose(t[0, 0], d.to(dtype=torch.int64)), \
+            assert not torch.allclose(t[0, 0], d), \
             "ERROR - Dataset is not shuffled."
