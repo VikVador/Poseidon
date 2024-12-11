@@ -80,8 +80,8 @@ class PoseidonDataset(Dataset):
             step_end: End index of the sample.
 
         Returns:
-            sample: A tensor containing the preprocessed sample.
-            time: Date features corresponding to each day of the trajectory.
+            sample: Preprocessed sample (float32).
+            time: Date features corresponding to each day of the trajectory (float32).
         """
 
         # Handle large data by splitting into smaller chunks
@@ -93,8 +93,10 @@ class PoseidonDataset(Dataset):
             sample = sample.to_stacked_array(
                 new_dim="z_total", sample_dims=("time", "longitude", "latitude")
             ).transpose("z_total", "time", ...)
+            sample = torch.as_tensor(sample.load().data)
 
-        return torch.as_tensor(sample.load().data), time
+        # Convert to float32 (neural network & efficiency)
+        return sample.to(dtype=torch.float32), time.to(dtype=torch.float32)
 
 
 def get_datasets(**kwargs) -> Tuple[PoseidonDataset, PoseidonDataset, PoseidonDataset]:
@@ -154,7 +156,6 @@ def get_toy_datasets(
             path=PATH_DATA,
             date_start=date_start,
             date_end=date_end,
-            variables=variables,
             region=TOY_DATASET_REGION,
             **kwargs,
         )
