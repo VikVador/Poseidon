@@ -1,7 +1,7 @@
 r"""Tests for the poseidon.network.encoding module."""
 
-import random
 import pytest
+import random
 import torch
 
 # isort: split
