@@ -4,7 +4,7 @@ import xarray as xr
 
 from pathlib import Path
 from torch import Tensor
-from typing import Dict, Optional, Sequence, Tuple
+from typing import Dict, Sequence, Tuple
 
 # isort: split
 from poseidon.config import PATH_DATA
@@ -12,9 +12,9 @@ from poseidon.data.const import DATASET_REGION, DATASET_VARIABLES
 
 
 def from_tensor_to_indices(
-    path: Optional[Path] = PATH_DATA,
-    variables: Optional[Sequence[str]] = DATASET_VARIABLES,
-    region: Optional[Dict[str, slice]] = DATASET_REGION,
+    path: Path = PATH_DATA,
+    variables: Sequence[str] = DATASET_VARIABLES,
+    region: Dict[str, slice] = DATASET_REGION,
 ) -> Dict[str, Tuple[int, int]]:
     r"""Determine variables position in a stacked tensor.
 
@@ -27,9 +27,7 @@ def from_tensor_to_indices(
         Mapping dictionary [variable, (pos_start, pos_end)]
     """
 
-    dataset = xr.open_zarr(path)
-    if variables is not None:
-        dataset = dataset[variables]
+    dataset = xr.open_zarr(path)[variables]
 
     # Creation of the mapping
     idx_start, mapping, total_levels = 0, {}, region["level"].stop
@@ -43,9 +41,9 @@ def from_tensor_to_indices(
 
 def from_tensor_to_xarray(
     x: Tensor,
-    path: Optional[Path] = PATH_DATA,
-    variables: Optional[Sequence[str]] = DATASET_VARIABLES,
-    region: Optional[Sequence[Dict]] = DATASET_REGION,
+    path: Path = PATH_DATA,
+    variables: Sequence[str] = DATASET_VARIABLES,
+    region: Dict[str, slice] = DATASET_REGION,
 ) -> xr.Dataset:
     r"""Transform a stacked tensor to an xarray dataset.
 
