@@ -22,7 +22,10 @@ from poseidon.data.const import (
     TOY_DATASET_DATES_VALIDATION,
     TOY_DATASET_REGION,
 )
-from poseidon.date import assert_date_format, get_date_features
+from poseidon.data.tools import (
+    assert_date_format,
+    get_date_features,
+)
 
 
 class PoseidonDataset(Dataset):

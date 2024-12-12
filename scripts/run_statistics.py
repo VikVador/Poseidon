@@ -12,7 +12,7 @@ from poseidon.data.const import (
     DATASET_VARIABLES_CLIPPING,
 )
 from poseidon.data.statistics import compute_statistics
-from poseidon.date import assert_date_format
+from poseidon.data.tools import assert_date_format
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compute statistics of a dataset.")
