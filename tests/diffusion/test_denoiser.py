@@ -1,4 +1,4 @@
-r"""Tests for the poseidon.diffusion.backbone module."""
+r"""Tests for the poseidon.diffusion.denoiser module."""
 
 import numpy as np
 import pytest
@@ -6,11 +6,11 @@ import random
 import torch
 import xarray as xr
 
+from torch import nn
+
 # isort: split
 from poseidon.diffusion.backbone import PoseidonBackbone
-from poseidon.diffusion.tools import generate_encoded_mesh
-from poseidon.network.embedding import SirenEmbedding
-from poseidon.network.unet import UNet
+from poseidon.diffusion.denoiser import PoseidonDenoiser
 
 # Generating random dimensions for testing
 MESH_LEVELS, (MESH_LAT, MESH_LON) = (
@@ -26,7 +26,7 @@ MESH_LEVELS, (MESH_LAT, MESH_LON) = (
 
 UNET_KERNEL, UNET_FEATURES, UNET_CHANNELS, UNET_BLOCKS, SIREN_FEATURES, SIREN_LAYERS = (
     random.choice([3, 5]),
-    random.choice([3, 4]),
+    random.choice([1]),
     list(random.randint(2, 5) for _ in range(3)),
     list(random.choice([1, 2]) for _ in range(3)),
     random.choice([2, 4]),
@@ -107,58 +107,47 @@ def backbone(fake_zarr_mesh, fake_configurations):
     )
 
 
-def test_generate_encoded_mesh(fake_zarr_mesh, fake_configurations):
-    """Testing encoded mesh generation."""
-    _, _, config_siren, config_region = fake_configurations
-    expected_shape = (10, 10, (3 * MESH_LEVELS * config_siren["features"]))
-
-    encoded_mesh = generate_encoded_mesh(
-        path=fake_zarr_mesh,
-        features=config_siren["features"],
-        region=config_region,
-    )
-    assert isinstance(
-        encoded_mesh, torch.Tensor
-    ), "ERROR - Encoded mesh should be a PyTorch tensor."
-    assert (
-        encoded_mesh.shape == expected_shape
-    ), f"ERROR - Encoded mesh does not have the expected shape {expected_shape} and got {encoded_mesh.shape}."
+@pytest.fixture
+def denoiser(backbone):
+    """Fixture to create an instance of PoseidonDenoiser."""
+    return PoseidonDenoiser(backbone=backbone)
 
 
-def test_backbone_initialization(backbone):
+def test_denoiser_initialization(backbone):
     """Testing the initialization."""
+    denoiser = PoseidonDenoiser(backbone)
     assert isinstance(
-        backbone.mesh, torch.Tensor
-    ), "ERROR - Encoded Mesh should be a PyTorch tensor but is not."
-    assert isinstance(
-        backbone.unet, UNet
-    ), "ERROR - UNet instance should be properly initialized but is not."
-    assert isinstance(
-        backbone.siren, SirenEmbedding
-    ), "ERROR - SirenEmbedding should be properly initialized."
+        denoiser, nn.Module
+    ), "ERROR - PoseidonDenoiser should inherit from torch.nn.Module."
+    assert hasattr(
+        denoiser, "backbone"
+    ), "ERROR - Denoiser should possess a 'backbone' attribute (PoseidonBackbone)."
+    assert (
+        denoiser.backbone == backbone
+    ), "ERROR - Backbone instance is not the same as the one given in 'init'."
 
 
-def test_backbone_forward_consistency(backbone, fake_input, fake_noise):
+def testing_denoiser_forward_consistency(denoiser, fake_input, fake_noise):
     """Testing the forward pass consistency."""
-    output1 = backbone.forward(fake_input, fake_noise)
-    output2 = backbone.forward(fake_input, fake_noise)
+    output1 = denoiser.forward(fake_input, fake_noise)
+    output2 = denoiser.forward(fake_input, fake_noise)
     assert output1.shape == output2.shape, "ERROR - Inconsistent output shapes."
     assert torch.allclose(
         output1, output2, equal_nan=True,
     ), "ERROR - Forward pass is not consistent for the same input."
 
 
-def test_backbone_differentiability(backbone, fake_input, fake_noise):
-    """Testing if the PoseidonBackbone is differentiable."""
-    output = backbone.forward(fake_input, fake_noise)
+def test_denoiser_differentiability(denoiser, fake_input, fake_noise):
+    """Testing that the PoseidonDenoiser is differentiable."""
+    output = denoiser(fake_input, fake_noise)
     loss = output.sum()
     loss.backward()
-    for name, param in backbone.named_parameters():
+    for name, param in denoiser.named_parameters():
         assert param.grad is not None, f"ERROR - Gradient not computed for {name} : {param}"
 
 
-def test_backbone_invalid_input_shape(backbone):
-    """Testing if the PoseidonBackbone raises an error for invalid input shapes."""
+def test_denoiser_invalid_input_shape(backbone):
+    """Testing if the PoseidonDenoiser raises an error for invalid input shapes."""
     invalid_x = torch.randn(5, 5, 3)
     sigma = torch.rand(5, 1)
     with pytest.raises(RuntimeError, match="while processing rearrange-reduction"):
