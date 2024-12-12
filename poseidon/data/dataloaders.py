@@ -14,13 +14,16 @@ from poseidon.data.datasets import (
 def get_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
     r"""Returns the training, validation, and test dataloaders.
 
+    Region:
+        Black Sea.
+
     Shuffling:
         Only the training dataset is shuffled (by default).
 
     Splits:
-        Training: 1995-01-01 to 2015-12-31.
-        Validation: 2016-01-01 to 2019-12-31.
-        Test: 2020-01-01 to 2022-12-31.
+        Training: 1995-01-01 to 2017-12-31.
+        Validation: 2018-01-01 to 2020-12-31.
+        Test: 2021-01-01 to 2022-12-31.
 
     Arguments:
         trajectory_size: Number of time steps in each sample.
@@ -37,16 +40,16 @@ def get_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
 def get_toy_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
     r"""Returns the toy training, validation, and test dataloaders.
 
-    Variables:
-        Only the sea surface height, temperature and oyxgen fields.
+    Region:
+        Black Sea Continental Shelf.
 
     Shuffling:
         Only the training dataset is shuffled (by default).
 
     Splits:
-        Training: 2014-01-01 to 2015-12-31.
-        Validation: 2019-01-01 to 2019-12-31.
-        Test: 2022-01-01 to 2022-12-31.
+        Training: 1995-01-01 to 2017-12-31.
+        Validation: 2018-01-01 to 2020-12-31.
+        Test: 2021-01-01 to 2022-12-31.
 
     Arguments:
         trajectory_size: Number of time steps in each sample.

@@ -17,6 +17,7 @@ from poseidon.data.const import (
     DATASET_DATES_VALIDATION,
     DATASET_NAN_FILL,
     DATASET_REGION,
+    DATASET_VARIABLES,
     TOY_DATASET_DATES_TEST,
     TOY_DATASET_DATES_TRAINING,
     TOY_DATASET_DATES_VALIDATION,
@@ -102,17 +103,27 @@ class PoseidonDataset(Dataset):
         return sample.to(dtype=torch.float32), time.to(dtype=torch.float32)
 
 
-def get_datasets(**kwargs) -> Tuple[PoseidonDataset, PoseidonDataset, PoseidonDataset]:
+def get_datasets(
+    variables: Optional[Sequence[str]] = None,
+    **kwargs,
+) -> Tuple[PoseidonDataset, PoseidonDataset, PoseidonDataset]:
     r"""Returns the training, validation, and test datasets.
 
+    Region:
+        Black Sea.
+
     Splits:
-        Training: 1995-01-01 to 2015-12-31.
-        Validation: 2016-01-01 to 2019-12-31.
-        Test: 2020-01-01 to 2022-12-31.
+        Training: 1995-01-01 to 2017-12-31.
+        Validation: 2018-01-01 to 2020-12-31.
+        Test: 2021-01-01 to 2022-12-31.
 
     Arguments:
+        variables: Variable names to retain from the dataset.
         kwargs: Keyword arguments passed to :class:`PoseidonDataset`.
     """
+
+    if variables is None:
+        variables = DATASET_VARIABLES
 
     datasets = [
         PoseidonDataset(
@@ -120,6 +131,7 @@ def get_datasets(**kwargs) -> Tuple[PoseidonDataset, PoseidonDataset, PoseidonDa
             date_start=date_start,
             date_end=date_end,
             region=DATASET_REGION,
+            variables=variables,
             **kwargs,
         )
         for date_start, date_end in [
@@ -138,13 +150,13 @@ def get_toy_datasets(
 ) -> Tuple[PoseidonDataset, PoseidonDataset, PoseidonDataset]:
     r"""Returns the toy training, validation, and test datasets.
 
-    Variables:
-        Only the sea surface height, temperature and oyxgen fields.
+    Region:
+        Black Sea Continental Shelf.
 
     Splits:
-        Training: 2014-01-01 to 2015-12-31.
-        Validation: 2019-01-01 to 2019-12-31.
-        Test: 2022-01-01 to 2022-12-31.
+        Training: 1995-01-01 to 2017-12-31.
+        Validation: 2018-01-01 to 2020-12-31.
+        Test: 2021-01-01 to 2022-12-31.
 
     Arguments:
         variables: Variable names to retain from the dataset.
@@ -152,7 +164,7 @@ def get_toy_datasets(
     """
 
     if variables is None:
-        variables = ["ssh", "votemper", "DOX"]
+        variables = DATASET_VARIABLES
 
     datasets = [
         PoseidonDataset(
@@ -160,6 +172,7 @@ def get_toy_datasets(
             date_start=date_start,
             date_end=date_end,
             region=TOY_DATASET_REGION,
+            variables=variables,
             **kwargs,
         )
         for date_start, date_end in [

@@ -16,7 +16,6 @@ DATASET_VARIABLES_ATMOSPHERE = [
     "DOX",
     "CHL",
     "vosaline",
-    "rho",
     "votemper",
 ]
 
