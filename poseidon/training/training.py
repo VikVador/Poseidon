@@ -180,6 +180,9 @@ def training(
             x, time, noise = x.to(device), time.to(device), noise.to(device)
 
             # Compute the loss and backpropagate
+            # x_t = x + sigma_t * torch.randn_like(x)
+            # x_t_denoised = denoiser(x_t=x_t, sigma_t=sigma_t, c=c)
+
             loss = PoseidonLoss(denoiser, x, noise, time)
             loss.backward()
             optimizer.step()
