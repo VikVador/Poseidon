@@ -1,16 +1,16 @@
 r"""Diffusion backbone helping conditionning data."""
 
-import torch
 import torch.nn as nn
-import xarray as xr
 
 from einops import rearrange
-from poseidon.config import PATH_MESH
+from pathlib import Path
+from torch import Tensor
 from typing import Dict, Tuple
 
 # isort: split
+from poseidon.config import PATH_MESH
+from poseidon.diffusion.tools import generate_encoded_mesh
 from poseidon.network.embedding import SirenEmbedding
-from poseidon.network.encoding import SineEncoding
 from poseidon.network.unet import UNet
 
 
@@ -31,7 +31,7 @@ class PoseidonBackbone(nn.Module):
         dimensions: Input tensor dimensions (B, C, K, H, W).
         config_unet: Configuration the UNet architecture.
         config_siren: Configuration for the Siren architecture.
-        config_region: Configuration for the spatial region used for training.
+        config_region: Configuration for the spatial region.
     """
 
     def __init__(
@@ -40,15 +40,18 @@ class PoseidonBackbone(nn.Module):
         config_unet: Dict,
         config_siren: Dict,
         config_region: Dict,
+        path_mesh: Path = PATH_MESH,
         device: str = "cpu",
     ):
         super().__init__()
 
-        # Initialization
-        self.region = config_region
         self.B, self.C, self.K, self.H, self.W = dimensions
-        self.mesh = self.generate_encoded_mesh(
+
+        # Sin/cos encoded mesh
+        self.mesh = generate_encoded_mesh(
+            path=path_mesh,
             features=config_siren["features"],
+            region=config_region,
         ).to(device)
 
         # Total embedded size of the mesh
@@ -67,30 +70,7 @@ class PoseidonBackbone(nn.Module):
             config_siren["n_layers"],
         ).to(device)
 
-    def generate_encoded_mesh(self, features: int) -> torch.Tensor:
-        """Load the Black Sea mesh and apply a sine encoding.
-
-        Arguments:
-            features: Number of embedding features (F). Must be even.
-
-        Returns:
-            Tensor: Encoded mesh tensor  X Y (Mesh Levels Features).
-        """
-
-        mesh_data = xr.open_zarr(PATH_MESH).isel(**self.region).load()
-
-        # Stack mesh variables into a single tensor
-        mesh = torch.stack(
-            [torch.from_numpy(mesh_data[v].values) for v in mesh_data.variables],
-            dim=0,
-        )
-        mesh = rearrange(
-            SineEncoding(features).forward(mesh),
-            "... X Y F -> X Y (F ...)",
-        )
-        return mesh
-
-    def forward(self, x: torch.Tensor, sigma: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: Tensor, sigma: Tensor) -> Tensor:
         r"""Condition the input and denoise it by forwarding it through the UNet.
 
         Arguments:
