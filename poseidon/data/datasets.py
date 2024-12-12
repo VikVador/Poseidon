@@ -55,7 +55,7 @@ class PoseidonDataset(Dataset):
         assert_date_format(date_start)
         assert_date_format(date_end)
         self.dataset = xr.open_zarr(path).sel(time=slice(date_start, date_end))
-        self.dataset = self.dataset[variables] if variables else self.dataset
+        self.dataset = self.dataset[variables] if variables else self.dataset[DATASET_VARIABLES]
         self.dataset = self.dataset.isel(**region) if region else self.dataset
         self.trajectory_size = trajectory_size
 
