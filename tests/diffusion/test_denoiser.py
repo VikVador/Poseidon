@@ -133,7 +133,9 @@ def testing_denoiser_forward_consistency(denoiser, fake_input, fake_noise):
     output2 = denoiser.forward(fake_input, fake_noise)
     assert output1.shape == output2.shape, "ERROR - Inconsistent output shapes."
     assert torch.allclose(
-        output1, output2, equal_nan=True,
+        output1,
+        output2,
+        equal_nan=True,
     ), "ERROR - Forward pass is not consistent for the same input."
 
 

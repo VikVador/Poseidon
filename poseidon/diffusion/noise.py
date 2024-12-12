@@ -1,11 +1,13 @@
-r"""Diffusion - Custom noise scheduler."""
+r"""Diffusion noise scheduler."""
 
 import torch
 import torch.nn as nn
 
+from torch import Tensor
+
 
 class PoseidonNoiseSchedule(nn.Module):
-    r"""Log-Normal Noise Schedule for Diffusion Models.
+    r"""Log-normal noise schedule.
 
     Formulation:
         log(sigma) ~ N(mu, sigma^2)
@@ -21,16 +23,23 @@ class PoseidonNoiseSchedule(nn.Module):
 
     def __init__(self, mu: float = -1.2, sigma: float = 1.2):
         super().__init__()
-        self.register_buffer("mu", torch.as_tensor(mu))
-        self.register_buffer("sigma", torch.as_tensor(sigma))
 
-    def forward(self, size: int) -> torch.Tensor:
-        r"""Generates a given number of noise levels.
+        self.mu = torch.as_tensor(mu)
+        self.sigma = torch.as_tensor(sigma)
+
+    def forward(self, batch_size: int) -> Tensor:
+        r"""Generates a batch of noise levels.
 
         Arguments:
-            size: Number of noise levels.
+            batch_size: Batch size (B) of input tensor.
 
         Returns:
-            Noise levels for each sample (size, 1)
+            Tensor: Noise levels (B, 1)
         """
-        return torch.exp(torch.normal(self.mu, self.sigma, size=(size, 1)))
+        return torch.exp(
+            torch.normal(
+                self.mu,
+                self.sigma,
+                size=(batch_size, 1),
+            )
+        ).to(dtype=torch.float32)
