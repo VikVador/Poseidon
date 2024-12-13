@@ -3,26 +3,32 @@
 Training Pipeline:
 
   config_problem:
-    toy_problem: [True]
+    "toy_problem": [True]
 
   config_dataloader:
-    batch_size: [2]
-    trajectory_size: [6]
+    "trajectory_size": [5]
+    "batch_size": [4]
+    "num_workers": [0]
+    "prefetch_factor": [null]
+    "shuffle": [[True, False, False]]
 
   config_training:
-    Learning Rate (Start): [0.0001]
-    Learning Rate (End): [0.00005]
-    Number of Epochs: [5000]
-    Save Frequency: [25]
-    Blanket Size: [1]
+    "blanket_neighbors": [1]
+    "learning_rate": [0.0001]
+    "weight_decay": [0.0]
+    "number_epochs": [100]
 
   config_unet:
-    kernel_size: [3]
-    mod_features: [1]
+    "kernel_size": [3]
+    "mod_features": [1]
+    "hid_channels": [[32 ,32, 32]]
+    "hid_blocks": [[1, 1, 1]]
+    "dropout": [null]
 
   config_siren:
-    features: [6]
-    n_layers: [3]
+      "features": [6]
+      "n_layers": [3]
+
 
 Cluster:
   "cpus"     : [8]
