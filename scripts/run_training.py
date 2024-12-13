@@ -35,7 +35,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     wandb_mode = "online" if args.use_wandb else "disabled"
 
-    # Loading configurations
+    # Loading all possible configurations
     list_of_configurations = load_configuration(args.config)
     config_cluster = list_of_configurations[0]["Cluster"]
 
