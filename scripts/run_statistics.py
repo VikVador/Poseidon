@@ -85,7 +85,7 @@ if __name__ == "__main__":
             account="bsmfc",
             partition="shared",
         ),
-        name="POSEIDON-STATS",
+        name="POSEIDON-STATISTICS",
         export="ALL",
         backend=args.backend,
     )

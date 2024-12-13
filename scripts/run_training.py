@@ -48,14 +48,14 @@ if __name__ == "__main__":
     else:
 
         @job(array=len(list_of_configurations), **config_cluster)
-        def training_neural_network(i: int):
+        def launch_training_pipeline(i: int):
             training(
                 **list_of_configurations[i]["Training Pipeline"],
                 wandb_mode=wandb_mode,
             )
 
         schedule(
-            training_neural_network,
+            launch_training_pipeline,
             name="POSEIDON-TRAINING",
             backend="slurm",
             export="ALL",
