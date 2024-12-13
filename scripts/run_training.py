@@ -1,4 +1,4 @@
-r"""Scripts launch a training pipeline"""
+r"""Script to launch a training pipeline"""
 
 import argparse
 
