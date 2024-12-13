@@ -1,4 +1,4 @@
-r"""Optimizers for training."""
+r"""Optimizers."""
 
 import torch
 
