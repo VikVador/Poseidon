@@ -36,8 +36,8 @@ class PoseidonDataset(Dataset):
         path: Path to the Zarr dataset.
         date_start: Start date of the data split (format: 'YYYY-MM-DD').
         date_end: End date of the data split (format: 'YYYY-MM-DD').
-        trajectory_size: Number of time steps in each sample.
         variables: Variable names to retain from the preprocessed dataset.
+        trajectory_size: Number of time steps in each sample.
         region: Region of interest to extract from the dataset.
     """
 
@@ -46,8 +46,8 @@ class PoseidonDataset(Dataset):
         path: Path,
         date_start: str,
         date_end: str,
+        variables: Sequence[str],
         trajectory_size: int = 1,
-        variables: Optional[Sequence[str]] = None,
         region: Optional[Dict[str, Tuple[int, int]]] = None,
     ):
         super().__init__()
@@ -55,7 +55,7 @@ class PoseidonDataset(Dataset):
         assert_date_format(date_start)
         assert_date_format(date_end)
         self.dataset = xr.open_zarr(path).sel(time=slice(date_start, date_end))
-        self.dataset = self.dataset[variables] if variables else self.dataset[DATASET_VARIABLES]
+        self.dataset = self.dataset[variables] if variables else self.dataset
         self.dataset = self.dataset.isel(**region) if region else self.dataset
         self.trajectory_size = trajectory_size
 
