@@ -1,20 +1,21 @@
-r"""Scripts - Train a denoiser model."""
+r"""Scripts launch a training pipeline"""
 
 import argparse
 
 from dawgz import job, schedule
 
 # isort: split
-from poseidon.parser import load_configuration
-from poseidon.training import training
+from poseidon.training.parser import load_configuration
+from poseidon.training.training import training
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Launch the training of a denoiser.")
+    parser = argparse.ArgumentParser(description="Launch training pipeline.")
     parser.add_argument(
         "--config",
         "-c",
         type=str,
-        help="Path to the .yml configuration file.",
+        required=True,
+        help="Path to the training .yml configuration file.",
     )
     parser.add_argument(
         "--use_wandb",
@@ -22,48 +23,40 @@ if __name__ == "__main__":
         action="store_true",
         help="Use Weights & Biases for logging advancement of the training.",
     )
+    parser.add_argument(
+        "--backend",
+        "-b",
+        type=str,
+        default="slurm",
+        choices=["slurm", "async"],
+        help="Computation backend, 'slurm' for cluster-based scheduling and 'async' for local execution.",
+    )
 
-    # Parse the command-line arguments
     args = parser.parse_args()
+    wandb_mode = "online" if args.use_wandb else "disabled"
 
-    # Load the configuration from the specified YAML file
-    config_list = load_configuration(args.config)
+    # Loading configurations
+    list_of_configurations = load_configuration(args.config)
+    config_cluster = list_of_configurations[0]["Cluster"]
 
-    # Extract the cluster configuration from the loaded config
-    config_cluster = config_list[0]["Cluster"]
-
-    # Check if training should be done locally
-    if not config_cluster["Dawgz"]:
+    if args.backend == "async":
         training(
-            config_dataloader=config_list[0]["Dataloader"],
-            config_backbone=config_list[0]["Backbone"],
-            config_nn=config_list[0]["Neural Network"],
-            config_training=config_list[0]["Training"],
-            toy_problem=config_list[0]["Problem"]["Toy_problem"],
-            wandb_mode="online" if args.use_wandb else "disabled",
+            **list_of_configurations[0]["Training Pipeline"],
+            wandb_mode=wandb_mode,
         )
 
-    # Proceed with cluster training if Dawgz is enabled
     else:
 
-        @job(
-            array=len(config_list),
-            cpus=config_cluster["CPUS"],
-            gpus=config_cluster["GPUS"],
-            ram=config_cluster["RAM"],
-            time=config_cluster["TIME"],
-            partition=config_cluster["PARTITION"],
-            account="bsmfc",
-        )
+        @job(array=len(list_of_configurations), **config_cluster)
         def training_neural_network(i: int):
             training(
-                config_dataloader=config_list[i]["Dataloader"],
-                config_backbone=config_list[i]["Backbone"],
-                config_nn=config_list[i]["Neural Network"],
-                config_training=config_list[i]["Training"],
-                toy_problem=config_list[i]["Problem"]["Toy_problem"],
-                wandb_mode="online" if args.use_wandb else "disabled",
+                **list_of_configurations[i]["Training Pipeline"],
+                wandb_mode=wandb_mode,
             )
 
-        # Schedule the defined jobs for execution on the cluster
-        schedule(training_neural_network, name="POSEIDON-TRAINING", backend="slurm", export="ALL")
+        schedule(
+            training_neural_network,
+            name="POSEIDON-TRAINING",
+            backend="slurm",
+            export="ALL",
+        )

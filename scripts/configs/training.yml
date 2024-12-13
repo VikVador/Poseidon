@@ -1,0 +1,33 @@
+# A configuration file to launch multiple trainings
+
+Training Pipeline:
+
+  config_problem:
+    toy_problem: [True]
+
+  config_dataloader:
+    batch_size: [2]
+    trajectory_size: [6]
+
+  config_training:
+    Learning Rate (Start): [0.0001]
+    Learning Rate (End): [0.00005]
+    Number of Epochs: [5000]
+    Save Frequency: [25]
+    Blanket Size: [1]
+
+  config_unet:
+    kernel_size: [3]
+    mod_features: [1]
+
+  config_siren:
+    features: [6]
+    n_layers: [3]
+
+Cluster:
+  "cpus"     : [8]
+  "gpus"     : [1]
+  "ram"      : ["60GB"]
+  "time"     : ["48:00:00"]
+  "partition": ["gpu"]
+  "account"  : ["bsmfc"]
