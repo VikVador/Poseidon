@@ -1,4 +1,4 @@
-# A configuration file to launch multiple trainings
+# A configuration file for the training pipeline.
 
 Training Pipeline:
 
@@ -6,34 +6,35 @@ Training Pipeline:
     "toy_problem": [True]
 
   config_dataloader:
-    "trajectory_size": [5]
-    "batch_size": [4]
+    "trajectory_size": [12]
+    "batch_size": [1]
     "num_workers": [0]
     "prefetch_factor": [null]
     "shuffle": [[True, False, False]]
 
   config_training:
-    "blanket_neighbors": [1]
+    "blanket_neighbors": [3]
     "learning_rate": [0.0001]
     "weight_decay": [0.0]
-    "number_epochs": [100]
+    "steps_training": [400000]
+    "steps_gradient_accumulation": [4]
 
   config_unet:
     "kernel_size": [3]
     "mod_features": [1]
-    "hid_channels": [[32 ,32, 32]]
-    "hid_blocks": [[1, 1, 1]]
+    "hid_channels": [[256, 512, 1024]]
+    "hid_blocks": [[2, 2, 2]]
     "dropout": [null]
 
   config_siren:
-      "features": [6]
-      "n_layers": [3]
+      "features": [2]
+      "n_layers": [2]
 
 
 Cluster:
-  "cpus"     : [8]
+  "cpus"     : [4]
   "gpus"     : [1]
   "ram"      : ["60GB"]
-  "time"     : ["48:00:00"]
+  "time"     : ["01:00:00"]
   "partition": ["gpu"]
   "account"  : ["bsmfc"]
