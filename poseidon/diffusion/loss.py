@@ -27,7 +27,7 @@ def PoseidonLoss(
     # fmt: off
     #
     # Sigma should never be zero due to exponential scaling.
-    lambda_t = (1 / sigma_t**2) + 1
+    lambda_t = 1 / (1 + sigma_t**2)
 
     se       = (x_t_denoised - x_t) ** 2
     mse      = torch.mean(se, dim=-1)
