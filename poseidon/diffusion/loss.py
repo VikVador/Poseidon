@@ -31,5 +31,6 @@ def PoseidonLoss(
 
     se       = (x_t_denoised - x_t) ** 2
     mse      = torch.mean(se, dim=-1)
-    wmse     = torch.mean(lambda_t * mse)
-    return wmse
+    wmse     = lambda_t * mse
+    mwmse    = torch.mean(wmse)
+    return mwmse
