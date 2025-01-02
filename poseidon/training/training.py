@@ -4,7 +4,6 @@ import gc
 import torch
 import wandb
 
-from itertools import cycle
 from torch.amp.grad_scaler import GradScaler
 from tqdm import tqdm
 from typing import Dict
@@ -26,7 +25,7 @@ def training(
     config_training: Dict,
     config_unet: Dict,
     config_siren: Dict,
-    wandb_mode: str,
+    config_wandb: Dict,
 ) -> None:
     r"""Launch the training of a `PoseidonDenoiser`.
 
@@ -36,12 +35,11 @@ def training(
         config_training: Configuration for the training.
         config_unet: Configuration for the UNet (denoiser).
         config_siren: Configuration for the Siren network (spatial embedding).
-        wandb_mode: Mode for wandb (e.g., 'online', 'offline').
+        config_wandb: Configuration for Weights & Biases.
     """
 
     wandb.init(
-        project="Poseidon-Training-V3",
-        mode=wandb_mode,
+        **config_wandb,
         config={
             "Problem": config_problem,
             "Dataloader": config_dataloader,
@@ -59,8 +57,9 @@ def training(
         else get_dataloaders(**config_dataloader)
     )
 
-    dataloader_train = cycle(dataloader_train)
+    dataloader_iter = iter(dataloader_train)
 
+    # Extracting dimensions and parameters
     (
         (B, C, _, H, W),
         blanket_neighbors,
@@ -108,14 +107,18 @@ def training(
     # Progression bar
     progress_bar = tqdm(total=steps_training, desc="Training", unit="step")
 
-    # Stores the loss over steps
-    loss_steps = []
+    # Running average for loss
+    loss_average = 0.0
 
     for step in range(0, steps_training):
         #
-        # --- Data Preprocessing ---
+        # --- Fetching & Preprocessing Data ---
         #
-        data, _ = next(dataloader_train)
+        try:
+            data, _ = next(dataloader_iter)
+        except StopIteration:
+            dataloader_iter = iter(dataloader_train)
+            data, _ = next(dataloader_iter)
 
         # Extractig random blanket from the data and generating noise
         x, noise = (
@@ -144,30 +147,28 @@ def training(
         #
         # Rescaling the loss
         loss /= steps_gradient_accumulation
+        loss_average += loss.item()
 
-        # Scaled backward pass
+        # Backward pass (loss scaled to avoid underflow)
         scaler.scale(loss).backward()
-        loss_steps.append(loss.item())
 
         if step % steps_gradient_accumulation == 0 and step != 0:
+            # Optimizer step
             scaler.step(poseidon_optimizer)
             scaler.update()
             poseidon_optimizer.zero_grad()
 
-            # Compute and log the average loss for accumulated steps
-            loss_averaged_over_steps = sum(loss_steps) / len(loss_steps)
-            loss_steps = []
-
-            # Updating progress bar with the loss
-            progress_bar.set_postfix({"Loss (AOS)": f"{loss_averaged_over_steps:.6f}"})
-
-            # Logging to Weights and Biases (average loss, learning rate, current step)
+            # Log the running loss average
+            progress_bar.set_postfix({"Loss (AOS)": f"{loss_average:.6f}"})
             wandb.log({
-                "Training/Loss (Averaged over Steps)": loss_averaged_over_steps,
+                "Training/Loss (Averaged over Steps)": loss_average,
                 "Training/Learning Rate": poseidon_optimizer.param_groups[0]["lr"],
                 "Training/Step": step,
                 "Training/Completed": step / steps_training,
             })
+
+            # Reseting running average
+            loss_average = 0.0
 
         # Updating learning rate
         if step > steps_gradient_accumulation:
@@ -179,8 +180,8 @@ def training(
         #
         # --- Cleanup ---
         #
-        # Ensure no cuda memory leaks
-        del data, x, noise, x_t, x_t_denoised
+        # Ensure no cuda:CPU memory leaks
+        del data, _, x, x_t, noise, x_t_denoised, loss
         torch.cuda.empty_cache()
         gc.collect()
 
