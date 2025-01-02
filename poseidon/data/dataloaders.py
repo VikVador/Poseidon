@@ -85,6 +85,7 @@ def _get_dataloaders_from_datasets(
         DataLoader(
             dataset,
             shuffle=shuffle[i],
+            pin_memory=True,
             **kwargs,
         )
         for i, dataset in enumerate(datasets)
