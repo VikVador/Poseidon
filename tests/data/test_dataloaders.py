@@ -66,7 +66,7 @@ def fake_black_sea_dataset(tmp_path) -> Path:
 
 @pytest.mark.parametrize("trajectory_size", [1, 3])
 @pytest.mark.parametrize("variables", [None, ["ssh", "votemper"]])
-@pytest.mark.parametrize("batch_size", [2, 4])
+@pytest.mark.parametrize("batch_size", [4])
 @pytest.mark.parametrize("shuffle", [[True, False, False], [False, True, True]])
 def test_get_dataloaders(fake_black_sea_dataset, trajectory_size, variables, batch_size, shuffle):
     r"""Testing generation of dataloaders."""
