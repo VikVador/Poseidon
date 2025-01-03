@@ -25,26 +25,23 @@ if __name__ == "__main__":
         choices=["slurm", "async"],
         help="Computation backend, 'slurm' for cluster-based scheduling and 'async' for local execution.",
     )
-
-    args = parser.parse_args()
-
-    # Loading every configurations
-    list_of_configurations = load_configuration(args.config)
-
-    # Extracting the cluster configuration
-    config_cluster = list_of_configurations[0]["Cluster"]
+    #
+    # fmt: off
+    # Initialization
+    args           = parser.parse_args()
+    configs        = load_configuration(args.config)
+    config_cluster = configs[0]["Cluster"]
 
     if args.backend == "async":
         training(
-            **list_of_configurations[0].get("Training Pipeline"),
+            **configs[0].get("Training Pipeline"),
         )
 
     else:
-
-        @job(array=len(list_of_configurations), **config_cluster)
+        @job(array=len(configs), **config_cluster)
         def launch_training_pipeline(i: int):
             training(
-                **list_of_configurations[i].get("Training Pipeline"),
+                **configs[i].get("Training Pipeline"),
             )
 
         schedule(

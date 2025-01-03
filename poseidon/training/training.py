@@ -15,14 +15,22 @@ from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.loss import PoseidonLoss
 from poseidon.diffusion.noise import PoseidonNoiseSchedule
-from poseidon.training.optimizer import SOAP
+from poseidon.training.optimizer import get_optimizer
+from poseidon.training.scheduler import get_scheduler
 from poseidon.training.tools import preprocessing_for_diffusion
+
+# fmt:off
+#
+# Constants
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def training(
     config_problem: Dict,
     config_dataloader: Dict,
     config_training: Dict,
+    config_optimizer: Dict,
+    config_scheduler: Dict,
     config_unet: Dict,
     config_siren: Dict,
     config_wandb: Dict,
@@ -33,31 +41,39 @@ def training(
         config_problem: Configuration for the problem.
         config_dataloader: Configuration for the dataloaders.
         config_training: Configuration for the training.
+        config_optimizer: Configuration for the optimizer.
+        config_scheduler: Configuration for the scheduler.
         config_unet: Configuration for the UNet (denoiser).
         config_siren: Configuration for the Siren network (spatial embedding).
         config_wandb: Configuration for Weights & Biases.
     """
 
+    # Initializing connection to Weights & Biases
     wandb.init(
         **config_wandb,
         config={
             "Problem": config_problem,
             "Dataloader": config_dataloader,
             "Training": config_training,
+            "Optimizer": config_optimizer,
+            "Scheduler": config_scheduler,
             "UNet": config_unet,
             "Siren": config_siren,
         },
     )
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    dataloader_train, _, _ = (
-        get_toy_dataloaders(**config_dataloader)
+    # Loading dataloaders as infinite iterators
+    iter_dataloader_training, _, _ = (
+        get_toy_dataloaders(
+            **config_dataloader,
+            infinite=True,
+        )
         if config_problem["toy_problem"]
-        else get_dataloaders(**config_dataloader)
+        else get_dataloaders(
+            **config_dataloader,
+            infinite=True,
+        )
     )
-
-    dataloader_iter = iter(dataloader_train)
 
     # Extracting dimensions and parameters
     (
@@ -66,127 +82,106 @@ def training(
         blanket_size,
         steps_training,
         steps_gradient_accumulation,
+        black_sea_region,
     ) = (
-        next(iter(dataloader_train))[0].shape,
-        config_training["blanket_neighbors"],  # Neighbors on each side
-        config_training["blanket_neighbors"] * 2 + 1,  # Complete blanket dimension
-        config_training["steps_training"],  # One-step is one day
-        config_training["steps_gradient_accumulation"],  # Number of steps before optimizer step
+        next(iter_dataloader_training)[0].shape,                                 # Dimension of Black Sea state trajectory
+        config_training["blanket_neighbors"],                                    # Neighbors on each side
+        config_training["blanket_neighbors"] * 2 + 1,                            # Complete blanket dimension
+        config_training["steps_training"],                                       # One-step is one day
+        config_training["steps_gradient_accumulation"],                          # Number of steps before optimizer step
+        TOY_DATASET_REGION if config_problem["toy_problem"] else DATASET_REGION, # Region of interest
     )
 
-    # Setting up building blocks
+    # Setting up denoising network
     poseidon_denoiser = PoseidonDenoiser(
         PoseidonBackbone(
             dimensions=(B, C, blanket_size, H, W),
             config_unet=config_unet,
             config_siren=config_siren,
-            config_region=TOY_DATASET_REGION if config_problem["toy_problem"] else DATASET_REGION,
-            device=device,
+            config_region=black_sea_region,
+            device=DEVICE,
         )
-    ).to(device)
+    ).to(DEVICE)
 
-    poseidon_optimizer = SOAP(
-        params=poseidon_denoiser.parameters(),
-        lr=config_training["learning_rate"],
-        weight_decay=config_training["weight_decay"],
+    # Tracking gradients
+    wandb.watch(poseidon_denoiser, log="gradients")
+
+    # Setting up training tools
+    optimizer = get_optimizer(
+        nn_parameters=poseidon_denoiser.parameters(),
+        config_optimizer=config_optimizer,
     )
 
-    poseidon_sheduler_lr = torch.optim.lr_scheduler.LambdaLR(
-        optimizer=poseidon_optimizer,
-        lr_lambda=lambda t: max(0, 1 - (t / steps_training)),
+    scheduler_lr, scheduler_noise = (
+        get_scheduler(
+            optimizer=optimizer,
+            total_steps=int(steps_training / steps_gradient_accumulation),
+            config_scheduler=config_scheduler,
+        ),
+        PoseidonNoiseSchedule(),
     )
 
-    poseidon_scheduler_noise = PoseidonNoiseSchedule()
-
-    # Used to handle mixed precision training with gradient accumulation
+    # Handles low losses for gradient accumulation
     scaler = GradScaler()
 
-    #
-    # --- Training Loop ---
-    #
-    # Progression bar
-    progress_bar = tqdm(total=steps_training, desc="Training", unit="step")
-
-    # Running average for loss
-    loss_average = 0.0
+    # Progression bar showing the accumulated averaged loss
+    loss_average, progress_bar = 0, tqdm(total=steps_training, desc="Training", unit="step")
 
     for step in range(0, steps_training):
-        #
-        # --- Fetching & Preprocessing Data ---
-        #
-        try:
-            data, _ = next(dataloader_iter)
-        except StopIteration:
-            dataloader_iter = iter(dataloader_train)
-            data, _ = next(dataloader_iter)
 
-        # Extractig random blanket from the data and generating noise
-        x, noise = (
-            preprocessing_for_diffusion(data, blanket_neighbors),
-            poseidon_scheduler_noise(batch_size=data.shape[0]),
+        # Fetching data (only x) and preprocessing it
+        x = preprocessing_for_diffusion(
+            x=next(iter_dataloader_training)[0],
+            k=blanket_neighbors,
         )
 
-        # Adding noise to the data
-        x_t = x + noise * torch.randn_like(x)
+        # Generating noise
+        noise = scheduler_noise(batch_size=x.shape[0])
 
-        # Moving data to device
-        x_t, noise = x_t.to(device), noise.to(device)
+        # Noising the clean state
+        x_noised = x + noise * torch.randn_like(x)
 
-        #
-        # --- Forward Pass (Mixed Precision) ---
-        #
-        with torch.autocast(device_type="cuda"):
-            # Denoising the data
-            x_t_denoised = poseidon_denoiser(x_t, noise)
+        # Pushing everything to the device
+        x, x_noised, noise = x.to(DEVICE), x_noised.to(DEVICE), noise.to(DEVICE)
 
-            # Computing loss
-            loss = PoseidonLoss(x_t, x_t_denoised, noise)
+        # Denoising the noisy state and computing the loss between clean and denoised states
+        loss = PoseidonLoss(
+            x=x,
+            x_denoised=poseidon_denoiser(x_noised, noise),
+            sigma=noise,
+        )
 
-        #
-        # --- Gradient Accumulation ---
-        #
-        # Rescaling the loss
-        loss /= steps_gradient_accumulation
+        # Computing gradients with scaled loss for gradient accumulation
+        scaler.scale(loss / steps_gradient_accumulation).backward()
+
+        # Storing the accumulated loss
         loss_average += loss.item()
 
-        # Backward pass (loss scaled to avoid underflow)
-        scaler.scale(loss).backward()
-
+        # Gradient accumulation optimizer step
         if step % steps_gradient_accumulation == 0 and step != 0:
-            # Optimizer step
-            scaler.step(poseidon_optimizer)
-            scaler.update()
-            poseidon_optimizer.zero_grad()
 
-            # Log the running loss average
-            progress_bar.set_postfix({"Loss (AOS)": f"{loss_average:.6f}"})
+            progress_bar.set_postfix({"Loss (AoAS)": f"{loss_average:.6f}"})
             wandb.log({
-                "Training/Loss (Averaged over Steps)": loss_average,
-                "Training/Learning Rate": poseidon_optimizer.param_groups[0]["lr"],
-                "Training/Step": step,
-                "Training/Completed": step / steps_training,
+                "Training/Loss (AoAS)": loss_average / steps_gradient_accumulation,
+                "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
+                "Training/Step [-]": step,
+                "Training/Samples Seen [-]": B * step,
+                "Training/Completed [%]": (step / steps_training) * 100,
             })
 
-            # Reseting running average
+            # Optimizing & Updating
+            scaler.step(optimizer)
+            scaler.update()
+            scheduler_lr.step()
+
+            # Reseting & Cleaning
             loss_average = 0.0
+            optimizer.zero_grad()
+            gc.collect()
 
-        # Updating learning rate
-        if step > steps_gradient_accumulation:
-            poseidon_sheduler_lr.step()
-
-        # Updating progress bar
+        # Updating & Cleaning
         progress_bar.update(1)
-
-        #
-        # --- Cleanup ---
-        #
-        # Ensure no cuda:CPU memory leaks
-        del data, _, x, x_t, noise, x_t_denoised, loss
+        del x, x_noised, noise, loss
         torch.cuda.empty_cache()
-        gc.collect()
 
-    # End of Training
-    progress_bar.close()
-
-    # Closing wandb
     wandb.finish()
