@@ -19,7 +19,7 @@ from poseidon.data.const import (
 from poseidon.data.preprocessing import compute_preprocessing
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Preprocess a dataset.")
+    parser = argparse.ArgumentParser(description="Launch a dataset preprocessing pipeline.")
 
     parser.add_argument(
         "--path_output",

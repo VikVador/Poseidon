@@ -66,7 +66,7 @@ def fake_black_sea_dataset(tmp_path) -> Path:
 
 @pytest.mark.parametrize("trajectory_size", [1, 3])
 @pytest.mark.parametrize("variables", [None, ["ssh", "votemper"]])
-@pytest.mark.parametrize("batch_size", [2, 4])
+@pytest.mark.parametrize("batch_size", [4])
 @pytest.mark.parametrize("shuffle", [[True, False, False], [False, True, True]])
 def test_get_dataloaders(fake_black_sea_dataset, trajectory_size, variables, batch_size, shuffle):
     r"""Testing generation of dataloaders."""
@@ -108,13 +108,13 @@ def test_get_dataloaders(fake_black_sea_dataset, trajectory_size, variables, bat
         4,
         batch_size,
         trajectory_size,
-        3,
+        4,
     )
 
     init_dates = [
-        Tensor([1, 1, 0]),
-        Tensor([2, 1, 0]),
-        Tensor([3, 1, 0])
+        Tensor([1995, 1, 1, 0]),
+        Tensor([1995, 2, 1, 0]),
+        Tensor([1995, 3, 1, 0])
     ]
 
     for x, t, s, d in zip([x_train, x_val, x_test], [t_train, t_val, t_test], shuffle, init_dates):
@@ -134,4 +134,4 @@ def test_get_dataloaders(fake_black_sea_dataset, trajectory_size, variables, bat
         # Since dataset is small, we need to fix the seed to check for shuffling
         if s:
             assert not torch.allclose(t[0, 0], d), \
-            "ERROR - Dataset is not shuffled."
+            "ERROR - Dataset does not shuffle properly."

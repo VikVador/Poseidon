@@ -98,7 +98,7 @@ def test_PoseidonDataset(fake_black_sea_dataset, trajectory_size, variables, reg
     TIME_DATES = time.shape[1]
 
     TIME_T_E     = trajectory_size
-    TIME_DATES_E = 3
+    TIME_DATES_E = 4
 
     # Assertion
     assert Z == Z_E,                   f"ERROR - Wrong number of total levels ({Z_E} != {Z})"

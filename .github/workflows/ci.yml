@@ -30,4 +30,4 @@ jobs:
           pip install pytest
           pip install . --extra-index-url https://download.pytorch.org/whl/cpu
       - name: Running tests
-        run: pytest tests
+        run: pytest --disable-warnings tests

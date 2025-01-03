@@ -1,141 +1,108 @@
-r"""Diffusion - Backbone module helping preprocessing data conditionning."""
+r"""Diffusion backbone helping conditionning data."""
 
-import torch
 import torch.nn as nn
-import xarray as xr
 
 from einops import rearrange
+from pathlib import Path
+from torch import Tensor
 from typing import Dict, Tuple
 
 # isort: split
-from poseidon.config import (
-    PATH_MASK,
-    PATH_MESH,
-)
+from poseidon.config import PATH_MESH
+from poseidon.diffusion.tools import generate_encoded_mesh
+from poseidon.network.embedding import SirenEmbedding
 from poseidon.network.unet import UNet
 
 
-def generate_mesh_mask(region: Dict) -> torch.Tensor:
-    r"""Load the Black Sea mesh and mask to create a spatial conditioning.
-
-    Arguments:
-        region: Contains information about the region of interest.
-
-    Returns:
-        Normalized spatial information with shape (4, level, lattitude, longitude).
-    """
-    mask = xr.open_zarr(PATH_MASK).sel(**region).mask.values
-    mesh = xr.open_zarr(PATH_MESH).sel(**region)
-
-    # Convert normalized mesh data (x, y, z) to PyTorch tensors
-    mx = torch.from_numpy(mesh.x_mesh.values) / (region["longitude"].stop - 1)
-    my = torch.from_numpy(mesh.y_mesh.values) / (region["latitude"].stop - 1)
-    mz = torch.from_numpy(mesh.z_mesh.values) / (region["level"].stop - 1)
-    mesh = torch.cat([mx.unsqueeze(0), my.unsqueeze(0), mz.unsqueeze(0)], dim=0)
-    return torch.cat([torch.from_numpy(mask).unsqueeze(0), mesh], dim=0)
-
-
 class PoseidonBackbone(nn.Module):
-    r"""A helper module used to preprocess data for the Poseidon neural network.
+    r"""A diffusion helper used to add data conditionning.
 
-    It is responsible for preparing the input data and temporal embeddings to condition
-    the neural network, based on a spatial mask, time embeddings (hour, day, month),
-    and a neighborhood blanket size.
+    Information:
+        Responsible for preparing spatial embeddings to add context to the input data.
+
+    Assumptions:
+        Simulator dynamics, P(x_{t+1} | x_t), is time-independent.
 
     References:
         | Elucidating the Design Space of Diffusion-Based Generative Models (Karras et al., 2022).
         | https://arxiv.org/abs/2206.00364
 
     Arguments:
-        k: Number of neighbors to consider on each side to define the "blanket"
-        dimensions: Contains number of channels, latitude, and longitude of the data
-        config_nn: Configuration parameters for the UNet neural network architecture
+        dimensions: Input tensor dimensions (B, C, K, H, W).
+        config_unet: Configuration the UNet architecture.
+        config_siren: Configuration for the Siren architecture.
         config_region: Configuration for the spatial region.
     """
 
     def __init__(
-        self, k: int, dimensions: Tuple[int, int, int, int], config_nn: Dict, config_region: Dict
+        self,
+        dimensions: Tuple[int, int, int, int, int],
+        config_unet: Dict,
+        config_siren: Dict,
+        config_region: Dict,
+        path_mesh: Path = PATH_MESH,
+        device: str = "cpu",
     ):
         super().__init__()
-        self.k = k
-        self.blanket_size = k * 2 + 1
-        self.channels = dimensions[0]
-        self.traj_size = dimensions[1]
-        self.latitude = dimensions[2]
-        self.longitude = dimensions[3]
-        nb_pixels = self.latitude * self.longitude
-        self.register_buffer(
-            "spatial", generate_mesh_mask(config_region).flatten(start_dim=0, end_dim=1)
-        )
-        self.embedding_hour = nn.Embedding(24, nb_pixels)
-        self.embedding_day = nn.Embedding(31, nb_pixels)
-        self.embedding_month = nn.Embedding(12, nb_pixels)
-        # Composed of: Blanket * Channels + Time (3) + Spatial (Mesh x,y,z and mask)(4)
-        self.in_channels = (
-            self.channels
-            + 3
-            + 4 * config_region["level"].stop  # Total number of levels in dataset
-        )
-        self.out_channels = self.channels
-        self.neural_network = UNet(
-            in_channels=self.in_channels, out_channels=self.out_channels, **config_nn
-        )
 
-    def forward(self, x: torch.Tensor, sigma: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-        r"""Performs a forward pass through the network.
+        self.B, self.C, self.K, self.H, self.W = dimensions
+
+        # Sin/cos encoded mesh
+        self.mesh = generate_encoded_mesh(
+            path=path_mesh,
+            features=config_siren["features"],
+            region=config_region,
+        ).to(device)
+
+        # Total embedded size of the mesh
+        emb_channels = self.mesh.shape[-1]
+        in_channels = self.C
+
+        self.unet = UNet(
+            in_channels,
+            in_channels,
+            **config_unet,
+        ).to(device)
+
+        self.siren = SirenEmbedding(
+            emb_channels,
+            in_channels * self.K,  # One embedding per element of the blanket
+            config_siren["n_layers"],
+        ).to(device)
+
+    def forward(self, x: Tensor, sigma: Tensor) -> Tensor:
+        r"""Condition the input and denoise it by forwarding it through the UNet.
 
         Arguments:
-            x: Noisy input tensor with shape (B, D).
-            sigma: Noise level of a specific diffusion step (B, 1).
-            c: Tokenized time-based conditioning (B, 3), i.e. month, day, hour.
+            x: Noisy input tensor (B, D).
+            sigma: Noise level of diffusion step (B, 1).
 
         Returns:
             Denoised tensor (B, D).
         """
-
-        # Mixing blanket and variables
         x = rearrange(
             x,
             "B (C K H W) -> B C K H W",
-            C=self.channels,
-            K=self.blanket_size,
-            H=self.latitude,
-            W=self.longitude,
+            C=self.C,
+            K=self.K,
+            H=self.H,
+            W=self.W,
         )
 
-        # Embedding temporal conditioning
-        embd_month, embd_day, embd_hour = (
-            self.embedding_month(c[:, 0]),
-            self.embedding_day(c[:, 1]),
-            self.embedding_hour(c[:, 2]),
-        )
-        embd_month, embd_day, embd_hour = (
-            rearrange(
-                embd_month, "B (C K H W) -> B C K H W", C=1, K=1, H=self.latitude, W=self.longitude
-            ),
-            rearrange(
-                embd_day, "B (C K H W) -> B C K H W", C=1, K=1, H=self.latitude, W=self.longitude
-            ),
-            rearrange(
-                embd_hour, "B (C K H W) -> B C K H W", C=1, K=1, H=self.latitude, W=self.longitude
-            ),
+        mesh_embedding = self.siren(self.mesh)
+
+        mesh_embedding = rearrange(
+            mesh_embedding,
+            "H W (C K) -> 1 C K H W",
+            C=self.C,
+            K=self.K,
+            H=self.H,
+            W=self.W,
         )
 
-        # Broadcasting the temporal mask to the blanket size
-        embd_month, embd_day, embd_hour = (
-            embd_month.repeat(1, 1, self.blanket_size, 1, 1),
-            embd_day.repeat(1, 1, self.blanket_size, 1, 1),
-            embd_hour.repeat(1, 1, self.blanket_size, 1, 1),
-        )
+        x = x + mesh_embedding
 
-        # Broadcasting the spatial mask to batch size
-        embd_spatial = self.spatial.repeat(x.shape[0], self.blanket_size, 1, 1, 1)
-        embd_spatial = rearrange(embd_spatial, "B K C H W -> B C K H W")
+        # Denoising
+        x = self.unet(x, sigma)
 
-        # Conditioning the input (converting mask to float)
-        x = torch.cat([x, embd_spatial, embd_month, embd_day, embd_hour], dim=1).float()
-
-        # Forward pass ('t' used to be diffusion step, now it's the noise level)
-        x = self.neural_network(x=x, t=sigma)
-        x = rearrange(x, "B ... -> B (...)")
-        return x
+        return rearrange(x, "B ... -> B (...)")

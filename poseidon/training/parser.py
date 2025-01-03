@@ -1,4 +1,4 @@
-r"""Poseidon - Helper tools for parsing configuration files."""
+r"""Helper tools for parsing configuration files."""
 
 import yaml
 
