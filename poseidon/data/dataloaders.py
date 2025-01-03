@@ -11,6 +11,16 @@ from poseidon.data.datasets import (
 )
 
 
+def infinite_iterable_dataloader(dataloader):
+    r"""Transforms a PyTorch dataloader into an infinite iterator without memory accumulation."""
+    iterator = iter(dataloader)
+    while True:
+        try:
+            yield next(iterator)
+        except StopIteration:
+            iterator = iter(dataloader)
+
+
 def get_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
     r"""Returns the training, validation, and test dataloaders.
 
@@ -28,7 +38,8 @@ def get_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
     Arguments:
         trajectory_size: Number of time steps in each sample.
         variables: Variable names to retain from the dataset.
-        shuffle: List of booleans defining which dataset to shuffle
+        shuffle: List of booleans defining which dataset to shuffle.
+        infinite: Whether to transform dataloaders as infinite iterators or not.
         kwargs: Keyword arguments passed to the dataloader.
     """
     return _get_dataloaders_from_datasets(
@@ -55,6 +66,7 @@ def get_toy_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
         trajectory_size: Number of time steps in each sample.
         variables: Variable names to retain from the dataset.
         shuffle: List of booleans defining which dataset to shuffle.
+        infinite: Whether to transform dataloaders as infinite iterators or not.
         kwargs: Keyword arguments passed to the dataloader.
     """
     return _get_dataloaders_from_datasets(
@@ -68,6 +80,7 @@ def _get_dataloaders_from_datasets(
     trajectory_size: int = 1,
     variables: Optional[Sequence[str]] = None,
     shuffle: Tuple[bool, bool, bool] = (True, False, False),
+    infinite: bool = False,
     **kwargs: Any,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     r"""Helper tool to generate dataloaders from datasets.
@@ -90,5 +103,8 @@ def _get_dataloaders_from_datasets(
         )
         for i, dataset in enumerate(datasets)
     ]
+
+    if infinite:
+        dataloaders = [infinite_iterable_dataloader(dataloader) for dataloader in dataloaders]
 
     return tuple(dataloaders)
