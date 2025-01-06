@@ -15,7 +15,7 @@ from torch import Tensor
 from typing import Optional, Sequence
 
 # isort: split
-from poseidon.network.convolution import Convolution2DBlock
+from poseidon.network.convolution import ConvNd, Convolution2DBlock
 from poseidon.network.normalization import LayerNorm
 from poseidon.network.residual import (
     SpatialModulatedResidualBlock,
@@ -43,16 +43,18 @@ class UNetBlock(nn.Module):
     ):
         super().__init__()
 
+        properties = {
+            "channels": channels,
+            "mod_features": mod_features,
+            "dropout": dropout,
+        }
+
         self.block_spatial = SpatialModulatedResidualBlock(
-            channels=channels,
-            mod_features=mod_features,
-            dropout=dropout,
+            **properties,
             **kwargs,
         )
         self.block_temporal = TemporalModulatedResidualBlock(
-            channels=channels,
-            mod_features=mod_features,
-            dropout=dropout,
+            **properties,
             **kwargs,
         )
 
@@ -163,38 +165,44 @@ class UNet(nn.Module):
                     )
                 )
 
-            # Adding first and last projection blocks
+            # First and last projection blocks
             else:
                 do.insert(
                     index=0,
-                    module=Convolution2DBlock(
+                    module=ConvNd(
                         in_channels,
                         hid_channels[i],
+                        3,
                         **kwargs,
                     ),
                 )
                 up.append(
-                    Convolution2DBlock(
+                    ConvNd(
                         hid_channels[i],
                         out_channels,
-                        kernel_size=1,  # Remove aliasing
-                    )
+                        3,
+                        kernel_size=1,  # Removes aliasing artifacts
+                    ),
                 )
 
-            # Adding projection for concatenated tensors (beginning of each ascent stage)
+            # Projection for concatening tensors (beginning of each ascent stage)
             if i + 1 < len(hid_blocks):
                 up.insert(
                     index=0,
-                    module=Convolution2DBlock(
+                    module=ConvNd(
                         hid_channels[i] + hid_channels[i + 1],
                         hid_channels[i],
+                        3,
                         **kwargs,
                     ),
                 )
 
             # Updating the descent and ascent stages
             self.descent.append(do)
-            self.ascent.insert(index=0, module=up)
+            self.ascent.insert(
+                index=0,
+                module=up,
+            )
 
     def forward(self, x: Tensor, mod: Tensor) -> Tensor:
         r"""
