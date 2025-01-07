@@ -19,7 +19,8 @@ from poseidon.training.optimizer import get_optimizer
 from poseidon.training.scheduler import get_scheduler
 from poseidon.training.tools import preprocessing_for_diffusion
 
-# fmt:off
+#
+# fmt: off
 #
 # Constants
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -84,12 +85,14 @@ def training(
         steps_gradient_accumulation,
         black_sea_region,
     ) = (
-        next(iter_dataloader_training)[0].shape,                                 # Dimension of Black Sea state trajectory
-        config_training["blanket_neighbors"],                                    # Neighbors on each side
-        config_training["blanket_neighbors"] * 2 + 1,                            # Complete blanket dimension
-        config_training["steps_training"],                                       # One-step is one day
-        config_training["steps_gradient_accumulation"],                          # Number of steps before optimizer step
-        TOY_DATASET_REGION if config_problem["toy_problem"] else DATASET_REGION, # Region of interest
+        next(iter_dataloader_training)[0].shape,        # Dimension of Black Sea state trajectory
+        config_training["blanket_neighbors"],           # Neighbors on each side
+        config_training["blanket_neighbors"] * 2 + 1,   # Complete blanket dimension
+        config_training["steps_training"],              # One-step is one day
+        config_training["steps_gradient_accumulation"], # Number of steps before optimizer step
+        TOY_DATASET_REGION                              # Region of interest
+        if config_problem["toy_problem"]
+        else DATASET_REGION,
     )
 
     # Setting up denoising network
@@ -103,8 +106,13 @@ def training(
         )
     ).to(DEVICE)
 
-    # Tracking gradients
-    wandb.watch(poseidon_denoiser, log="gradients")
+    # Tracking gradients & Number of trainable parameters
+    wandb.watch(poseidon_denoiser, log="gradients", log_freq=512)
+    wandb.log({
+        "Neural Network/Trainable Parameters [-]": sum(
+            p.numel() for p in poseidon_denoiser.parameters() if p.requires_grad
+        ),
+    })
 
     # Setting up training tools
     optimizer = get_optimizer(
@@ -129,7 +137,7 @@ def training(
 
     for step in range(0, steps_training):
 
-        # Fetching data (only x) and preprocessing it
+        # Fetching data (only state x) and preprocessing it
         x = preprocessing_for_diffusion(
             x=next(iter_dataloader_training)[0],
             k=blanket_neighbors,
@@ -160,7 +168,10 @@ def training(
         # Gradient accumulation optimizer step
         if step % steps_gradient_accumulation == 0 and step != 0:
 
-            progress_bar.set_postfix({"Loss (AoAS)": f"{loss_average:.6f}"})
+            progress_bar.set_postfix({
+                "Loss (AoAS) ": f"{(loss_average / steps_gradient_accumulation):.6f}"
+            })
+
             wandb.log({
                 "Training/Loss (AoAS)": loss_average / steps_gradient_accumulation,
                 "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
