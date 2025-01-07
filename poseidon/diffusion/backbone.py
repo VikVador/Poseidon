@@ -41,18 +41,20 @@ class PoseidonBackbone(nn.Module):
         config_siren: Dict,
         config_region: Dict,
         path_mesh: Path = PATH_MESH,
-        device: str = "cpu",
     ):
         super().__init__()
 
         self.B, self.C, self.K, self.H, self.W = dimensions
 
         # Sin/cos encoded mesh
-        self.mesh = generate_encoded_mesh(
-            path=path_mesh,
-            features=config_siren["features"],
-            region=config_region,
-        ).to(device)
+        self.register_buffer(
+            "mesh",
+            generate_encoded_mesh(
+                path=path_mesh,
+                features=config_siren["features"],
+                region=config_region,
+            ),
+        )
 
         # Total embedded size of the mesh
         emb_channels = self.mesh.shape[-1]
@@ -62,13 +64,13 @@ class PoseidonBackbone(nn.Module):
             in_channels,
             in_channels,
             **config_unet,
-        ).to(device)
+        )
 
         self.siren = SirenEmbedding(
             emb_channels,
             in_channels * self.K,  # One embedding per element of the blanket
             config_siren["n_layers"],
-        ).to(device)
+        )
 
     def forward(self, x: Tensor, sigma: Tensor) -> Tensor:
         r"""Condition the input and denoise it by forwarding it through the UNet.
@@ -89,6 +91,7 @@ class PoseidonBackbone(nn.Module):
             W=self.W,
         )
 
+        # Adding embedded mesh to the input
         mesh_embedding = self.siren(self.mesh)
 
         mesh_embedding = rearrange(

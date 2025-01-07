@@ -24,8 +24,8 @@ class PoseidonNoiseSchedule(nn.Module):
     def __init__(self, mu: float = -1.2, sigma: float = 1.2):
         super().__init__()
 
-        self.mu = torch.as_tensor(mu)
-        self.sigma = torch.as_tensor(sigma)
+        self.register_buffer("mu", torch.as_tensor(mu))
+        self.register_buffer("sigma", torch.as_tensor(sigma))
 
     def forward(self, batch_size: int) -> Tensor:
         r"""Generates a batch of noise levels.
