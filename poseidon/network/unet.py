@@ -43,18 +43,17 @@ class UNetBlock(nn.Module):
     ):
         super().__init__()
 
-        properties = {
-            "channels": channels,
-            "mod_features": mod_features,
-            "dropout": dropout,
-        }
-
         self.block_spatial = SpatialModulatedResidualBlock(
-            **properties,
+            channels=channels,
+            mod_features=mod_features,
+            dropout=dropout,
             **kwargs,
         )
+
         self.block_temporal = TemporalModulatedResidualBlock(
-            **properties,
+            channels=channels,
+            mod_features=mod_features,
+            dropout=dropout,
             **kwargs,
         )
 
@@ -75,16 +74,6 @@ class UNetBlock(nn.Module):
 class UNet(nn.Module):
     r"""Creates a U-Net model for 3-dimensional convolutions.
 
-    Example:
-        >>> unet = UNet(in_channels=64,
-                        out_channels=64,
-                        mod_features=128,
-                        hid_channels=[64, 128, 256],
-                        hid_blocks=[2, 3, 3],
-                        kernel_size=3,
-                        stride=2,
-                        dropout=0.1)
-
     Arguments:
         in_channels: Number of input channels (C_i)
         out_channels: Number of output channels (C_o).
@@ -94,6 +83,16 @@ class UNet(nn.Module):
         kernel_size: Kernel size of all convolutions.
         stride: Stride of the downsampling convolutions.
         dropout: Dropout probability for regularization [0, 1].
+
+    Example:
+        >>> unet = UNet(in_channels=64,
+                        out_channels=64,
+                        mod_features=128,
+                        hid_channels=[64, 128, 256],
+                        hid_blocks=[2, 3, 3],
+                        kernel_size=3,
+                        stride=2,
+                        dropout=0.1)
     """
 
     def __init__(
@@ -109,7 +108,11 @@ class UNet(nn.Module):
     ):
         super().__init__()
 
-        assert len(hid_blocks) == len(hid_channels)
+        assert len(hid_blocks) == len(
+            hid_channels
+        ), "ERROR (UNet) - Mismatched number of hidden blocks and channels."
+
+        # UNet block and concatenation block parameters
         kwargs = dict(
             kernel_size=kernel_size,
             padding=kernel_size // 2,
@@ -118,7 +121,6 @@ class UNet(nn.Module):
         # Contains the blocks for the descent and ascent of the UNet
         self.descent, self.ascent = nn.ModuleList(), nn.ModuleList()
 
-        # Creation of the UNet
         for i, blocks in enumerate(hid_blocks):
             # Contains blocks at a stage of the UNet
             do, up = nn.ModuleList(), nn.ModuleList()

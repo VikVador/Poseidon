@@ -19,11 +19,11 @@ from poseidon.training.optimizer import get_optimizer
 from poseidon.training.scheduler import get_scheduler
 from poseidon.training.tools import preprocessing_for_diffusion
 
-#
 # fmt: off
 #
 # Constants
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
+DEVICE_LIST = [i for i in range(torch.cuda.device_count())]
 
 
 def training(
@@ -102,9 +102,17 @@ def training(
             config_unet=config_unet,
             config_siren=config_siren,
             config_region=black_sea_region,
-            device=DEVICE,
-        )
-    ).to(DEVICE)
+        ).to(DEVICE),
+    )
+
+    # Parallizing the model if multiple GPUs are available
+    if torch.cuda.device_count() > 1:
+        print("---- DataParallel ----")
+        print("Total GPUs: ", torch.cuda.device_count())
+        poseidon_denoiser = torch.nn.DataParallel(
+            poseidon_denoiser,
+            device_ids=DEVICE_LIST,
+        ).to(DEVICE)
 
     # Tracking gradients & Number of trainable parameters
     wandb.watch(poseidon_denoiser, log="gradients", log_freq=512)

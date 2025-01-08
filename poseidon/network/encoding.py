@@ -20,7 +20,7 @@ class SineEncoding(nn.Module):
 
     def __init__(self, features: int, omega: float = 1e3):
         super().__init__()
-        assert features % 2 == 0, "ERROR - The number of features must be even."
+        assert features % 2 == 0, "ERROR (SineEncoding) - The number of features must be even."
 
         freqs = torch.linspace(0, 1, features // 2, dtype=torch.float64)
         freqs = omega ** (-freqs)

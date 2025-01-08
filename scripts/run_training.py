@@ -30,8 +30,18 @@ if __name__ == "__main__":
     # Initialization
     args           = parser.parse_args()
     configs        = load_configuration(args.config)
-    config_cluster = configs[0]["Cluster"]
+    config_cluster = configs[0].get("Cluster")
 
+    # Security
+    nb_gpus, batch_size = (
+        config_cluster.get("gpus"),
+        configs[0].get("Training Pipeline").get("config_dataloader").get("batch_size"),
+    )
+    assert (
+        nb_gpus <= batch_size
+    ), f"ERROR - To parallelize training, bach size ({batch_size}) must be greater than number of GPUs ({nb_gpus})."
+
+    # Launching training pipeline
     if args.backend == "async":
         training(
             **configs[0].get("Training Pipeline"),
