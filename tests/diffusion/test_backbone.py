@@ -103,7 +103,6 @@ def backbone(fake_zarr_mesh, fake_configurations):
         config_siren=config_siren,
         config_region=config_region,
         path_mesh=fake_zarr_mesh,
-        device="cpu",
     )
 
 
