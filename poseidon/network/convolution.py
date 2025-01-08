@@ -29,8 +29,8 @@ class Convolution2DBlock(nn.Module):
     r"""A spatial convolutional block for a 5-dimensional input.
 
     Information
-        This block reshapes a 5-dimensional input (B, C, T, X, Y) into a format
-        suitable for 2-dimensional convolutions (B * T, C, X, Y) along the
+        This block reshapes a 5-dimensional input (B, C, T, H, W) into a format
+        suitable for 2-dimensional convolutions (B * T, C, H, W) along the
         spatial dimensions.
 
     Arguments:
