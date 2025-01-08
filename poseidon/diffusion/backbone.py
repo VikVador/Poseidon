@@ -82,6 +82,7 @@ class PoseidonBackbone(nn.Module):
         Returns:
             Denoised tensor (B, D).
         """
+
         x = rearrange(
             x,
             "B (C K H W) -> B C K H W",
