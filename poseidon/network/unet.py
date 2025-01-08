@@ -12,9 +12,10 @@ import torch
 import torch.nn as nn
 
 from torch import Tensor
-from typing import Optional, Sequence
+from typing import Dict, Optional, Sequence
 
 # isort: split
+from poseidon.network.attention import SelfAttentionNd
 from poseidon.network.convolution import ConvNd, Convolution2DBlock
 from poseidon.network.normalization import LayerNorm
 from poseidon.network.residual import (
@@ -31,6 +32,7 @@ class UNetBlock(nn.Module):
         channels: Number of channels (C) in the input tensor.
         mod_features: Number of features (D) in the modulation vector.
         dropout: Dropout probability for regularization [0, 1].
+        attention_heads: Number of attention heads.
         **kwargs: Additional arguments passed to the residual blocks.
     """
 
@@ -39,6 +41,7 @@ class UNetBlock(nn.Module):
         channels: int,
         mod_features: int,
         dropout: Optional[float] = None,
+        attention_heads: Optional[int] = None,
         **kwargs,
     ):
         super().__init__()
@@ -57,6 +60,15 @@ class UNetBlock(nn.Module):
             **kwargs,
         )
 
+        self.block_attention = (
+            nn.Sequential(
+                LayerNorm(dim=1),
+                SelfAttentionNd(channels, heads=attention_heads),
+            )
+            if attention_heads is not None
+            else None
+        )
+
     def forward(self, x: Tensor, mod: Tensor) -> Tensor:
         """
         Arguments:
@@ -66,8 +78,11 @@ class UNetBlock(nn.Module):
         Returns:
             Tensor: Convoluted tensor (B, C, T, H, W).
         """
-        x = self.block_temporal(x, mod)
         x = self.block_spatial(x, mod)
+        x = self.block_temporal(x, mod)
+        if self.block_attention is not None:
+            x = self.block_attention(x)
+
         return x
 
 
@@ -83,6 +98,7 @@ class UNet(nn.Module):
         kernel_size: Kernel size of all convolutions.
         stride: Stride of the downsampling convolutions.
         dropout: Dropout probability for regularization [0, 1].
+        attention_heads: The number of attention heads at each depth.
 
     Example:
         >>> unet = UNet(in_channels=64,
@@ -105,6 +121,7 @@ class UNet(nn.Module):
         kernel_size: int = 3,
         stride: int = 2,
         dropout: Optional[float] = None,
+        attention_heads: Dict[str, int] = {},  # noqa: B006
     ):
         super().__init__()
 
@@ -132,6 +149,7 @@ class UNet(nn.Module):
                         hid_channels[i],
                         mod_features,
                         dropout=dropout,
+                        attention_heads=attention_heads.get(str(i), None),
                         **kwargs,
                     )
                 )
@@ -141,6 +159,7 @@ class UNet(nn.Module):
                         hid_channels[i],
                         mod_features,
                         dropout=dropout,
+                        attention_heads=attention_heads.get(str(i), None),
                         **kwargs,
                     )
                 )
