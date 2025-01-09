@@ -82,6 +82,7 @@ def training(
         blanket_size,
         steps_training,
         steps_gradient_accumulation,
+        steps_logging,
         black_sea_region,
     ) = (
         next(iter_dataloader_training)[0].shape,        # Dimension of Black Sea state trajectory
@@ -89,6 +90,7 @@ def training(
         config_training["blanket_neighbors"] * 2 + 1,   # Complete blanket dimension
         config_training["steps_training"],              # One-step is one day
         config_training["steps_gradient_accumulation"], # Number of steps before optimizer step
+        config_training["steps_logging"],               # Number of steps before logging
         TOY_DATASET_REGION                              # Region of interest
         if config_problem["toy_problem"]
         else DATASET_REGION,
@@ -114,7 +116,6 @@ def training(
         ).to(DEVICE)
 
     # Tracking gradients & Number of trainable parameters
-    wandb.watch(poseidon_denoiser, log="gradients", log_freq=512)
     wandb.log({
         "Neural Network/Trainable Parameters [-]": sum(
             p.numel() for p in poseidon_denoiser.parameters() if p.requires_grad
@@ -138,7 +139,7 @@ def training(
 
 
     # Progression bar showing the accumulated averaged loss
-    loss_average, progress_bar = 0, tqdm(total=steps_training, desc="Training", unit="step")
+    loss_average, progress_bar = 0, tqdm(total=int(steps_training/steps_logging), desc="Training", unit="step")
 
     for step in range(0, steps_training):
 
@@ -174,21 +175,23 @@ def training(
         # Gradient accumulation optimizer step
         if step % steps_gradient_accumulation == 0 and step != 0:
 
-            progress_bar.set_postfix({
-                "Loss (AoAS) ": f"{(loss_average):.6f}"
-            })
-
-            wandb.log({
-                "Training/Loss (AoAS)": loss_average,
-                "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
-                "Training/Step [-]": step,
-                "Training/Samples Seen [-]": B * step,
-                "Training/Completed [%]": (step / steps_training) * 100,
-            })
-
             # Optimizing & Updating
             optimizer.step()
             scheduler_lr.step()
+
+            if step % steps_logging == 0 and step != 0:
+
+                wandb.log({
+                    "Training/Loss (AoAS)": loss_average,
+                    "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
+                    "Training/Step [-]": step,
+                    "Training/Samples Seen [-]": B * step,
+                    "Training/Completed [%]": (step / steps_training) * 100,
+                })
+
+                progress_bar.set_postfix({
+                    "Loss (AoAS) ": f"{(loss_average):.6f}"
+                })
 
             # Reseting & Cleaning
             loss_average = 0.0
@@ -196,7 +199,9 @@ def training(
             gc.collect()
 
         # Updating & Cleaning
-        progress_bar.update(1)
+        if step % steps_logging == 0 and step != 0:
+            progress_bar.update(1)
+
         del x, x_noised, noise, loss
         torch.cuda.empty_cache()
 
