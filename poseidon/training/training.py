@@ -4,7 +4,6 @@ import gc
 import torch
 import wandb
 
-from torch.amp.grad_scaler import GradScaler
 from tqdm import tqdm
 from typing import Dict
 
@@ -137,8 +136,6 @@ def training(
         PoseidonNoiseSchedule(),
     )
 
-    # Handles low losses for gradient accumulation
-    scaler = GradScaler()
 
     # Progression bar showing the accumulated averaged loss
     loss_average, progress_bar = 0, tqdm(total=steps_training, desc="Training", unit="step")
@@ -168,7 +165,8 @@ def training(
         )
 
         # Computing gradients with scaled loss for gradient accumulation
-        scaler.scale(loss / steps_gradient_accumulation).backward()
+        loss = loss / steps_gradient_accumulation
+        loss.backward()
 
         # Storing the accumulated loss
         loss_average += loss.item()
@@ -177,11 +175,11 @@ def training(
         if step % steps_gradient_accumulation == 0 and step != 0:
 
             progress_bar.set_postfix({
-                "Loss (AoAS) ": f"{(loss_average / steps_gradient_accumulation):.6f}"
+                "Loss (AoAS) ": f"{(loss_average):.6f}"
             })
 
             wandb.log({
-                "Training/Loss (AoAS)": loss_average / steps_gradient_accumulation,
+                "Training/Loss (AoAS)": loss_average,
                 "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
                 "Training/Step [-]": step,
                 "Training/Samples Seen [-]": B * step,
@@ -189,8 +187,7 @@ def training(
             })
 
             # Optimizing & Updating
-            scaler.step(optimizer)
-            scaler.update()
+            optimizer.step()
             scheduler_lr.step()
 
             # Reseting & Cleaning
