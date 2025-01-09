@@ -139,7 +139,7 @@ def training(
 
 
     # Progression bar showing the accumulated averaged loss
-    loss_average, progress_bar = 0, tqdm(total=int(steps_training/steps_logging), desc="Training", unit="step")
+    loss_average, progress_bar = 0, tqdm(total=int(steps_training/steps_logging), desc="Training", unit=f" {steps_logging} step(s)")
 
     for step in range(0, steps_training):
 
