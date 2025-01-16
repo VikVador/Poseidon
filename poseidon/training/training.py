@@ -8,6 +8,7 @@ from tqdm import tqdm
 from typing import Dict
 
 # isort: split
+from poseidon.config import PATH_MODEL
 from poseidon.data.const import DATASET_REGION, TOY_DATASET_REGION
 from poseidon.data.dataloaders import get_dataloaders, get_toy_dataloaders
 from poseidon.diffusion.backbone import PoseidonBackbone
@@ -15,6 +16,7 @@ from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.loss import PoseidonLoss
 from poseidon.diffusion.noise import PoseidonNoiseSchedule
 from poseidon.training.optimizer import get_optimizer
+from poseidon.training.save import PoseidonSave
 from poseidon.training.scheduler import get_scheduler
 from poseidon.training.tools import preprocessing_for_diffusion
 
@@ -61,7 +63,7 @@ def training(
             "Scheduler": config_scheduler,
             "UNet": config_unet,
             "Siren": config_siren,
-            "Cluster": config_cluster
+            "Cluster": config_cluster,
         },
     )
 
@@ -109,23 +111,29 @@ def training(
         ).to(DEVICE),
     )
 
-    # Parallizing the model if multiple GPUs are available
-    if torch.cuda.device_count() > 1:
-        print("---- DataParallel ----")
-        print("Total GPUs: ", torch.cuda.device_count())
-        poseidon_denoiser = torch.nn.DataParallel(
-            poseidon_denoiser,
-            device_ids=DEVICE_LIST,
-        ).to(DEVICE)
-
-    # Tracking gradients & Number of trainable parameters
     wandb.log({
         "Neural Network/Trainable Parameters [-]": sum(
             p.numel() for p in poseidon_denoiser.parameters() if p.requires_grad
         ),
     })
 
-    # Setting up training tools
+    # Setting up saving tool
+    poseidon_save = PoseidonSave(
+        path=PATH_MODEL,
+        name_model=wandb.run.name,
+        dimensions=(B, C, blanket_size, H, W),
+        config_unet=config_unet,
+        config_siren=config_siren,
+        config_problem=config_problem,
+    )
+
+    # Launching parallel training
+    if torch.cuda.device_count() > 1:
+        poseidon_denoiser = torch.nn.DataParallel(
+            poseidon_denoiser,
+            device_ids=DEVICE_LIST,
+        ).to(DEVICE)
+
     optimizer = get_optimizer(
         nn_parameters=poseidon_denoiser.parameters(),
         config_optimizer=config_optimizer,
@@ -140,13 +148,20 @@ def training(
         PoseidonNoiseSchedule(),
     )
 
-
     # Progression bar showing the accumulated averaged loss
-    loss_average, progress_bar = 0, tqdm(total=int(steps_training/steps_logging), desc="Training", unit=f" {steps_logging} step(s)")
+    loss_aoas, progress_bar = (
+        0,
+        tqdm(
+            total=int(steps_training / steps_logging),
+            desc="| POSEIDON | Training",
+            unit=f" {steps_logging} step(s)",
+        )
+    )
 
     for step in range(0, steps_training):
-
-        # Fetching data (only state x) and preprocessing it
+        #
+        # TRAINING
+        #
         x = preprocessing_for_diffusion(
             x=next(iter_dataloader_training)[0],
             k=blanket_neighbors,
@@ -173,37 +188,52 @@ def training(
         loss.backward()
 
         # Storing the accumulated loss
-        loss_average += loss.item()
+        loss_aoas += loss.item()
 
-        # Gradient accumulation optimizer step
+        #
+        # UPDATING & LOGGING
+        #
         if step % steps_gradient_accumulation == 0 and step != 0:
-
-            # Optimizing & Updating
+            #
             optimizer.step()
             scheduler_lr.step()
 
             if step % steps_logging == 0 and step != 0:
+                #
+                progress_bar.set_postfix({
+                    "Loss (AoAS) ": f"{(loss_aoas):.4f}",
+                })
 
                 wandb.log({
-                    "Training/Loss (AoAS)": loss_average,
+                    "Training/Loss (AoAS)": loss_aoas,
                     "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
                     "Training/Step [-]": step,
                     "Training/Samples Seen [-]": B * step,
                     "Training/Completed [%]": (step / steps_training) * 100,
                 })
 
-                progress_bar.set_postfix({
-                    "Loss (AoAS) ": f"{(loss_average):.6f}"
-                })
+                poseidon_save.save(
+                    loss=loss_aoas,
+                    model=poseidon_denoiser.backbone,
+                    optimizer=optimizer,
+                    scheduler=scheduler_lr,
+                )
 
-            # Reseting & Cleaning
-            loss_average = 0.0
+            loss_aoas = 0.0
             optimizer.zero_grad()
             gc.collect()
 
-        # Updating & Cleaning
         if step % steps_logging == 0 and step != 0:
             progress_bar.update(1)
+
+        if step == steps_training - 1:
+            progress_bar.update(1)
+            poseidon_save.save(
+                loss=float("inf"),
+                model=poseidon_denoiser.backbone,
+                optimizer=optimizer,
+                scheduler=scheduler_lr,
+            )
 
         del x, x_noised, noise, loss
         torch.cuda.empty_cache()
