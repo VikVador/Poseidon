@@ -21,6 +21,7 @@ class PoseidonSave:
         config_unet: Configuration the UNet architecture.
         config_siren: Configuration for the Siren architecture.
         config_problem: Configuration of the problem.
+        saving: Whether to save or not.
     """
 
     def __init__(
@@ -31,30 +32,34 @@ class PoseidonSave:
         config_unet: dict,
         config_siren: dict,
         config_problem: dict,
+        saving: bool = True,
     ):
         super().__init__()
 
         self.path = path
         self.name_model = name_model
         self.loss_best = float("inf")
+        self.saving = saving
 
-        # Saving configurations
-        list_configs, list_names = (
-            [
-                {
-                    "dimensions": list(dimensions),
-                },
-                config_unet,
-                config_siren,
-                config_problem,
-            ],
-            ["dimensions", "unet", "siren", "problem"],
-        )
-
-        for config, name in zip(list_configs, list_names):
-            save_configuration(
-                path=self.path, config=config, name_model=self.name_model, name_config=name
+        if self.saving:
+            #
+            # Saving configurations
+            list_configs, list_names = (
+                [
+                    {
+                        "dimensions": list(dimensions),
+                    },
+                    config_unet,
+                    config_siren,
+                    config_problem,
+                ],
+                ["dimensions", "unet", "siren", "problem"],
             )
+
+            for config, name in zip(list_configs, list_names):
+                save_configuration(
+                    path=self.path, config=config, name_model=self.name_model, name_config=name
+                )
 
     def save(
         self,
@@ -62,7 +67,7 @@ class PoseidonSave:
         model: PoseidonBackbone,
         optimizer: Optional[Optimizer] = None,
         scheduler: Optional[lr_scheduler] = None,
-    ):
+    ) -> None:
         r"""Saves model, optimizer & scheduler.
 
         Information:
@@ -70,37 +75,38 @@ class PoseidonSave:
             are saved. This allows to recover anything in case the
             training is interrupted abruptly.
         """
-
-        # Saving tools and last model with backup protection
-        for n in [self.name_model, self.name_model + "/__backup__"]:
+        if self.saving:
             #
-            save_tools(
-                path=self.path,
-                name_model=n,
-                optimizer=optimizer,
-                scheduler=scheduler,
-            )
-
-            save_backbone(
-                path=self.path,
-                name_model=n,
-                name_state="last",
-                model=model,
-            )
-
-        # Saving best model
-        if loss < self.loss_best:
+            # Saving tools and last model with backup protection
             for n in [self.name_model, self.name_model + "/__backup__"]:
                 #
+                save_tools(
+                    path=self.path,
+                    name_model=n,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                )
+
                 save_backbone(
                     path=self.path,
                     name_model=n,
-                    name_state="best",
+                    name_state="last",
                     model=model,
                 )
 
-            # Updating the best loss
-            self.loss_best = loss
+            # Saving best model
+            if loss < self.loss_best:
+                for n in [self.name_model, self.name_model + "/__backup__"]:
+                    #
+                    save_backbone(
+                        path=self.path,
+                        name_model=n,
+                        name_state="best",
+                        model=model,
+                    )
+
+                # Updating the best loss
+                self.loss_best = loss
 
 
 def save_backbone(
@@ -156,7 +162,7 @@ def save_tools(
     name_model: str,
     optimizer: Optional[Optimizer] = None,
     scheduler: Optional[lr_scheduler] = None,
-):
+) -> None:
     r"""Saves the optimizer and scheduler.
 
     Arguments:

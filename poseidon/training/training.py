@@ -88,6 +88,7 @@ def training(
         steps_training,
         steps_gradient_accumulation,
         steps_logging,
+        save_model,
         black_sea_region,
     ) = (
         next(iter_dataloader_training)[0].shape,        # Dimension of Black Sea state trajectory
@@ -96,6 +97,7 @@ def training(
         config_training["steps_training"],              # One-step is one day
         config_training["steps_gradient_accumulation"], # Number of steps before optimizer step
         config_training["steps_logging"],               # Number of steps before logging
+        config_training["save_model"],                  # Whether to save the model or not
         TOY_DATASET_REGION                              # Region of interest
         if config_problem["toy_problem"]
         else DATASET_REGION,
@@ -125,6 +127,7 @@ def training(
         config_unet=config_unet,
         config_siren=config_siren,
         config_problem=config_problem,
+        saving=save_model,
     )
 
     # Launching parallel training
@@ -227,7 +230,6 @@ def training(
             progress_bar.update(1)
 
         if step == steps_training - 1:
-            progress_bar.update(1)
             poseidon_save.save(
                 loss=float("inf"),
                 model=poseidon_denoiser.backbone,
@@ -238,4 +240,6 @@ def training(
         del x, x_noised, noise, loss
         torch.cuda.empty_cache()
 
+    # Finalizing the training
+    progress_bar.update(1)
     wandb.finish()
