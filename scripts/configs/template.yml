@@ -3,48 +3,51 @@
 Training Pipeline:
 
   config_wandb:
-    "project": ["Poseidon-Training-Big"]
+    "project": ["Poseidon-Training-Debugging"]
     "mode": ["disabled"]
 
   config_problem:
-    "toy_problem": [True]
+    "toy_problem": [False]
 
   config_dataloader:
     "trajectory_size": [5]
-    "batch_size": [2]
+    "batch_size": [1]
     "num_workers": [0]
     "prefetch_factor": [null]
     "shuffle": [[True, False, False]]
 
   config_training:
     "blanket_neighbors": [1]
-    "steps_training": [2]
-    "steps_gradient_accumulation": [2]
+    "steps_training": [32000]
+    "steps_gradient_accumulation": [1]
+    "steps_logging": [1]
+    "save_model": [False]
 
   config_optimizer:
     "optimizer": ["soap"]
-    "learning_rate": [0.001, 0.0001]
+    "learning_rate": [0.001]
     "weight_decay": [0]
     "betas": [[0.9, 0.999, 0.999]]
 
   config_scheduler:
-    "scheduler": ["constant"]
+    "scheduler": ["linear"]
 
   config_unet:
     "kernel_size": [3]
     "mod_features": [1]
-    "hid_channels": [[32, 32, 32]]
-    "hid_blocks": [[2, 2, 2]]
+    "hid_channels": [[256, 256, 512, 512]]
+    "hid_blocks": [[4, 4, 2, 2]]
     "dropout": [null]
+    "attention_heads": [{"2": 8, "3": 8}]
 
   config_siren:
       "features": [2]
       "n_layers": [1]
 
 Cluster:
-  "cpus"     : [4]
+  "cpus"     : [8]
   "gpus"     : [1]
   "ram"      : ["60GB"]
-  "time"     : ["00:30:00"]
-  "partition": ["ia"]
+  "time"     : ["00:10:00"]
+  "partition": ["gpu"]
   "account"  : ["bsmfc"]
