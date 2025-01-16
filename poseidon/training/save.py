@@ -1,4 +1,4 @@
-r"""Helper tools to perform saving & loading operations"""
+r"""Helper tools to perform saving operations"""
 
 import torch
 import yaml
