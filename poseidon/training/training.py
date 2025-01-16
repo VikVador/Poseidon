@@ -34,6 +34,7 @@ def training(
     config_unet: Dict,
     config_siren: Dict,
     config_wandb: Dict,
+    config_cluster: Dict,
 ) -> None:
     r"""Launch the training of a `PoseidonDenoiser`.
 
@@ -46,6 +47,7 @@ def training(
         config_unet: Configuration for the UNet (denoiser).
         config_siren: Configuration for the Siren network (spatial embedding).
         config_wandb: Configuration for Weights & Biases.
+        config_cluster: Configuration of the Cluster.
     """
 
     # Initializing connection to Weights & Biases
@@ -59,6 +61,7 @@ def training(
             "Scheduler": config_scheduler,
             "UNet": config_unet,
             "Siren": config_siren,
+            "Cluster": config_cluster
         },
     )
 
