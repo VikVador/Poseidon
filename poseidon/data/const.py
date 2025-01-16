@@ -4,9 +4,9 @@ r"""Information about our datasets"""
 #
 # ----- Global Information
 #
-TOY_DATASET_DATES_TRAINING   = ("1995-01-01", "2017-12-31")
-TOY_DATASET_DATES_VALIDATION = ("2018-01-01", "2020-12-31")
-TOY_DATASET_DATES_TEST       = ("2021-01-01", "2022-12-31")
+TOY_DATASET_DATES_TRAINING   = ("2016-01-01", "2016-12-31")
+TOY_DATASET_DATES_VALIDATION = ("2020-01-01", "2020-12-31")
+TOY_DATASET_DATES_TEST       = ("2022-01-01", "2022-12-31")
 
 DATASET_DATES_TRAINING       = ("1995-01-01", "2017-12-31")
 DATASET_DATES_VALIDATION     = ("2018-01-01", "2020-12-31")
@@ -27,14 +27,14 @@ DATASET_VARIABLES = \
     DATASET_VARIABLES_ATMOSPHERE + DATASET_VARIABLES_SURFACE
 
 TOY_DATASET_REGION = {
-    "latitude":  slice(104, 232),
-    "longitude": slice(25, 281),
-    "level":     slice(0, 56),
+    "latitude":  slice(200, 232),
+    "longitude": slice(125, 189),
+    "level":     slice(0, 2),
 }
 
 DATASET_REGION = {
-    "latitude":  slice(0, 256),
-    "longitude": slice(0, 576),
+    "latitude":  slice(104, 232),
+    "longitude": slice(25, 281),
     "level":     slice(0, 56),
 }
 

@@ -26,10 +26,10 @@ def PoseidonLoss(
     """
     # fmt: off
     #
-    weight = (1 / sigma**2) + 1
+    weight   = (1 / sigma**2) + 1
 
     se       = (x_denoised - x) ** 2
-    mse      = torch.mean(se, dim=-1)
+    mse      = torch.mean(se, dim=-1, keepdim=True)
     wmse     = weight * mse
     mwmse    = torch.mean(wmse)
     return mwmse
