@@ -15,13 +15,14 @@ from poseidon.data.const import (
     DATASET_DATES_TEST,
     DATASET_DATES_TRAINING,
     DATASET_DATES_VALIDATION,
-    DATASET_NAN_FILL,
     DATASET_REGION,
     DATASET_VARIABLES,
+    NAN_FILL,
     TOY_DATASET_DATES_TEST,
     TOY_DATASET_DATES_TRAINING,
     TOY_DATASET_DATES_VALIDATION,
     TOY_DATASET_REGION,
+    TOY_DATASET_VARIABLES,
 )
 from poseidon.data.tools import (
     assert_date_format,
@@ -90,7 +91,7 @@ class PoseidonDataset(Dataset):
         # Handle large data by splitting into smaller chunks
         with dask.config.set(**{"array.slicing.split_large_chunks": True}):
             sample = self.dataset.isel(time=slice(step_start, step_end))
-            sample = sample.fillna(DATASET_NAN_FILL)
+            sample = sample.fillna(NAN_FILL)
             time = [get_date_features(sample.time[i].values) for i in range(sample.time.size)]
             time = torch.stack(time, dim=0)
             sample = sample.to_stacked_array(
@@ -163,7 +164,7 @@ def get_toy_datasets(
     """
 
     if variables is None:
-        variables = DATASET_VARIABLES
+        variables = TOY_DATASET_VARIABLES
 
     datasets = [
         PoseidonDataset(
