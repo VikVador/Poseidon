@@ -164,9 +164,10 @@ def training(
         )
     )
 
+    #
+    # === TRAINING ====
+    #
     for step, (x, _) in dataloader_training:
-        #
-        # TRAINING
         #
         x = preprocessing_for_diffusion(
             x=x,
@@ -197,51 +198,51 @@ def training(
         loss_aoas += loss.item()
 
         #
-        # UPDATING & LOGGING
+        # === LOGGING ====
+        #
+        if step % steps_logging == 0 and step != 0:
+            #
+            progress_bar.set_postfix({
+                "Loss (AoAS) ": f"{(loss_aoas):.4f}",
+            })
+
+            # Updating manually progress bar
+            progress_bar.update(1)
+
+            wandb.log({
+                "Training/Loss (AoAS)": loss_aoas,
+                "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
+                "Training/Step [-]": step,
+                "Training/Samples Seen [-]": B * step,
+                "Training/Completed [%]": (step / steps_training) * 100,
+            })
+
+            poseidon_save.save(
+                loss=loss_aoas,
+                optimizer=optimizer,
+                scheduler=scheduler_lr,
+                model=poseidon_denoiser.module.backbone if torch.cuda.device_count() > 1 else \
+                        poseidon_denoiser.backbone,
+            )
+
+        #
+        # === UPDATING ====
         #
         if step % steps_gradient_accumulation == 0 and step != 0:
             #
             optimizer.step()
             scheduler_lr.step()
-
-            if step % steps_logging == 0 and step != 0:
-                #
-                progress_bar.set_postfix({
-                    "Loss (AoAS) ": f"{(loss_aoas):.4f}",
-                })
-
-                wandb.log({
-                    "Training/Loss (AoAS)": loss_aoas,
-                    "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
-                    "Training/Step [-]": step,
-                    "Training/Samples Seen [-]": B * step,
-                    "Training/Completed [%]": (step / steps_training) * 100,
-                })
-
-                poseidon_save.save(
-                    loss=loss_aoas,
-                    model=poseidon_denoiser.backbone,
-                    optimizer=optimizer,
-                    scheduler=scheduler_lr,
-                )
-
-            loss_aoas = 0.0
             optimizer.zero_grad()
+            loss_aoas = 0.0
             gc.collect()
 
-        if step % steps_logging == 0 and step != 0:
-            progress_bar.update(1)
-
-        if step == steps_training - 1:
-            poseidon_save.save(
-                loss=float("inf"),
-                model=poseidon_denoiser.backbone,
-                optimizer=optimizer,
-                scheduler=scheduler_lr,
-            )
-
+        # Cleaning
         del x, x_noised, noise, loss
         torch.cuda.empty_cache()
+
+        # Emergency stop
+        if steps_training <= step:
+            break
 
     # Finalizing the training
     progress_bar.update(1)
