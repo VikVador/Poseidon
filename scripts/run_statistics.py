@@ -9,7 +9,7 @@ from functools import partial
 from poseidon.data.const import (
     DATASET_DATES_TRAINING,
     DATASET_VARIABLES,
-    DATASET_VARIABLES_CLIPPING,
+    VARIABLES_CLIPPING,
 )
 from poseidon.data.statistics import compute_statistics
 from poseidon.data.tools import assert_date_format
@@ -72,7 +72,7 @@ if __name__ == "__main__":
         args.date_end,
         "online" if args.use_wandb else "disabled",
         args.variables,
-        DATASET_VARIABLES_CLIPPING,
+        VARIABLES_CLIPPING,
     )
 
     schedule(
