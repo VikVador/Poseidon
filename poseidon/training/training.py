@@ -67,22 +67,8 @@ def training(
         },
     )
 
-    # Loading dataloaders as infinite iterators
-    iter_dataloader_training, _, _ = (
-        get_toy_dataloaders(
-            **config_dataloader,
-            infinite=True,
-        )
-        if config_problem["toy_problem"]
-        else get_dataloaders(
-            **config_dataloader,
-            infinite=True,
-        )
-    )
-
-    # Extracting dimensions and parameters
+    # Extracting parameters
     (
-        (B, C, _, H, W),
         blanket_neighbors,
         blanket_size,
         steps_training,
@@ -91,7 +77,6 @@ def training(
         save_model,
         black_sea_region,
     ) = (
-        next(iter_dataloader_training)[0].shape,        # Dimension of Black Sea state trajectory
         config_training["blanket_neighbors"],           # Neighbors on each side
         config_training["blanket_neighbors"] * 2 + 1,   # Complete blanket dimension
         config_training["steps_training"],              # One-step is one day
@@ -102,6 +87,24 @@ def training(
         if config_problem["toy_problem"]
         else DATASET_REGION,
     )
+
+    # Loading dataloaders as infinite iterators
+    dataloader_training, _, _ = (
+        get_toy_dataloaders(
+            **config_dataloader,
+            infinite=True,
+            steps=steps_training,
+        )
+        if config_problem["toy_problem"]
+        else get_dataloaders(
+            **config_dataloader,
+            infinite=True,
+            steps=steps_training,
+        )
+    )
+
+    # Dimension of Black Sea state trajectory
+    (B, C, _, H, W) = next(dataloader_training)[1][0].shape
 
     # Setting up denoising network
     poseidon_denoiser = PoseidonDenoiser(
@@ -161,12 +164,12 @@ def training(
         )
     )
 
-    for step in range(0, steps_training):
+    for step, (x, _) in dataloader_training:
         #
         # TRAINING
         #
         x = preprocessing_for_diffusion(
-            x=next(iter_dataloader_training)[0],
+            x=x,
             k=blanket_neighbors,
         )
 

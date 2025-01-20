@@ -11,14 +11,13 @@ from poseidon.data.datasets import (
 )
 
 
-def infinite_iterable_dataloader(dataloader):
-    r"""Transforms a PyTorch dataloader into an infinite iterator without memory accumulation."""
-    iterator = iter(dataloader)
-    while True:
-        try:
-            yield next(iterator)
-        except StopIteration:
-            iterator = iter(dataloader)
+def infinite_dataloader(dataloader: DataLoader, steps: int) -> Any:
+    r"""Transforms a PyTorch dataloader into an infinite dataloader."""
+    s = 1
+    while s < (steps + 1):
+        for batch in dataloader:
+            yield s, batch
+            s += 1
 
 
 def get_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
@@ -40,6 +39,7 @@ def get_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
         variables: Variable names to retain from the dataset.
         shuffle: List of booleans defining which dataset to shuffle.
         infinite: Whether to transform dataloaders as infinite iterators or not.
+        steps: If infinite, the maximum number of steps to iterate.
         kwargs: Keyword arguments passed to the dataloader.
     """
     return _get_dataloaders_from_datasets(
@@ -67,6 +67,7 @@ def get_toy_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
         variables: Variable names to retain from the dataset.
         shuffle: List of booleans defining which dataset to shuffle.
         infinite: Whether to transform dataloaders as infinite iterators or not.
+        steps: If infinite, the maximum number of steps to iterate.
         kwargs: Keyword arguments passed to the dataloader.
     """
     return _get_dataloaders_from_datasets(
@@ -81,6 +82,7 @@ def _get_dataloaders_from_datasets(
     variables: Optional[Sequence[str]] = None,
     shuffle: Tuple[bool, bool, bool] = (True, False, False),
     infinite: bool = False,
+    steps: Optional[int] = None,
     **kwargs: Any,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     r"""Helper tool to generate dataloaders from datasets.
@@ -88,6 +90,11 @@ def _get_dataloaders_from_datasets(
     Arguments:
         get_datasets: A function that returns datasets.
     """
+
+    if infinite:
+        assert (
+            steps is not None
+        ), "ERROR - Maximum number of steps needed to create an 'infinite' dataloaders."
 
     datasets = get_datasets(
         trajectory_size=trajectory_size,
@@ -105,6 +112,6 @@ def _get_dataloaders_from_datasets(
     ]
 
     if infinite:
-        dataloaders = [infinite_iterable_dataloader(dataloader) for dataloader in dataloaders]
+        dataloaders = [infinite_dataloader(dataloader, steps) for dataloader in dataloaders]
 
     return tuple(dataloaders)
