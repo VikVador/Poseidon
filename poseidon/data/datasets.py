@@ -73,7 +73,6 @@ class PoseidonDataset(Dataset):
             sample: Preprocessed data tensor of shape (trajectory_size, z_total, x, y).
             time: Date features corresponding to each day of the trajectory.
         """
-
         return self.preprocess(idx, idx + self.trajectory_size)
 
     def preprocess(self, step_start: int, step_end: int) -> Tuple[Tensor, Tensor]:
@@ -97,7 +96,7 @@ class PoseidonDataset(Dataset):
             sample = sample.to_stacked_array(
                 new_dim="z_total", sample_dims=("time", "longitude", "latitude")
             ).transpose("z_total", "time", ...)
-            sample = torch.as_tensor(sample.load().data)
+            sample = torch.as_tensor(sample.load().data.copy())
 
         # Convert to float32 (neural network & efficiency)
         return sample.to(dtype=torch.float32), time.to(dtype=torch.float32)
