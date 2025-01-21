@@ -12,12 +12,13 @@ from poseidon.data.datasets import (
 
 
 def infinite_dataloader(dataloader: DataLoader, steps: int) -> Any:
-    r"""Transforms a PyTorch dataloader into an infinite dataloader."""
-    s = 1
-    while s < (steps + 1):
+    r"""Transforms a PyTorch dataloader into an 'infinite' dataloader."""
+    for _ in range(steps):
         for batch in dataloader:
-            yield s, batch
-            s += 1
+            yield batch
+            steps -= 1
+            if steps <= 0:
+                return
 
 
 def get_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
@@ -87,8 +88,8 @@ def _get_dataloaders_from_datasets(
     shuffle: Tuple[bool, bool, bool] = (True, False, False),
     linspace: Optional[Sequence[bool]] = [False, False, False],
     linspace_samples: Optional[Sequence[int]] = [None, None, None],
-    infinite: bool = False,
-    steps: Optional[int] = None,
+    infinite: Optional[Sequence[bool]] = [False, False, False],
+    steps: Optional[Sequence[int]] = [None, None, None],
     **kwargs: Any,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     r"""Helper tool to generate dataloaders from datasets.
@@ -119,7 +120,9 @@ def _get_dataloaders_from_datasets(
         for i, dataset in enumerate(datasets)
     ]
 
-    if infinite:
-        dataloaders = [infinite_dataloader(dataloader, steps) for dataloader in dataloaders]
+    dataloaders = [
+        infinite_dataloader(dl, st) if inf else dl
+        for inf, st, dl in zip(infinite, steps, dataloaders)
+    ]
 
     return tuple(dataloaders)
