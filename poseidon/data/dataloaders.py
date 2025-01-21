@@ -24,7 +24,7 @@ def get_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
     r"""Returns the training, validation, and test dataloaders.
 
     Region:
-        Black Sea.
+        Black Sea Continental Shelf.
 
     Shuffling:
         Only the training dataset is shuffled (by default).
@@ -52,15 +52,15 @@ def get_toy_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
     r"""Returns the toy training, validation, and test dataloaders.
 
     Region:
-        Black Sea Continental Shelf.
+        Black Sea Continental Shelf (Debugging).
 
     Shuffling:
         Only the training dataset is shuffled (by default).
 
     Splits:
-        Training: 1995-01-01 to 2017-12-31.
-        Validation: 2018-01-01 to 2020-12-31.
-        Test: 2021-01-01 to 2022-12-31.
+        Training: 2017-01-01 to 2017-12-31.
+        Validation: 2020-01-01 to 2020-12-31.
+        Test: 2022-01-01 to 2022-12-31.
 
     Arguments:
         trajectory_size: Number of time steps in each sample.
