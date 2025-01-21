@@ -72,6 +72,7 @@ def training(
         blanket_neighbors,
         blanket_size,
         steps_training,
+        steps_validation,
         steps_gradient_accumulation,
         steps_logging,
         save_model,
@@ -80,6 +81,7 @@ def training(
         config_training["blanket_neighbors"],           # Neighbors on each side
         config_training["blanket_neighbors"] * 2 + 1,   # Complete blanket dimension
         config_training["steps_training"],              # One-step is one day
+        config_training["steps_validation"],            # Number of steps before validation
         config_training["steps_gradient_accumulation"], # Number of steps before optimizer step
         config_training["steps_logging"],               # Number of steps before logging
         config_training["save_model"],                  # Whether to save the model or not
@@ -88,23 +90,28 @@ def training(
         else DATASET_REGION,
     )
 
-    # Loading dataloaders as infinite iterators
-    dataloader_training, _, _ = (
+    # Loading dataloaders
+    config_dataloader_additional = {
+        "infinite": [True, False, False],               # Infinite iterator configuration
+        "steps": [steps_training, None, None],          # Maximum number of steps before stopping training
+        "linspace": [False, True, True],                # Linear temporal subsampling for validation and testing
+        "linspace_samples": [None, 3 * 12, 2 * 12],     # Number of samples for each subsampling, ~1 sample/month for dynamics diversity
+    }
+
+    dataloader_training, dataloader_validation, _ = (
         get_toy_dataloaders(
             **config_dataloader,
-            infinite=True,
-            steps=steps_training,
+            **config_dataloader_additional,
         )
         if config_problem["toy_problem"]
         else get_dataloaders(
             **config_dataloader,
-            infinite=True,
-            steps=steps_training,
+            **config_dataloader_additional,
         )
     )
 
     # Dimension of Black Sea state trajectory
-    (B, C, _, H, W) = next(dataloader_training)[1][0].shape
+    (B, C, _, H, W) = next(dataloader_training)[0].shape
 
     # Setting up denoising network
     poseidon_denoiser = PoseidonDenoiser(
@@ -167,7 +174,7 @@ def training(
     #
     # === TRAINING ====
     #
-    for step, (x, _) in dataloader_training:
+    for step, (x, _) in enumerate(dataloader_training):
         #
         x = preprocessing_for_diffusion(
             x=x,
@@ -200,7 +207,7 @@ def training(
         #
         # === LOGGING ====
         #
-        if step % steps_logging == 0 and step != 0:
+        if ((step + 1) % steps_logging == 0 and step != 0) or (step == steps_training - 2):
             #
             progress_bar.set_postfix({
                 "Loss (AoAS) ": f"{(loss_aoas):.4f}",
@@ -212,9 +219,9 @@ def training(
             wandb.log({
                 "Training/Loss (AoAS)": loss_aoas,
                 "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
-                "Training/Step [-]": step,
-                "Training/Samples Seen [-]": B * step,
-                "Training/Completed [%]": (step / steps_training) * 100,
+                "Training/Step [-]": (step + 1),
+                "Training/Samples Seen [-]": B * (step + 1),
+                "Training/Completed [%]": (step / (steps_training - 2)) * 100,
             })
 
             poseidon_save.save(
@@ -226,10 +233,45 @@ def training(
             )
 
         #
+        # === VALIDATING ====
+        #
+        if ((step + 1) % steps_validation == 0 and step != 0) or (step == steps_training - 2):
+            with torch.no_grad():
+
+                # Average validation loss
+                vld_loss_avg = 0.0
+
+                for vld_x, _ in dataloader_validation:
+                    #
+                    vld_x = preprocessing_for_diffusion(
+                        x=vld_x,
+                        k=blanket_neighbors,
+                    )
+
+                    # Generating noise
+                    vld_noise = scheduler_noise(batch_size=vld_x.shape[0])
+
+                    # Noising the clean state
+                    vld_x_noised = vld_x + vld_noise * torch.randn_like(vld_x)
+
+                    # Pushing everything to the device
+                    vld_x, vld_x_noised, vld_noise = vld_x.to(DEVICE), vld_x_noised.to(DEVICE), vld_noise.to(DEVICE)
+
+                    vld_loss_avg += PoseidonLoss(
+                        x=vld_x,
+                        x_denoised=poseidon_denoiser(vld_x_noised, vld_noise),
+                        sigma=vld_noise,
+                    ).item()
+
+                wandb.log({
+                    "Validation/Loss (Averaged)": vld_loss_avg/config_dataloader_additional["linspace_samples"][1],
+                })
+
+
+        #
         # === UPDATING ====
         #
-        if step % steps_gradient_accumulation == 0 and step != 0:
-            #
+        if ((step + 1) % steps_gradient_accumulation == 0 and step != 0) or (step == steps_training - 2):
             optimizer.step()
             scheduler_lr.step()
             optimizer.zero_grad()
