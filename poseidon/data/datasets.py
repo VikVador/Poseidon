@@ -110,7 +110,7 @@ def get_datasets(
     r"""Returns the training, validation, and test datasets.
 
     Region:
-        Black Sea.
+        Black Sea Continental Shelf.
 
     Splits:
         Training: 1995-01-01 to 2017-12-31.
@@ -151,12 +151,12 @@ def get_toy_datasets(
     r"""Returns the toy training, validation, and test datasets.
 
     Region:
-        Black Sea Continental Shelf.
+        Black Sea Continental Shelf (Debugging).
 
     Splits:
-        Training: 1995-01-01 to 2017-12-31.
-        Validation: 2018-01-01 to 2020-12-31.
-        Test: 2021-01-01 to 2022-12-31.
+        Training: 2017-01-01 to 2017-12-31.
+        Validation: 2020-01-01 to 2020-12-31.
+        Test: 2022-01-01 to 2022-12-31.
 
     Arguments:
         variables: Variable names to retain from the dataset.
