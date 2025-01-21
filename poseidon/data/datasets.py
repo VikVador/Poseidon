@@ -39,6 +39,8 @@ class PoseidonDataset(Dataset):
         date_end: End date of the data split (format: 'YYYY-MM-DD').
         variables: Variable names to retain from the preprocessed dataset.
         trajectory_size: Number of time steps in each sample.
+        linspace: Whether to extract samples at linearly spaced intervals.
+        linspace_samples: Number of linearly spaced samples to extract, if `linspace` is True.
         region: Region of interest to extract from the dataset.
     """
 
@@ -49,6 +51,8 @@ class PoseidonDataset(Dataset):
         date_end: str,
         variables: Sequence[str],
         trajectory_size: int = 1,
+        linspace: Optional[bool] = False,
+        linspace_samples: Optional[int] = None,
         region: Optional[Dict[str, Tuple[int, int]]] = None,
     ):
         super().__init__()
@@ -59,21 +63,31 @@ class PoseidonDataset(Dataset):
         self.dataset = self.dataset[variables] if variables else self.dataset
         self.dataset = self.dataset.isel(**region) if region else self.dataset
         self.trajectory_size = trajectory_size
+        self.linspace = linspace
+        self.linspace_samples = linspace_samples
+        self.linspace_samples_index = None
+
+        # Checking if linearly spaced samples are requested
+        if self.linspace:
+            #
+            self.linspace_samples_index = torch.linspace(
+                0,
+                self.dataset.time.size - 1 - self.trajectory_size,
+                linspace_samples,
+                dtype=torch.int64,
+            )
 
     def __len__(self) -> int:
         r"""Return the total number of samples in the dataset."""
-        return self.dataset.time.size - self.trajectory_size + 1
+        return (
+            self.linspace_samples
+            if self.linspace
+            else (self.dataset.time.size - self.trajectory_size + 1)
+        )
 
     def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
-        r"""Gets and preprocesses a sample from the dataset.
-
-        Argument:
-            idx: Index of the first time step in the sample.
-
-        Returns:
-            sample: Preprocessed data tensor of shape (trajectory_size, z_total, x, y).
-            time: Date features corresponding to each day of the trajectory.
-        """
+        r"""Gets and preprocesses a sample from the dataset."""
+        idx = self.linspace_samples_index[idx].item() if self.linspace else idx
         return self.preprocess(idx, idx + self.trajectory_size)
 
     def preprocess(self, step_start: int, step_end: int) -> Tuple[Tensor, Tensor]:
@@ -105,6 +119,8 @@ class PoseidonDataset(Dataset):
 
 def get_datasets(
     variables: Optional[Sequence[str]] = None,
+    linspace: Optional[Sequence[bool]] = [False, False, False],
+    linspace_samples: Optional[Sequence[int]] = [None, None, None],
     **kwargs,
 ) -> Tuple[PoseidonDataset, PoseidonDataset, PoseidonDataset]:
     r"""Returns the training, validation, and test datasets.
@@ -132,13 +148,19 @@ def get_datasets(
             date_end=date_end,
             region=DATASET_REGION,
             variables=variables,
+            linspace=l,
+            linspace_samples=s,
             **kwargs,
         )
-        for date_start, date_end in [
-            DATASET_DATES_TRAINING,
-            DATASET_DATES_VALIDATION,
-            DATASET_DATES_TEST,
-        ]
+        for (date_start, date_end), l, s in zip(
+            [
+                DATASET_DATES_TRAINING,
+                DATASET_DATES_VALIDATION,
+                DATASET_DATES_TEST,
+            ],
+            linspace,
+            linspace_samples,
+        )
     ]
 
     return tuple(datasets)
@@ -146,6 +168,8 @@ def get_datasets(
 
 def get_toy_datasets(
     variables: Optional[Sequence[str]] = None,
+    linspace: Optional[Sequence[bool]] = [False, False, False],
+    linspace_samples: Optional[Sequence[int]] = [None, None, None],
     **kwargs,
 ) -> Tuple[PoseidonDataset, PoseidonDataset, PoseidonDataset]:
     r"""Returns the toy training, validation, and test datasets.
@@ -173,13 +197,19 @@ def get_toy_datasets(
             date_end=date_end,
             region=TOY_DATASET_REGION,
             variables=variables,
+            linspace=l,
+            linspace_samples=s,
             **kwargs,
         )
-        for date_start, date_end in [
-            TOY_DATASET_DATES_TRAINING,
-            TOY_DATASET_DATES_VALIDATION,
-            TOY_DATASET_DATES_TEST,
-        ]
+        for (date_start, date_end), l, s in zip(
+            [
+                TOY_DATASET_DATES_TRAINING,
+                TOY_DATASET_DATES_VALIDATION,
+                TOY_DATASET_DATES_TEST,
+            ],
+            linspace,
+            linspace_samples,
+        )
     ]
 
     return tuple(datasets)

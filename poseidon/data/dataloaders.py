@@ -38,6 +38,8 @@ def get_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
         trajectory_size: Number of time steps in each sample.
         variables: Variable names to retain from the dataset.
         shuffle: List of booleans defining which dataset to shuffle.
+        linspace: Whether to extract samples at linearly spaced intervals.
+        linspace_samples: Number of linearly spaced samples to extract, if `linspace` is True.
         infinite: Whether to transform dataloaders as infinite iterators or not.
         steps: If infinite, the maximum number of steps to iterate.
         kwargs: Keyword arguments passed to the dataloader.
@@ -66,6 +68,8 @@ def get_toy_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
         trajectory_size: Number of time steps in each sample.
         variables: Variable names to retain from the dataset.
         shuffle: List of booleans defining which dataset to shuffle.
+        linspace: Whether to extract samples at linearly spaced intervals.
+        linspace_samples: Number of linearly spaced samples to extract, if `linspace` is True.
         infinite: Whether to transform dataloaders as infinite iterators or not.
         steps: If infinite, the maximum number of steps to iterate.
         kwargs: Keyword arguments passed to the dataloader.
@@ -81,6 +85,8 @@ def _get_dataloaders_from_datasets(
     trajectory_size: int = 1,
     variables: Optional[Sequence[str]] = None,
     shuffle: Tuple[bool, bool, bool] = (True, False, False),
+    linspace: Optional[Sequence[bool]] = [False, False, False],
+    linspace_samples: Optional[Sequence[int]] = [None, None, None],
     infinite: bool = False,
     steps: Optional[int] = None,
     **kwargs: Any,
@@ -99,6 +105,8 @@ def _get_dataloaders_from_datasets(
     datasets = get_datasets(
         trajectory_size=trajectory_size,
         variables=variables,
+        linspace=linspace,
+        linspace_samples=linspace_samples,
     )
 
     dataloaders = [
