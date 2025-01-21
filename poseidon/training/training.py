@@ -95,7 +95,11 @@ def training(
         "infinite": [True, False, False],               # Infinite iterator configuration
         "steps": [steps_training, None, None],          # Maximum number of steps before stopping training
         "linspace": [False, True, True],                # Linear temporal subsampling for validation and testing
-        "linspace_samples": [None, 3 * 12, 2 * 12],     # Number of samples for each subsampling, ~1 sample/month for dynamics diversity
+        "linspace_samples": [                           # Number of samples for each subsampling, ~1 sample/month for dynamics diversity
+            None,
+            3 * 12,
+            2 * 12,
+        ],
     }
 
     dataloader_training, dataloader_validation, _ = (
@@ -168,7 +172,7 @@ def training(
             total=int(steps_training / steps_logging),
             desc="| POSEIDON | Training",
             unit=f" {steps_logging} step(s)",
-        )
+        ),
     )
 
     #
@@ -188,7 +192,11 @@ def training(
         x_noised = x + noise * torch.randn_like(x)
 
         # Pushing everything to the device
-        x, x_noised, noise = x.to(DEVICE), x_noised.to(DEVICE), noise.to(DEVICE)
+        x, x_noised, noise = (
+            x.to(DEVICE),
+            x_noised.to(DEVICE),
+            noise.to(DEVICE),
+        )
 
         # Denoising the noisy state and computing the loss between clean and denoised states
         loss = PoseidonLoss(
@@ -228,8 +236,9 @@ def training(
                 loss=loss_aoas,
                 optimizer=optimizer,
                 scheduler=scheduler_lr,
-                model=poseidon_denoiser.module.backbone if torch.cuda.device_count() > 1 else \
-                        poseidon_denoiser.backbone,
+                model=poseidon_denoiser.module.backbone
+                if torch.cuda.device_count() > 1
+                else poseidon_denoiser.backbone,
             )
 
         #
@@ -237,41 +246,46 @@ def training(
         #
         if ((step + 1) % steps_validation == 0 and step != 0) or (step == steps_training - 2):
             with torch.no_grad():
-
                 # Average validation loss
-                vld_loss_avg = 0.0
+                VLD_loss_avg = 0.0
 
-                for vld_x, _ in dataloader_validation:
+                for VLD_x, _ in dataloader_validation:
                     #
-                    vld_x = preprocessing_for_diffusion(
-                        x=vld_x,
+                    VLD_x = preprocessing_for_diffusion(
+                        x=VLD_x,
                         k=blanket_neighbors,
                     )
 
                     # Generating noise
-                    vld_noise = scheduler_noise(batch_size=vld_x.shape[0])
+                    VLD_noise = scheduler_noise(batch_size=VLD_x.shape[0])
 
                     # Noising the clean state
-                    vld_x_noised = vld_x + vld_noise * torch.randn_like(vld_x)
+                    VLD_x_noised = VLD_x + VLD_noise * torch.randn_like(VLD_x)
 
                     # Pushing everything to the device
-                    vld_x, vld_x_noised, vld_noise = vld_x.to(DEVICE), vld_x_noised.to(DEVICE), vld_noise.to(DEVICE)
+                    VLD_x, VLD_x_noised, VLD_noise = (
+                        VLD_x.to(DEVICE),
+                        VLD_x_noised.to(DEVICE),
+                        VLD_noise.to(DEVICE),
+                    )
 
-                    vld_loss_avg += PoseidonLoss(
-                        x=vld_x,
-                        x_denoised=poseidon_denoiser(vld_x_noised, vld_noise),
-                        sigma=vld_noise,
+                    VLD_loss_avg += PoseidonLoss(
+                        x=VLD_x,
+                        x_denoised=poseidon_denoiser(VLD_x_noised, VLD_noise),
+                        sigma=VLD_noise,
                     ).item()
 
                 wandb.log({
-                    "Validation/Loss (Averaged)": vld_loss_avg/config_dataloader_additional["linspace_samples"][1],
+                    "Validation/Loss (Averaged)": VLD_loss_avg
+                    / config_dataloader_additional["linspace_samples"][1],
                 })
-
 
         #
         # === UPDATING ====
         #
-        if ((step + 1) % steps_gradient_accumulation == 0 and step != 0) or (step == steps_training - 2):
+        if ((step + 1) % steps_gradient_accumulation == 0 and step != 0) or (
+            step == steps_training - 2
+        ):
             optimizer.step()
             scheduler_lr.step()
             optimizer.zero_grad()
