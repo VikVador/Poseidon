@@ -15,11 +15,14 @@ from poseidon.data.const import (
     TOY_DATASET_DATES_TRAINING,
     TOY_DATASET_DATES_VALIDATION,
     TOY_DATASET_REGION,
+    TOY_DATASET_VARIABLES,
+    TOY_DATASET_VARIABLES_ATMOSPHERE,
+    TOY_DATASET_VARIABLES_SURFACE,
 )
 
-
+# fmt: off
 @pytest.fixture
-def dataset_date_ranges():
+def fake_dataset_date_ranges():
     """Fixture providing dataset date ranges for validation."""
     return {
         "toy": {
@@ -35,27 +38,33 @@ def dataset_date_ranges():
     }
 
 
-def test_dataset_variables():
-    """Testing dataset variable definitions."""
-    for var in DATASET_VARIABLES_ATMOSPHERE:
-        assert var in DATASET_VARIABLES, f"ERROR - {var} missing from DATASET_VARIABLES."
-    for var in DATASET_VARIABLES_SURFACE:
-        assert var in DATASET_VARIABLES, f"ERROR - {var} missing from DATASET_VARIABLES."
+def test_list_variables_completeness():
+    """Testing that variable lists contains surface and atmospheric variables."""
+
+    for v in DATASET_VARIABLES_SURFACE + DATASET_VARIABLES_ATMOSPHERE:
+        assert v in DATASET_VARIABLES, f"ERROR - {v} is missing from DATASET_VARIABLES."
+
+    for v in TOY_DATASET_VARIABLES_SURFACE + TOY_DATASET_VARIABLES_ATMOSPHERE:
+        assert v in TOY_DATASET_VARIABLES, f"ERROR - {v} is missing from TOY_DATASET_VARIABLES."
 
 
 def test_dataset_regions():
-    """testing region definitions for toy and full datasets."""
-    for key in TOY_DATASET_REGION:
-        assert (
-            TOY_DATASET_REGION[key].start >= DATASET_REGION[key].start
-        ), f"ERROR - Toy dataset region {key} starts outside full dataset region."
-        assert (
-            TOY_DATASET_REGION[key].stop <= DATASET_REGION[key].stop
-        ), f"ERROR - Toy dataset region {key} ends outside full dataset region."
+    """Testing if regions are defined correctly."""
+
+    # Boundaries of the unprocessed Black Sea dataset
+    x_max, y_max, z_max = 256, 576, 56
+
+    for region in [TOY_DATASET_REGION, DATASET_REGION]:
+        assert region["latitude"].start >= 0,      "ERROR - Latitude start is negative."
+        assert region["latitude"].stop <= x_max,  f"ERROR - Latitude end is greater than maximum {x_max}."
+        assert region["longitude"].start >= 0,     "ERROR - Longitude start is negative."
+        assert region["longitude"].stop <= y_max, f"ERROR - Longitude end is greater than maximum {y_max}."
+        assert region["level"].start >= 0,         "ERROR - Level start is negative."
+        assert region["level"].stop <= z_max,     f"ERROR - Level end is greater than maximum {z_max}."
 
 
-def test_dataset_date_ranges(dataset_date_ranges):
-    """testing dataset date ranges for training, validation, and testing."""
+def test_dataset_date_ranges(fake_dataset_date_ranges):
+    """Testing dataset date ranges for training, validation, and testing."""
 
     def validate_time_range(start, end, label):
         """Helper to check if a time range is valid."""
@@ -72,7 +81,8 @@ def test_dataset_date_ranges(dataset_date_ranges):
             dates["validation"][1] <= dates["testing"][0]
         ), f"ERROR - Validation dates overlap with test dates in {dataset_label}."
 
-    for dataset_type, ranges in dataset_date_ranges.items():
+    # Checking everything all at once !
+    for dataset_type, ranges in fake_dataset_date_ranges.items():
         for fold, (start, end) in ranges.items():
             validate_time_range(start, end, f"{dataset_type} {fold}")
         validate_folds(ranges, dataset_type)
