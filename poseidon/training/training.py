@@ -1,5 +1,6 @@
 r"""Training."""
 
+import dask
 import gc
 import torch
 import wandb
@@ -51,6 +52,8 @@ def training(
         config_wandb: Configuration for Weights & Biases.
         config_cluster: Configuration of the Cluster.
     """
+
+    dask.config.set(scheduler="synchronous")
 
     # Initializing connection to Weights & Biases
     wandb.init(
@@ -132,6 +135,7 @@ def training(
             p.numel() for p in poseidon_denoiser.parameters() if p.requires_grad
         ),
     })
+
 
     # Setting up saving tool
     poseidon_save = PoseidonSave(
