@@ -143,7 +143,7 @@ class UNet(nn.Module):
                     UNetBlock(
                         hid_channels[i],
                         mod_features,
-                        attention_heads=attention_heads.get(i, None),
+                        attention_heads=attention_heads.get(str(i), None),
                         dropout=dropout,
                         spatial=spatial,
                         **kwargs,
@@ -153,7 +153,7 @@ class UNet(nn.Module):
                     UNetBlock(
                         hid_channels[i],
                         mod_features,
-                        attention_heads=attention_heads.get(i, None),
+                        attention_heads=attention_heads.get(str(i), None),
                         dropout=dropout,
                         spatial=spatial,
                         **kwargs,
