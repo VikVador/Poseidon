@@ -23,9 +23,9 @@ TOY_DATASET_DATES_VALIDATION = ("2020-01-01", "2020-12-31")
 TOY_DATASET_DATES_TEST       = ("2022-01-01", "2022-12-31")
 
 TOY_DATASET_REGION = {
-    "latitude":  slice(230, 232),
-    "longitude": slice(187, 189),
-    "level":     slice(0, 1),
+    "latitude":  slice(75, 107),
+    "longitude": slice(75, 107),
+    "level":     [0, 24],        # 0.25 [m] / 46 [m]
 }
 
 TOY_DATASET_VARIABLES_ATMOSPHERE = [
