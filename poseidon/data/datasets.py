@@ -31,7 +31,7 @@ from poseidon.data.tools import (
 
 
 class PoseidonDataset(Dataset):
-    r"""Creates a Poseidon dataset.
+    r"""Creates a :class:`PoseidonDataset`.
 
     Arguments:
         path: Path to the Zarr dataset.
@@ -69,7 +69,6 @@ class PoseidonDataset(Dataset):
 
         # Checking if linearly spaced samples are requested
         if self.linspace:
-            #
             self.linspace_samples_index = torch.linspace(
                 0,
                 self.dataset.time.size - 1 - self.trajectory_size,
@@ -123,7 +122,7 @@ def get_datasets(
     linspace_samples: Optional[Sequence[int]] = [None, None, None],
     **kwargs,
 ) -> Tuple[PoseidonDataset, PoseidonDataset, PoseidonDataset]:
-    r"""Returns the training, validation, and test datasets.
+    r"""Returns the training, validation, and test :class:`PoseidonDataset`.
 
     Region:
         Black Sea Continental Shelf.
@@ -135,6 +134,8 @@ def get_datasets(
 
     Arguments:
         variables: Variable names to retain from the dataset.
+        linspace: Whether to extract samples at linearly spaced intervals.
+        linspace_samples: Number of linearly spaced samples to extract, if `linspace` is True.
         kwargs: Keyword arguments passed to :class:`PoseidonDataset`.
     """
 
@@ -172,7 +173,7 @@ def get_toy_datasets(
     linspace_samples: Optional[Sequence[int]] = [None, None, None],
     **kwargs,
 ) -> Tuple[PoseidonDataset, PoseidonDataset, PoseidonDataset]:
-    r"""Returns the toy training, validation, and test datasets.
+    r"""Returns the toy training, validation, and test :class:`PoseidonDataset`.
 
     Region:
         Black Sea Continental Shelf (Debugging).
@@ -184,6 +185,8 @@ def get_toy_datasets(
 
     Arguments:
         variables: Variable names to retain from the dataset.
+        linspace: Whether to extract samples at linearly spaced intervals.
+        linspace_samples: Number of linearly spaced samples to extract, if `linspace` is True.
         kwargs: Keyword arguments passed to :class:`PoseidonDataset`.
     """
 
