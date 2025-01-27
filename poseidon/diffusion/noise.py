@@ -21,7 +21,7 @@ class PoseidonNoiseSchedule(nn.Module):
         sigma: Standard deviation of the noise in log-space.
     """
 
-    def __init__(self, mu: float = -1.2, sigma: float = 1.2):
+    def __init__(self, mu: float = -1, sigma: float = 1.7):
         super().__init__()
 
         self.register_buffer("mu", torch.as_tensor(mu))
