@@ -24,7 +24,7 @@ from poseidon.config import (
 
 
 def test_mask_and_mesh():
-    """Test mask and mesh paths for consistency."""
+    """Testing mask and mesh paths extension for consistency."""
     assert (
         PATH_MASK.suffix == ".zarr"
     ), f"ERROR - PATH_MASK should be a .zarr file but got {PATH_MASK.suffix}."
@@ -58,7 +58,7 @@ def test_paths_are_strings_or_paths():
 
 @pytest.mark.parametrize("path_dict", [PATH_OBSERVATIONS_FLOATS, PATH_OBSERVATIONS_SATELLITE])
 def test_observations_structure(path_dict):
-    """Verify that observation structures have expected keys and values."""
+    """Testing that observation path structures have expected keys and values."""
     for region, observations in path_dict.items():
         assert region in {"shelf", "black_sea"}, f"ERROR - Unexpected region: {region}."
         for _, entries in observations.items():
