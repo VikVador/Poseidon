@@ -65,7 +65,7 @@ def test_unet_block_invalid_input_shape(unet_block):
     """Testing that UNetBlock raises an error for invalid input shapes."""
     invalid_input = torch.randn(BATCH, CHANNELS, HEIGHT, WIDTH)
     invalid_modulation = torch.randn(BATCH, MOD_FEATURES)
-    with pytest.raises(ValueError, match="not enough values to unpack"):
+    with pytest.raises(RuntimeError, match="must match the size of tensor"):
         unet_block(invalid_input, invalid_modulation)
 
 

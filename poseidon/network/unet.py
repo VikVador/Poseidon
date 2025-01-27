@@ -1,8 +1,5 @@
 r"""UNet Architecture for 3-dimensional convolutions.
 
-This UNet performs 3D convolutions via a combination of 2D spatial
-and 1D temporal convolutions, optimizing efficiency for diffusion tasks.
-
 References:
     Inspired by the implementation in:
     https://github.com/probabilists/azula
@@ -11,27 +8,26 @@ References:
 import torch
 import torch.nn as nn
 
-from einops.layers.torch import Rearrange
 from torch import Tensor
-from typing import Dict, Optional, Sequence, Union
+from typing import Dict, Optional, Sequence
 
 # isort: split
 from poseidon.network.attention import SelfAttentionNd
 from poseidon.network.convolution import ConvNd, Convolution2DBlock
+from poseidon.network.modulation import Modulator
 from poseidon.network.normalization import LayerNorm
 from poseidon.network.upsample import UpsampleBlock
 
 
 class UNetBlock(nn.Module):
-    r"""Creates a modulated U-Net block module.
+    r"""Creates a UNet residual block.
 
     Arguments:
-        channels: The number of channels :math:`C`.
-        mod_features: The number of modulating features :math:`D`.
-        attention_heads: The number of attention heads.
-        dropout: The dropout rate in :math:`[0, 1]`.
-        spatial: The number of spatial dimensions :math:`N`.
-        kwargs: Keyword arguments passed to :class:`torch.nn.Conv2d`.
+        channels: Number of channels (C) in the input tensor.
+        mod_features: Number of features (D) in the modulation vector.
+        dropout: Dropout probability for regularization [0, 1].
+        attention_heads: Number of attention heads.
+        **kwargs: Additional arguments passed to the residual blocks.
     """
 
     def __init__(
@@ -40,29 +36,32 @@ class UNetBlock(nn.Module):
         mod_features: int,
         attention_heads: Optional[int] = None,
         dropout: Optional[float] = None,
-        spatial: int = 2,
         **kwargs,
     ):
         super().__init__()
 
-        # Ada-zero
-        self.ada_zero = nn.Sequential(
-            nn.Linear(mod_features, mod_features),
-            nn.SiLU(),
-            nn.Linear(mod_features, 3 * channels),
-            Rearrange("... (r C) -> r ... C" + " 1" * spatial, r=3),
+        self.modulator = Modulator(
+            channels=channels,
+            mod_features=mod_features,
+            spatial=3,
         )
 
-        layer = self.ada_zero[-2]
-        layer.weight = nn.Parameter(layer.weight * 1e-2)
-
-        # Block
         self.block = nn.Sequential(
             LayerNorm(dim=1),
-            ConvNd(channels, channels, spatial=spatial, **kwargs),
+            ConvNd(
+                channels,
+                channels,
+                spatial=3,
+                **kwargs,
+            ),
             nn.SiLU(),
             nn.Identity() if dropout is None else nn.Dropout(dropout),
-            ConvNd(channels, channels, spatial=spatial, **kwargs),
+            ConvNd(
+                channels,
+                channels,
+                spatial=3,
+                **kwargs,
+            ),
         )
 
         if attention_heads is not None:
@@ -72,37 +71,45 @@ class UNetBlock(nn.Module):
     def forward(self, x: Tensor, mod: Tensor) -> Tensor:
         r"""
         Arguments:
-            x: The input tensor, with shape :math:`(B, C, H_1, ..., H_N)`.
-            mod: The modulation vector, with shape :math:`(D)` or :math:`(B, D)`.
+            x: Input tensor (B, C, T, H, W).
+            mod: Modulation vector (B, D).
 
         Returns:
-            The output tensor, with shape :math:`(B, C, H_1, ..., H_N)`.
+            Tensor: Output tensor (B, C, T, H, W).
         """
+        mod_factor, mod_bias, mod_scaling = self.modulator(mod)
 
-        a, b, c = self.ada_zero(mod)
-
-        y = (a + 1) * x + b
+        y = (mod_factor + 1) * x + mod_bias
         y = self.block(y)
-        y = x + c * y
-        y = y / torch.sqrt(1 + c * c)
+        y = x + mod_scaling * y
+        y = y / torch.sqrt(1 + mod_scaling * mod_scaling)
 
         return y
 
 
 class UNet(nn.Module):
-    r"""Creates a modulated U-Net module.
+    r"""Creates a U-Net model for 3-dimensional convolutions.
 
     Arguments:
-        in_channels: The number of input channels :math:`C_i`.
-        out_channels: The number of output channels :math:`C_o`.
-        mod_features: The number of modulating features :math:`D`.
-        hid_channels: The numbers of channels at each depth.
-        hid_blocks: The numbers of hidden blocks at each depth.
-        kernel_size: The kernel size of all convolutions.
-        stride: The stride of the downsampling convolutions.
+        in_channels: Number of input channels (C_i)
+        out_channels: Number of output channels (C_o).
+        mod_features: Number of features (D) in the modulating vector (B, D).
+        hid_channels: Numbers of channels at each depth.
+        hid_blocks: Numbers of hidden blocks at each depth.
+        kernel_size: Kernel size of all convolutions.
+        stride: Stride of the downsampling convolutions.
+        dropout: Dropout probability for regularization [0, 1].
         attention_heads: The number of attention heads at each depth.
-        dropout: The dropout rate in :math:`[0, 1]`.
-        spatial: The number of spatial dimensions.
+
+    Example:
+        >>> unet = UNet(in_channels=64,
+                        out_channels=64,
+                        mod_features=128,
+                        hid_channels=[64, 128, 256],
+                        hid_blocks=[2, 3, 3],
+                        kernel_size=3,
+                        stride=2,
+                        dropout=0.1)
     """
 
     def __init__(
@@ -111,33 +118,32 @@ class UNet(nn.Module):
         out_channels: int,
         mod_features: int,
         hid_channels: Sequence[int] = (64, 128, 256),
-        hid_blocks: Sequence[int] = (3, 3, 3),
-        kernel_size: Union[int, Sequence[int]] = 3,
-        stride: Union[int, Sequence[int]] = 2,
-        attention_heads: Dict[int, int] = {},  # noqa: B006
+        hid_blocks: Sequence[int] = (2, 3, 3),
+        kernel_size: int = 3,
+        stride: int = 2,
         dropout: Optional[float] = None,
-        spatial: int = 3,
+        attention_heads: Dict[str, int] = {},  # noqa: B006
     ):
         super().__init__()
 
-        assert len(hid_blocks) == len(hid_channels)
+        assert len(hid_blocks) == len(
+            hid_channels
+        ), "ERROR (UNet) - Mismatched number of hidden blocks and channels."
 
-        if isinstance(kernel_size, int):
-            kernel_size = [kernel_size] * spatial
-
-        if isinstance(stride, int):
-            stride = [stride] * spatial
-
+        # UNet block and concatenation block parameters
         kwargs = dict(
-            kernel_size=tuple(kernel_size),
-            padding=tuple(k // 2 for k in kernel_size),
+            kernel_size=kernel_size,
+            padding=kernel_size // 2,
         )
 
+        # Contains the blocks for the descent and ascent of the UNet
         self.descent, self.ascent = nn.ModuleList(), nn.ModuleList()
 
         for i, blocks in enumerate(hid_blocks):
+            # Contains blocks at a stage of the UNet
             do, up = nn.ModuleList(), nn.ModuleList()
 
+            # Filling the stage with blocks
             for _ in range(blocks):
                 do.append(
                     UNetBlock(
@@ -145,7 +151,6 @@ class UNet(nn.Module):
                         mod_features,
                         attention_heads=attention_heads.get(str(i), None),
                         dropout=dropout,
-                        spatial=spatial,
                         **kwargs,
                     )
                 )
@@ -155,7 +160,6 @@ class UNet(nn.Module):
                         mod_features,
                         attention_heads=attention_heads.get(str(i), None),
                         dropout=dropout,
-                        spatial=spatial,
                         **kwargs,
                     )
                 )
@@ -168,9 +172,8 @@ class UNet(nn.Module):
                         Convolution2DBlock(
                             hid_channels[i - 1],
                             hid_channels[i],
-                            stride=2,
-                            kernel_size=3,
-                            padding=1,
+                            stride=stride,
+                            **kwargs,
                         ),
                         LayerNorm(dim=1),
                     ),
@@ -179,39 +182,58 @@ class UNet(nn.Module):
                 up.append(
                     nn.Sequential(
                         LayerNorm(dim=1),
-                        UpsampleBlock(scale_factor=2),
+                        UpsampleBlock(scale_factor=stride),
                     )
                 )
+            # First and last projection blocks
             else:
-                do.insert(0, ConvNd(in_channels, hid_channels[i], spatial=spatial, **kwargs))
-                up.append(ConvNd(hid_channels[i], out_channels, spatial=spatial, kernel_size=1))
+                do.insert(
+                    0,
+                    ConvNd(
+                        in_channels,
+                        hid_channels[i],
+                        spatial=3,
+                        **kwargs,
+                    ),
+                )
+                up.append(
+                    ConvNd(
+                        hid_channels[i],
+                        out_channels,
+                        spatial=3,
+                        kernel_size=1,  # Removes aliasing artifacts
+                    )
+                )
 
+            # Projection for concatening tensors (beginning of each ascent stage)
             if i + 1 < len(hid_blocks):
                 up.insert(
                     0,
                     ConvNd(
                         hid_channels[i] + hid_channels[i + 1],
                         hid_channels[i],
-                        spatial=spatial,
+                        spatial=3,
                         **kwargs,
                     ),
                 )
 
+            # Updating the descent and ascent stages
             self.descent.append(do)
             self.ascent.insert(0, up)
 
     def forward(self, x: Tensor, mod: Tensor) -> Tensor:
         r"""
         Arguments:
-            x: The input tensor, with shape :math:`(B, C_i, H_1, ..., H_N)`.
-            mod: The modulation vector, with shape :math:`(D)` or :math:`(B, D)`.
+            x: Input tensor (B, Ci, T, H, W).
+            mod: Modulation vector (B, D).
 
         Returns:
-            The output tensor, with shape :math:`(B, C_o, H_1, ..., H_N)`.
+            Tensor: Output tensor (B, Co, T, H, W).
         """
-
+        # Saves end stage tensors
         memory = []
 
+        # Descent
         for blocks in self.descent:
             for block in blocks:
                 if isinstance(block, UNetBlock):
@@ -221,6 +243,7 @@ class UNet(nn.Module):
 
             memory.append(x)
 
+        # Ascent
         for blocks in self.ascent:
             y = memory.pop()
             if x is not y:
