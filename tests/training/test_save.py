@@ -111,11 +111,6 @@ def fake_backbone(fake_zarr_mesh, fake_configurations):
 
 
 @pytest.fixture
-def temp_dir(tmp_path):
-    return tmp_path
-
-
-@pytest.fixture
 def fake_optimizer(fake_backbone):
     return Adam(fake_backbone.parameters(), lr=0.001)
 

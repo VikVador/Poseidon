@@ -7,12 +7,13 @@ import torch
 import xarray as xr
 
 # isort: split
+from poseidon.data.const import TOY_DATASET_REGION
 from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.training.load import load_backbone
 from poseidon.training.save import PoseidonSave
 
 # Generating random dimensions for testing
-MESH_LEVELS, MESH_LAT, MESH_LON = (4, 32, 32)
+MESH_LEVELS, MESH_LAT, MESH_LON = (4, 128, 128)
 
 (INPUT_B, INPUT_C, INPUT_K), INPUT_H, INPUT_W = (
     (random.randint(3, 5) for _ in range(3)),
@@ -79,20 +80,13 @@ def fake_configurations():
         "n_layers": 1,
     }
 
-    config_region = {
-        "latitude": slice(0, MESH_LAT),
-        "longitude": slice(0, MESH_LON),
-        "level": slice(0, MESH_LEVELS),
-    }
-
-    return dimensions, config_unet, config_siren, config_region
+    return dimensions, config_unet, config_siren, TOY_DATASET_REGION
 
 
 @pytest.fixture
 def fake_backbone(fake_zarr_mesh, fake_configurations):
     """Initialize a PoseidonBackbone instance."""
     dimensions, config_unet, config_siren, config_region = fake_configurations
-
     return PoseidonBackbone(
         dimensions=dimensions,
         config_unet=config_unet,
@@ -102,7 +96,7 @@ def fake_backbone(fake_zarr_mesh, fake_configurations):
     )
 
 
-def test_load_backbone(temp_dir, fake_backbone, fake_configurations):
+def test_load_backbone(temp_dir, fake_backbone, fake_zarr_mesh, fake_configurations):
     """Testing if a PoseidonBackbone is save and loaded correctly."""
 
     # Initialization
@@ -127,6 +121,7 @@ def test_load_backbone(temp_dir, fake_backbone, fake_configurations):
     loaded_model = load_backbone(
         name_model=name_model,
         path=temp_dir,
+        path_mesh=fake_zarr_mesh,
         best=True,
         backup=False,
     )
