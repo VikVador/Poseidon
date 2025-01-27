@@ -12,7 +12,7 @@ from poseidon.data.datasets import (
 
 
 def infinite_dataloader(dataloader: DataLoader, steps: int) -> Any:
-    r"""Transforms a basic PyTorch dataloader into an 'infinite' dataloader.
+    r"""Transforms a basic PyTorch :class:`dataloader` into an 'infinite' :class:`dataloader`.
 
     Arguments:
         dataloader: A PyTorch :class:`dataloader`.
@@ -27,7 +27,7 @@ def infinite_dataloader(dataloader: DataLoader, steps: int) -> Any:
 
 
 def get_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    r"""Returns the training, validation, and test dataloaders.
+    r"""Returns the training, validation, and test :class:`dataloader`.
 
     Region:
         Black Sea Continental Shelf.
