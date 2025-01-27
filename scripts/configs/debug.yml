@@ -22,8 +22,8 @@ Training Pipeline:
     "mode":    ["online"]
 
   config_problem:
-    "model_checkpoint_name":    ["lively-disco-7"]
-    "model_checkpoint_version": ["last"]
+    "model_checkpoint_name":    [null]
+    "model_checkpoint_version": [null]
     "model_saving":             [True]
     "toy_problem":              [True]
 
