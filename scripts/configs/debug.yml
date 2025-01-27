@@ -1,0 +1,63 @@
+# ====================================
+#  Poseidon | Diffusion Model Training
+# ====================================
+#
+# ===== Cluster Configuration =====
+#
+Cluster:
+  "account"  : ["bsmfc"]
+  "cpus"     : [8]
+  "gpus"     : [1]
+  "partition": ["gpu"]
+  "ram"      : ["60GB"]
+  "time"     : ["24:00:00"]
+
+
+# ===== Diffusion Training Configuration =====
+#
+Training Pipeline:
+
+  config_wandb:
+    "project": ["Poseidon-Training-Black-Sea-Shelf-Debugging"]
+    "mode":    ["online"]
+
+  config_problem:
+    "model_checkpoint_name":    ["lively-disco-7"]
+    "model_checkpoint_version": ["last"]
+    "model_saving":             [True]
+    "toy_problem":              [True]
+
+  config_dataloader:
+    "batch_size":      [8]
+    "num_workers":     [0]
+    "prefetch_factor": [null]
+    "shuffle":         [[True, False, False]]
+    "trajectory_size": [5]
+
+  config_training:
+    "blanket_neighbors":           [1]
+    "steps_training":              [128000]
+    "steps_gradient_accumulation": [4]
+    "steps_logging":               [4]
+    "steps_validation":            [8]
+
+  config_optimizer:
+    "betas":         [[0.9, 0.999, 0.999]]
+    "learning_rate": [0.0001]
+    "optimizer":     ["soap"]
+    "weight_decay":  [0.005]
+
+  config_scheduler:
+    "scheduler": ["cosine"]
+
+  config_unet:
+    "kernel_size":     [3]
+    "mod_features":    [1]
+    "hid_channels":    [[32, 64, 128]]
+    "hid_blocks":      [[1, 1, 1]]
+    "dropout":         [0.1]
+    "attention_heads": [{"0": 8}, {"1": 8}, {"2": 8}]
+
+  config_siren:
+      "features": [16]
+      "n_layers": [4]
