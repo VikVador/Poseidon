@@ -27,14 +27,14 @@ def fake_dataset_date_ranges():
     """Fixture providing dataset date ranges for validation."""
     return {
         "toy": {
-            "training": TOY_DATASET_DATES_TRAINING,
+            "training":   TOY_DATASET_DATES_TRAINING,
             "validation": TOY_DATASET_DATES_VALIDATION,
-            "testing": TOY_DATASET_DATES_TEST,
+            "testing":    TOY_DATASET_DATES_TEST,
         },
         "full": {
-            "training": DATASET_DATES_TRAINING,
+            "training":   DATASET_DATES_TRAINING,
             "validation": DATASET_DATES_VALIDATION,
-            "testing": DATASET_DATES_TEST,
+            "testing":    DATASET_DATES_TEST,
         },
     }
 
