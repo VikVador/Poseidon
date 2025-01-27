@@ -16,6 +16,7 @@ from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.loss import PoseidonLoss
 from poseidon.diffusion.noise import PoseidonNoiseSchedule
+from poseidon.training.load import load_backbone
 from poseidon.training.optimizer import get_optimizer
 from poseidon.training.save import PoseidonSave
 from poseidon.training.scheduler import get_scheduler
@@ -78,7 +79,9 @@ def training(
         steps_validation,
         steps_gradient_accumulation,
         steps_logging,
-        save_model,
+        model_saving,
+        model_checkpoint_name,
+        model_checkpoint_version,
         black_sea_region,
     ) = (
         config_training["blanket_neighbors"],           # Neighbors on each side
@@ -87,7 +90,9 @@ def training(
         config_training["steps_validation"],            # Number of steps before validation
         config_training["steps_gradient_accumulation"], # Number of steps before optimizer step
         config_training["steps_logging"],               # Number of steps before logging
-        config_training["save_model"],                  # Whether to save the model or not
+        config_problem["model_saving"],                 # Whether to save the model or not
+        config_problem["model_checkpoint_name"],        # Name of the model checkpoint (if any)
+        config_problem["model_checkpoint_version"],     # Version of the model checkpoint (best or last)
         TOY_DATASET_REGION                              # Region of interest
         if config_problem["toy_problem"]
         else DATASET_REGION,
@@ -95,10 +100,10 @@ def training(
 
     # Loading dataloaders
     config_dataloader_additional = {
-        "infinite": [True, False, False],               # Infinite iterator configuration
-        "steps": [steps_training, None, None],          # Maximum number of steps before stopping training
-        "linspace": [False, True, True],                # Linear temporal subsampling for validation and testing
-        "linspace_samples": [                           # Number of samples for each subsampling, ~1 sample/month for dynamics diversity
+        "infinite": [True, False, False],      # Infinite iterator configuration
+        "steps": [steps_training, None, None], # Maximum number of steps before stopping training
+        "linspace": [False, True, True],       # Linear temporal subsampling for validation and testing
+        "linspace_samples": [                  # Number of samples for each subsampling, ~1 sample/month for dynamics diversity
             None,
             3 * 12,
             2 * 12,
@@ -120,14 +125,23 @@ def training(
     # Dimension of Black Sea state trajectory
     (B, C, _, H, W) = next(dataloader_training)[0].shape
 
-    # Setting up denoising network
-    poseidon_denoiser = PoseidonDenoiser(
+    # Setting up denoising network from scratch or loading from checkpoint
+    poseidon_backbone = (
         PoseidonBackbone(
             dimensions=(B, C, blanket_size, H, W),
             config_unet=config_unet,
             config_siren=config_siren,
             config_region=black_sea_region,
-        ).to(DEVICE),
+        )
+        if model_checkpoint_name is None
+        else load_backbone(
+            name_model=model_checkpoint_name,
+            best=True if model_checkpoint_version == "best" else False,
+        )
+    )
+
+    poseidon_denoiser = PoseidonDenoiser(
+        backbone=poseidon_backbone.to(DEVICE),
     )
 
     wandb.log({
@@ -135,7 +149,6 @@ def training(
             p.numel() for p in poseidon_denoiser.parameters() if p.requires_grad
         ),
     })
-
 
     # Setting up saving tool
     poseidon_save = PoseidonSave(
@@ -145,7 +158,7 @@ def training(
         config_unet=config_unet,
         config_siren=config_siren,
         config_problem=config_problem,
-        saving=save_model,
+        saving=model_saving,
     )
 
     # Launching parallel training
@@ -250,6 +263,7 @@ def training(
         #
         if ((step + 1) % steps_validation == 0 and step != 0) or (step == steps_training - 2):
             with torch.no_grad():
+
                 # Average validation loss
                 VLD_loss_avg = 0.0
 
