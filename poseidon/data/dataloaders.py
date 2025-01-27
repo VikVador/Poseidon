@@ -12,7 +12,12 @@ from poseidon.data.datasets import (
 
 
 def infinite_dataloader(dataloader: DataLoader, steps: int) -> Any:
-    r"""Transforms a PyTorch dataloader into an 'infinite' dataloader."""
+    r"""Transforms a basic PyTorch dataloader into an 'infinite' dataloader.
+
+    Arguments:
+        dataloader: A PyTorch :class:`dataloader`.
+        steps: Maximum number of steps to iterate before infinite loop stops.
+    """
     for _ in range(steps):
         for batch in dataloader:
             yield batch
@@ -98,10 +103,18 @@ def _get_dataloaders_from_datasets(
         get_datasets: A function that returns datasets.
     """
 
-    if infinite:
-        assert (
-            steps is not None
-        ), "ERROR - Maximum number of steps needed to create an 'infinite' dataloaders."
+    # Securities
+    for inf, stp in zip(infinite, steps):
+        if inf:
+            assert (
+                stp is not None
+            ), "ERROR - Maximum number of steps needed to create an 'infinite' dataloaders."
+
+    for lin, lin_s in zip(linspace, linspace_samples):
+        if lin:
+            assert (
+                lin_s is not None
+            ), "ERROR - Number of samples needed to create a 'linspace' dataloaders"
 
     datasets = get_datasets(
         trajectory_size=trajectory_size,
