@@ -71,7 +71,7 @@ class PoseidonDataset(Dataset):
         if self.linspace:
             self.linspace_samples_index = torch.linspace(
                 0,
-                self.dataset.time.size - 1 - self.trajectory_size,
+                self.dataset.time.size - self.trajectory_size,
                 linspace_samples,
                 dtype=torch.int64,
             )

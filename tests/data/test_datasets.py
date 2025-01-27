@@ -117,7 +117,7 @@ def test_PoseidonDataset(fake_black_sea_dataset, trajectory_size, variables, reg
 
 @pytest.mark.parametrize("linspace", [True, False])
 def test_PoseidonDataset_linspace(fake_black_sea_dataset, linspace):
-    r"""Testing PoseidonDataset class linspace."""
+    r"""Testing PoseidonDataset class linspace attribute."""
 
     ds = PoseidonDataset(
         path=fake_black_sea_dataset,
