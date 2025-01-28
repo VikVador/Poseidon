@@ -71,7 +71,12 @@ def fake_black_sea_dataset(tmp_path) -> Path:
 def test_get_dataloaders(fake_black_sea_dataset, trajectory_size, variables, batch_size, shuffle):
     r"""Testing generation of dataloaders."""
 
-    def get_fake_datasets(trajectory_size: int, variables: Optional[Sequence[str]] = None):
+    def get_fake_datasets(
+        trajectory_size: int,
+        variables: Optional[Sequence[str]] = None,
+        linspace: Optional[Sequence[bool]] = [False, False, False],
+        linspace_samples: Optional[Sequence[int]] = [None, None, None],
+    ):
         """Helper callabale to generate fake datasets."""
         return [
             PoseidonDataset(
@@ -80,10 +85,14 @@ def test_get_dataloaders(fake_black_sea_dataset, trajectory_size, variables, bat
                 date_end=de,
                 trajectory_size=trajectory_size,
                 variables=variables,
+                linspace=l,
+                linspace_samples=s,
             )
-            for (ds, de) in zip(
+            for ds, de, l, s in zip(
                 ["1995-01-01", "1995-02-01", "1995-03-01"],
                 ["1995-01-31", "1995-02-28", "1995-03-31"],
+                linspace,
+                linspace_samples,
             )
         ]
 

@@ -13,8 +13,8 @@ from poseidon.data.const import (
     DATASET_DATES_TEST,
     DATASET_DATES_TRAINING,
     DATASET_VARIABLES,
-    DATASET_VARIABLES_CLIPPING,
     DATASET_VARIABLES_SURFACE,
+    VARIABLES_CLIPPING,
 )
 from poseidon.data.preprocessing import compute_preprocessing
 
@@ -82,7 +82,7 @@ if __name__ == "__main__":
         args.date_end,
         "online" if args.use_wandb else "disabled",
         args.variables,
-        DATASET_VARIABLES_CLIPPING,
+        VARIABLES_CLIPPING,
         DATASET_VARIABLES_SURFACE,
     )
 

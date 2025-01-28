@@ -10,6 +10,11 @@ from pathlib import Path
 # isort: split
 from poseidon.data.datasets import PoseidonDataset
 
+LINSPACE_SAMPLES, TRAJECTORY_SIZE = (
+    np.random.randint(1, 10),
+    np.random.randint(1, 3),
+)
+
 FAKE_REGION = {
     "latitude": slice(0, 2),
     "longitude": slice(0, 3),
@@ -108,3 +113,26 @@ def test_PoseidonDataset(fake_black_sea_dataset, trajectory_size, variables, reg
     assert TIME_T == TIME_T_E,         f"ERROR - Wrong number of time steps ({TIME_T_E} != {TIME_T})"
     assert TIME_DATES == TIME_DATES_E, f"ERROR - Wrong number of elements in date({TIME_DATES_E} != {TIME_DATES})"
     assert SAMPLES == SAMPLES_E,       f"ERROR - Wrong number of samples in dataset ({SAMPLES_E} != {SAMPLES})"
+
+
+@pytest.mark.parametrize("linspace", [True, False])
+def test_PoseidonDataset_linspace(fake_black_sea_dataset, linspace):
+    r"""Testing PoseidonDataset class linspace attribute."""
+
+    ds = PoseidonDataset(
+        path=fake_black_sea_dataset,
+        date_start="1995-01-01",
+        date_end="1995-01-10",
+        trajectory_size=TRAJECTORY_SIZE,
+        variables=["ssh", "votemper"],
+        region=FAKE_REGION,
+        linspace=linspace,
+        linspace_samples=LINSPACE_SAMPLES,
+    )
+
+    # Dataset
+    SAMPLES   = len(ds)
+    SAMPLES_E = LINSPACE_SAMPLES if linspace else ds.dataset.time.size - TRAJECTORY_SIZE + 1
+
+    # Assertion
+    assert SAMPLES == SAMPLES_E, f"ERROR - Wrong number of samples in dataset ({SAMPLES_E} != {SAMPLES})"

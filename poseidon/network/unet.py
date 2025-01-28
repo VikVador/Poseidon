@@ -1,8 +1,5 @@
 r"""UNet Architecture for 3-dimensional convolutions.
 
-This UNet performs 3D convolutions via a combination of 2D spatial
-and 1D temporal convolutions, optimizing efficiency for diffusion tasks.
-
 References:
     Inspired by the implementation in:
     https://github.com/probabilists/azula
@@ -17,16 +14,13 @@ from typing import Dict, Optional, Sequence
 # isort: split
 from poseidon.network.attention import SelfAttentionNd
 from poseidon.network.convolution import ConvNd, Convolution2DBlock
+from poseidon.network.modulation import Modulator
 from poseidon.network.normalization import LayerNorm
-from poseidon.network.residual import (
-    SpatialModulatedResidualBlock,
-    TemporalModulatedResidualBlock,
-)
 from poseidon.network.upsample import UpsampleBlock
 
 
 class UNetBlock(nn.Module):
-    r"""A UNet block combining spatial and temporal residual convolutions.
+    r"""Creates a UNet residual block.
 
     Arguments:
         channels: Number of channels (C) in the input tensor.
@@ -40,50 +34,57 @@ class UNetBlock(nn.Module):
         self,
         channels: int,
         mod_features: int,
-        dropout: Optional[float] = None,
         attention_heads: Optional[int] = None,
+        dropout: Optional[float] = None,
         **kwargs,
     ):
         super().__init__()
 
-        self.block_spatial = SpatialModulatedResidualBlock(
+        self.modulator = Modulator(
             channels=channels,
             mod_features=mod_features,
-            dropout=dropout,
-            **kwargs,
+            spatial=3,
         )
 
-        self.block_temporal = TemporalModulatedResidualBlock(
-            channels=channels,
-            mod_features=mod_features,
-            dropout=dropout,
-            **kwargs,
+        self.block = nn.Sequential(
+            LayerNorm(dim=1),
+            ConvNd(
+                channels,
+                channels,
+                spatial=3,
+                **kwargs,
+            ),
+            nn.SiLU(),
+            nn.Identity() if dropout is None else nn.Dropout(dropout),
+            ConvNd(
+                channels,
+                channels,
+                spatial=3,
+                **kwargs,
+            ),
         )
 
-        self.block_attention = (
-            nn.Sequential(
-                LayerNorm(dim=1),
-                SelfAttentionNd(channels, heads=attention_heads),
-            )
-            if attention_heads is not None
-            else None
-        )
+        if attention_heads is not None:
+            self.block.append(LayerNorm(dim=1))
+            self.block.append(SelfAttentionNd(channels, heads=attention_heads))
 
     def forward(self, x: Tensor, mod: Tensor) -> Tensor:
-        """
+        r"""
         Arguments:
-            x: Input tensor with shape (B, C, T, H, W).
-            mod: Modulation vector with shape (B, D).
+            x: Input tensor (B, C, T, H, W).
+            mod: Modulation vector (B, D).
 
         Returns:
-            Tensor: Convoluted tensor (B, C, T, H, W).
+            Tensor: Output tensor (B, C, T, H, W).
         """
-        x = self.block_spatial(x, mod)
-        x = self.block_temporal(x, mod)
-        if self.block_attention is not None:
-            x = self.block_attention(x)
+        mod_factor, mod_bias, mod_scaling = self.modulator(mod)
 
-        return x
+        y = (mod_factor + 1) * x + mod_bias
+        y = self.block(y)
+        y = x + mod_scaling * y
+        y = y / torch.sqrt(1 + mod_scaling * mod_scaling)
+
+        return y
 
 
 class UNet(nn.Module):
@@ -148,18 +149,17 @@ class UNet(nn.Module):
                     UNetBlock(
                         hid_channels[i],
                         mod_features,
-                        dropout=dropout,
                         attention_heads=attention_heads.get(str(i), None),
+                        dropout=dropout,
                         **kwargs,
                     )
                 )
-
                 up.append(
                     UNetBlock(
                         hid_channels[i],
                         mod_features,
-                        dropout=dropout,
                         attention_heads=attention_heads.get(str(i), None),
+                        dropout=dropout,
                         **kwargs,
                     )
                 )
@@ -182,18 +182,17 @@ class UNet(nn.Module):
                 up.append(
                     nn.Sequential(
                         LayerNorm(dim=1),
-                        UpsampleBlock(scale_factor=float(stride)),
+                        UpsampleBlock(scale_factor=stride),
                     )
                 )
-
             # First and last projection blocks
             else:
                 do.insert(
-                    index=0,
-                    module=ConvNd(
+                    0,
+                    ConvNd(
                         in_channels,
                         hid_channels[i],
-                        3,
+                        spatial=3,
                         **kwargs,
                     ),
                 )
@@ -201,29 +200,26 @@ class UNet(nn.Module):
                     ConvNd(
                         hid_channels[i],
                         out_channels,
-                        3,
+                        spatial=3,
                         kernel_size=1,  # Removes aliasing artifacts
-                    ),
+                    )
                 )
 
             # Projection for concatening tensors (beginning of each ascent stage)
             if i + 1 < len(hid_blocks):
                 up.insert(
-                    index=0,
-                    module=ConvNd(
+                    0,
+                    ConvNd(
                         hid_channels[i] + hid_channels[i + 1],
                         hid_channels[i],
-                        3,
+                        spatial=3,
                         **kwargs,
                     ),
                 )
 
             # Updating the descent and ascent stages
             self.descent.append(do)
-            self.ascent.insert(
-                index=0,
-                module=up,
-            )
+            self.ascent.insert(0, up)
 
     def forward(self, x: Tensor, mod: Tensor) -> Tensor:
         r"""
@@ -244,6 +240,7 @@ class UNet(nn.Module):
                     x = block(x, mod)
                 else:
                     x = block(x)
+
             memory.append(x)
 
         # Ascent
@@ -253,6 +250,7 @@ class UNet(nn.Module):
                 for i in range(2, x.ndim):
                     if x.shape[i] > y.shape[i]:
                         x = torch.narrow(x, i, 0, y.shape[i])
+
                 x = torch.cat((x, y), dim=1)
 
             for block in blocks:

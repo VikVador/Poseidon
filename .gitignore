@@ -4,6 +4,11 @@
 logs/*.err
 logs/*.log
 
+# Weight and biases
+poseidon/wandb/
+poseidon/.dawgz/
+scripts/configs/*.yml
+
 # Macbook
 scripts/.dawgz/
 scripts/wandb
@@ -20,10 +25,6 @@ __pycache__/
 
 # Images
 *.gif
-
-# Weight and biases
-poseidon/wandb/
-poseidon/.dawgz/
 
 # Distribution / packaging
 .Python
@@ -178,3 +179,4 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 logs/jupiter_notebook.err
+scripts/configs/template.yml

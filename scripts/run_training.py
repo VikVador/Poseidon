@@ -45,6 +45,7 @@ if __name__ == "__main__":
     if args.backend == "async":
         training(
             **configs[0].get("Training Pipeline"),
+            config_cluster=config_cluster,
         )
 
     else:
@@ -52,6 +53,7 @@ if __name__ == "__main__":
         def launch_training_pipeline(i: int):
             training(
                 **configs[i].get("Training Pipeline"),
+                config_cluster=config_cluster,
             )
 
         schedule(

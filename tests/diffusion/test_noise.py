@@ -7,15 +7,21 @@ import torch
 # isort: split
 from poseidon.diffusion.noise import PoseidonNoiseSchedule
 
+# Generating random noise values
+MU, SIGMA = torch.randn(1).item(), torch.randn(1).item()
+
 
 def test_default_initialization():
     """Testing the default initialization of the noise schedule."""
-    scheduler = PoseidonNoiseSchedule()
+    scheduler = PoseidonNoiseSchedule(
+        mu=MU,
+        sigma=SIGMA,
+    )
     assert torch.allclose(
-        scheduler.mu, torch.tensor(-1.2)
+        scheduler.mu, torch.tensor(MU)
     ), f"ERROR - Default mu value is incorrect: {scheduler.mu.item()}"
     assert torch.allclose(
-        scheduler.sigma, torch.tensor(1.2)
+        scheduler.sigma, torch.tensor(SIGMA)
     ), f"ERROR - Default sigma value is incorrect: {scheduler.sigma.item()}"
 
 
