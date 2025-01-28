@@ -39,7 +39,7 @@ class PoseidonNoiseSchedule(nn.Module):
         return torch.exp(
             torch.normal(
                 self.mu,
-                self.sigma**2,
+                self.sigma,
                 size=(batch_size, 1),
             )
         ).to(dtype=torch.float32)
