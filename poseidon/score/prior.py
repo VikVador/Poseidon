@@ -41,7 +41,9 @@ class PoseidonScorePrior(nn.Module):
         )
 
         # Parallelizing is needed only for long trajectories prediction
-        self.denoiser = self._parallelize(denoiser).to(DEVICE) if parallelize else denoiser
+        self.denoiser = (
+            self._parallelize(denoiser).to(DEVICE) if parallelize else denoiser.to(DEVICE)
+        )
 
     def forward(self, x: Tensor, sigma: Tensor) -> Tensor:
         r"""Compute the score of prior distribution of a trajectory.
