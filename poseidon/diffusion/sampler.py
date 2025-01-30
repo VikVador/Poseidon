@@ -1,159 +1,134 @@
-r"""Diffusion - Custom sampler to perform diffusion."""
+r"""Diffusion sampler."""
 
 import torch
 import torch.nn as nn
 
-from einops import rearrange
-from tqdm import trange
-from typing import Tuple
+from abc import abstractmethod
+from torch import Tensor
+from tqdm import tqdm
 
 # isort: split
-from datetime import datetime, timedelta
 from poseidon.diffusion.denoiser import PoseidonDenoiser
-from poseidon.diffusion.tools import (
-    compute_blanket_indices,
-    extract_blankets_in_trajectories,
-    time_tokenizer,
-)
+from poseidon.score.prior import PoseidonScorePrior
+
+# Constants
+DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 
-class PoseidonSampler(nn.Module):
-    r"""A sampler for a diffusion model, responsible for generating trajectories from a denoiser model.
+class PoseidonEDMSampler(nn.Module):
+    r"""Template to create a diffusion sampler
 
-    Arguments:
-        denoiser: The denoiser model to be used for the diffusion process.
-        steps: Number of diffusion steps to perform.
-        sigma_min: Minimum noise value for diffusion.
-        sigma_max: Maximum noise value for diffusion.
-        rho: Smoothing factor that controls the curvature of the noise schedule.
+    References:
+        | Elucidating the Design Space of Diffusion-Based Generative Models (Karras et al., 2022).
+        | https://arxiv.org/abs/2206.00364
     """
 
     def __init__(
         self,
         denoiser: PoseidonDenoiser,
-        steps: int = 256,
+        parallelize: bool = False,
+        rho: float = 2,
         sigma_min: float = 0.002,
         sigma_max: float = 80,
-        rho: int = 6,
     ):
         super().__init__()
 
-        self.denoiser = denoiser.cuda()
-        self.k = denoiser.backbone.k
-        self.blanket_size = denoiser.backbone.blanket_size
-        self.channels, self.latitude, self.longitude = (
-            denoiser.backbone.channels,
-            denoiser.backbone.latitude,
-            denoiser.backbone.longitude,
+        self.score_prior = PoseidonScorePrior(
+            denoiser,
+            parallelize=parallelize,
         )
 
-        # Precomputing timesteps
-        sigma_min, sigma_max, rho = 0.002, 80, 6
-        steps_tensor = torch.arange(steps + 1)
-        sigma_max_rho_ = sigma_max ** (1 / rho)
-        sigma_min_rho_ = sigma_min ** (1 / rho)
-        self.timesteps = (
-            sigma_max_rho_ + (steps_tensor / (steps)) * (sigma_min_rho_ - sigma_max_rho_)
-        ) ** rho
-
-    def score_prior(
-        self,
-        x_i: torch.Tensor,
-        noise_i: torch.Tensor,
-        time: torch.Tensor,
-        trajectory_size: int,
-        idx=Tuple[int, int, int],
-    ) -> torch.Tensor:
-        """Computes the score for the prior.
-
-        Arguments:
-            x_i: The current state
-            noise_i: The noise
-            time: The time token
-            trajectory_size: The number of days in the trajectory
-            idx: The indices of the blankets
-        """
-
-        # Preprocessing as batch of blankets
-        x_i = x_i.repeat(trajectory_size, 1, 1, 1, 1)
-        x_i = extract_blankets_in_trajectories(x=x_i, blanket_idx=(idx[0], idx[1]))
-        x_i = rearrange(
-            x_i,
-            "N ... -> N (...)",
+        # Extracting dimensions of the region
+        self.C, self.H, self.W = (
+            denoiser.backbone.C,
+            denoiser.backbone.H,
+            denoiser.backbone.W,
         )
 
-        # Scores (for each blanket)
-        score_blankets = (
-            self.denoiser(x_i.cuda(), noise_i.cuda(), time.cuda()).cpu() - x_i
-        ) / noise_i**2
-
-        score_blankets = rearrange(
-            score_blankets,
-            "N (C K H W) -> N C K H W",
-            K=self.blanket_size,
-            C=self.channels,
-            H=self.latitude,
-            W=self.longitude,
+        # Properties for generating timesteps
+        self.steps, self.rho, self.sigma_min_rho_, self.sigma_max_rho_ = (
+            1,
+            rho,
+            sigma_min ** (1 / rho),
+            sigma_max ** (1 / rho),
         )
-        s = torch.stack([score_blankets[i, :, idx] for i, idx in enumerate(idx[2])])
-        s = rearrange(s, "K C H W -> C K H W")
 
-        # Score (individual states)
-        return s
-
-    def _initialize_state(self, trajectory_size: int) -> torch.Tensor:
-        """Initializes the state for the diffusion process."""
+    def get_timestep(self, i: int) -> Tensor:
+        r"""Computes timestep at a given step of the diffusion process."""
         return (
-            torch.randn(self.channels, trajectory_size, self.latitude, self.longitude)
-            * self.timesteps[0]
+            self.sigma_max_rho_
+            + (i / (self.steps - 1)) * (self.sigma_min_rho_ - self.sigma_max_rho_)
+        ) ** self.rho
+
+    def get_noise(self, t: int) -> Tensor:
+        r"""Computes noise at a given timestep of the diffusion process."""
+        return torch.tensor([t]).to(DEVICE)
+
+    def get_noise_derivative(self, t: int) -> Tensor:
+        r"""Computes noise derivative at a given timestep of the diffusion process."""
+        return torch.tensor([1]).to(DEVICE)
+
+    def evaluate(self, x: Tensor, t: int) -> Tensor:
+        r"""Evaluates the function f(x_i, t_i)."""
+        return (
+            self.get_noise_derivative(t)
+            * self.get_noise(t)
+            * self.score_prior.forward(x, self.get_noise(t).unsqueeze(0))
         )
 
-    def _initialize_time(self, trajectory_size: int, date: str) -> torch.Tensor:
-        """Converts a date string into a tokenized time tensor."""
-        return time_tokenizer(
-            torch.tensor(
-                [
-                    [d.month + 1, d.day, d.hour]
-                    for t in range(trajectory_size)
-                    for d in [datetime.strptime(f"{date}-12", "%Y-%m-%d-%H") + timedelta(days=t)]
-                ],
-                dtype=torch.int,
-            )
-        )
+    @abstractmethod
+    def update(self, x_i: Tensor, t_i: int, h_i: float) -> Tensor:
+        r"""Perfoms one-step of diffusion."""
+        raise NotImplementedError
 
-    def forward(self, trajectory_size: int, date: str) -> torch.Tensor:
-        r"""Generates a forecast using the diffusion process.
-
-        Arguments:
-            trajectory_size (int): Number of steps (days) in the forecasted trajectory.
-            date (str): The starting date of the forecast, in "YEAR-MM-DD" format.
-
-        Returns:
-            torch.Tensor: A generated forecast trajectory with dimensions (trajectory_size, channels, latitude, longitude).
-        """
-        # fmt: off
-        # Pre-computing blanket indices
-        idx_start, idx_end, idx_state = compute_blanket_indices(indices=torch.arange(trajectory_size), k=self.k, trajectory_size=trajectory_size)
-
+    def forward(self, trajectory_size: int, forecast_size: int = 1, steps: int = 64) -> Tensor:
+        r"""Generates forecasts of a trajectory."""
         with torch.no_grad():
+            progression = tqdm(
+                total=steps,
+                desc="| POSEIDON | Diffusion",
+            )
 
-            # Initiliazation of the state and time
-            x_i, time = self._initialize_state(trajectory_size), self._initialize_time(trajectory_size, date)
+            forecasts, self.steps = [], steps
 
-            # --- Diffusion ---
-            for t in trange(len(self.timesteps) - 1):
+            for _ in range(forecast_size):
+                x_i = self.get_noise(t=self.get_timestep(0)) * torch.randn(
+                    self.C, trajectory_size, self.H, self.W
+                ).to(DEVICE)
 
-                # Constants
-                t_i, delta_t, noise_i = (
-                        self.timesteps[t],
-                        self.timesteps[t + 1] - self.timesteps[t],
-                        torch.ones((trajectory_size, 1)) * self.timesteps[t]
+                for s in range(0, steps - 1):
+                    t_i, h_i = (
+                        self.get_timestep(s),
+                        self.get_timestep(s + 1) - self.get_timestep(s),
                     )
 
-                # Computing score (prior and observation)
-                score = self.score_prior(x_i, noise_i, time, trajectory_size, [idx_start, idx_end, idx_state])
+                    x_i = self.update(
+                        x_i=x_i,
+                        t_i=t_i,
+                        h_i=h_i,
+                    )
 
-                # Integration step (Euler 1st order)
-                x_i = x_i - t_i * delta_t * score
+                    if s % forecast_size == 0:
+                        progression.update(1)
 
-        return x_i
+                forecasts.append(x_i)
+
+            return torch.stack(forecasts, dim=0)
+
+
+class PoseidonEulerSampler(PoseidonEDMSampler):
+    r"""Euler 1st Order."""
+
+    def update(self, x_i: Tensor, t_i: int, h_i: float) -> Tensor:
+        r"""Perfoms one-step of diffusion."""
+        return x_i - h_i * self.evaluate(x_i, t_i)
+
+
+class PoseidonHeunSampler(PoseidonEDMSampler):
+    r"""Heun 2nd Order."""
+
+    def update(self, x_i: Tensor, t_i: int, h_i: float) -> Tensor:
+        r"""Perfoms one-step of diffusion."""
+        evaluation = self.evaluate(x_i, t_i)
+        x = x_i - h_i * evaluation
+        return x_i - (h_i / 2) * (evaluation + self.evaluate(x=x, t=(t_i + h_i)))
