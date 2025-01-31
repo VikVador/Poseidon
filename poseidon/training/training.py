@@ -3,6 +3,7 @@ r"""Training."""
 import dask
 import gc
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import wandb
 
@@ -262,7 +263,6 @@ def training(
         # ========================
         if ((step + 1) % steps_validation == 0 and step != 0) or (step == steps_training - 2):
             with torch.no_grad():
-
                 # === Average Validation Loss ===
                 #
                 loss_avg_val = 0.0
@@ -301,29 +301,37 @@ def training(
                 # === Visualisation ===
                 #
                 if config_wandb["mode"] == "online":
-
                     sampler = PoseidonEulerSampler(
                         denoiser=poseidon_denoiser.module
                         if torch.cuda.device_count() > 1
-                        else poseidon_denoiser
-                        )
+                        else poseidon_denoiser,
+                        parallelize=False,
+                    )
 
                     # Forecasts dimensions
-                    fore_size, traj_size, steps = 3, 7, 128
+                    fore_size, traj_size, steps = 5, 12, 64
 
-                    # Generating a trajetory
                     euler_trajectory = sampler.forward(
                         trajectory_size=traj_size,
                         forecast_size=fore_size,
-                        steps=steps)
+                        steps=steps,
+                    )
 
-                    # Visualizing the trajectory
                     fig, axs = plt.subplots(fore_size, traj_size, figsize=(15, 5))
                     for i in range(fore_size):
                         for j in range(traj_size):
-                            axs[i, j].imshow(euler_trajectory[i, 0, j].detach().cpu().numpy(), cmap="viridis")
+                            q_min, q_max = np.quantile(
+                                euler_trajectory[i, 0, j].detach().cpu().numpy(), [0.10, 0.90]
+                            )
+                            axs[i, j].imshow(
+                                euler_trajectory[i, 0, j].detach().cpu().numpy(),
+                                cmap="RdYlBu_r",
+                                vmin=q_min,
+                                vmax=q_max,
+                            )
                             axs[i, j].axis("off")
                     plt.tight_layout()
+
                     wandb.log({
                         "Validation/Trajectory": wandb.Image(fig),
                     })
