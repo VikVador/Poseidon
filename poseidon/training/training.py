@@ -2,6 +2,7 @@ r"""Training."""
 
 import dask
 import gc
+import matplotlib.pyplot as plt
 import torch
 import wandb
 
@@ -16,6 +17,7 @@ from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.loss import PoseidonLoss
 from poseidon.diffusion.noise import PoseidonNoiseSchedule
+from poseidon.diffusion.sampler import PoseidonEulerSampler
 from poseidon.training.load import load_backbone
 from poseidon.training.optimizer import get_optimizer
 from poseidon.training.save import PoseidonSave
@@ -54,9 +56,6 @@ def training(
         config_cluster: Configuration of the Cluster.
     """
 
-    dask.config.set(scheduler="synchronous")
-
-    # Initializing connection to Weights & Biases
     wandb.init(
         **config_wandb,
         config={
@@ -71,7 +70,9 @@ def training(
         },
     )
 
-    # Extracting parameters
+    # Avoid deadlocks between training and validation
+    dask.config.set(scheduler="synchronous")
+
     (
         blanket_neighbors,
         blanket_size,
@@ -103,7 +104,7 @@ def training(
         "infinite": [True, False, False],      # Infinite iterator configuration
         "steps": [steps_training, None, None], # Maximum number of steps before stopping training
         "linspace": [False, True, True],       # Linear temporal subsampling for validation and testing
-        "linspace_samples": [                  # Number of samples for each subsampling, ~1 sample/month for dynamics diversity
+        "linspace_samples": [                  # Number of samples for each subsampling, ~1 sample/week for robustness
             None,
             3 * 12,
             2 * 12,
@@ -150,6 +151,13 @@ def training(
         ),
     })
 
+    # Placing the model on multiple GPUs
+    if torch.cuda.device_count() > 1:
+        poseidon_denoiser = torch.nn.DataParallel(
+            poseidon_denoiser,
+            device_ids=DEVICE_LIST,
+        ).to(DEVICE)
+
     # Setting up saving tool
     poseidon_save = PoseidonSave(
         path=PATH_MODEL,
@@ -161,13 +169,7 @@ def training(
         saving=model_saving,
     )
 
-    # Launching parallel training
-    if torch.cuda.device_count() > 1:
-        poseidon_denoiser = torch.nn.DataParallel(
-            poseidon_denoiser,
-            device_ids=DEVICE_LIST,
-        ).to(DEVICE)
-
+    # Setting up training tool
     optimizer = get_optimizer(
         nn_parameters=poseidon_denoiser.parameters(),
         config_optimizer=config_optimizer,
@@ -182,7 +184,6 @@ def training(
         PoseidonNoiseSchedule(),
     )
 
-    # Progression bar showing the accumulated averaged loss
     loss_aoas, progress_bar = (
         0,
         tqdm(
@@ -192,9 +193,9 @@ def training(
         ),
     )
 
-    #
-    # === TRAINING ====
-    #
+    # ========================
+    # ======= TRAINING =======
+    # ========================
     for step, (x, _) in enumerate(dataloader_training):
         #
         x = preprocessing_for_diffusion(
@@ -229,16 +230,14 @@ def training(
         # Storing the accumulated loss
         loss_aoas += loss.item()
 
-        #
-        # === LOGGING ====
-        #
+        # ========================
+        # ======== LOGGING =======
+        # ========================
         if ((step + 1) % steps_logging == 0 and step != 0) or (step == steps_training - 2):
             #
             progress_bar.set_postfix({
                 "Loss (AoAS) ": f"{(loss_aoas):.4f}",
             })
-
-            # Updating manually progress bar
             progress_bar.update(1)
 
             wandb.log({
@@ -258,49 +257,80 @@ def training(
                 else poseidon_denoiser.backbone,
             )
 
-        #
-        # === VALIDATING ====
-        #
+        # ========================
+        # ====== VALIDATING ======
+        # ========================
         if ((step + 1) % steps_validation == 0 and step != 0) or (step == steps_training - 2):
             with torch.no_grad():
 
-                # Average validation loss
-                VLD_loss_avg = 0.0
+                # === Average Validation Loss ===
+                #
+                loss_avg_val = 0.0
 
-                for VLD_x, _ in dataloader_validation:
+                for x_val, _ in dataloader_validation:
                     #
-                    VLD_x = preprocessing_for_diffusion(
-                        x=VLD_x,
+                    x_val = preprocessing_for_diffusion(
+                        x=x_val,
                         k=blanket_neighbors,
                     )
 
                     # Generating noise
-                    VLD_noise = scheduler_noise(batch_size=VLD_x.shape[0])
+                    noise_val = scheduler_noise(batch_size=x_val.shape[0])
 
                     # Noising the clean state
-                    VLD_x_noised = VLD_x + VLD_noise * torch.randn_like(VLD_x)
+                    x_noised_val = x_val + noise_val * torch.randn_like(x_val)
 
                     # Pushing everything to the device
-                    VLD_x, VLD_x_noised, VLD_noise = (
-                        VLD_x.to(DEVICE),
-                        VLD_x_noised.to(DEVICE),
-                        VLD_noise.to(DEVICE),
+                    x_val, x_noised_val, noise_val = (
+                        x_val.to(DEVICE),
+                        x_noised_val.to(DEVICE),
+                        noise_val.to(DEVICE),
                     )
 
-                    VLD_loss_avg += PoseidonLoss(
-                        x=VLD_x,
-                        x_denoised=poseidon_denoiser(VLD_x_noised, VLD_noise),
-                        sigma=VLD_noise,
+                    loss_avg_val += PoseidonLoss(
+                        x=x_val,
+                        x_denoised=poseidon_denoiser(x_noised_val, noise_val),
+                        sigma=noise_val,
                     ).item()
 
                 wandb.log({
-                    "Validation/Loss (Averaged)": VLD_loss_avg
+                    "Validation/Loss (Averaged)": loss_avg_val
                     / config_dataloader_additional["linspace_samples"][1],
                 })
 
-        #
-        # === UPDATING ====
-        #
+                # === Visualisation ===
+                #
+                if config_wandb["mode"] == "online":
+
+                    sampler = PoseidonEulerSampler(
+                        denoiser=poseidon_denoiser.module
+                        if torch.cuda.device_count() > 1
+                        else poseidon_denoiser
+                        )
+
+                    # Forecasts dimensions
+                    fore_size, traj_size, steps = 3, 7, 128
+
+                    # Generating a trajetory
+                    euler_trajectory = sampler.forward(
+                        trajectory_size=traj_size,
+                        forecast_size=fore_size,
+                        steps=steps)
+
+                    # Visualizing the trajectory
+                    fig, axs = plt.subplots(fore_size, traj_size, figsize=(15, 5))
+                    for i in range(fore_size):
+                        for j in range(traj_size):
+                            axs[i, j].imshow(euler_trajectory[i, 0, j].detach().cpu().numpy(), cmap="viridis")
+                            axs[i, j].axis("off")
+                    plt.tight_layout()
+                    wandb.log({
+                        "Validation/Trajectory": wandb.Image(fig),
+                    })
+
+        # ========================
+        # ======= UPDATING =======
+        # ========================
         if ((step + 1) % steps_gradient_accumulation == 0 and step != 0) or (
             step == steps_training - 2
         ):
