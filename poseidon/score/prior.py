@@ -18,7 +18,7 @@ DEVICE_LIST = [i for i in range(torch.cuda.device_count())]
 
 
 class PoseidonScorePrior(nn.Module):
-    r"""Computes the score of the prior distribution using a pre-trained :class:`PoseidonDenoiser`.
+    r"""Computes the score of the prior distribution using a trained :class:`PoseidonDenoiser`.
 
     Mathematics:
         ∇_x_{1:T} log p(x_{1:T} ; σ) = [ Denoiser(x_{1:T}, σ) - x_{1:T} ] / σ^2

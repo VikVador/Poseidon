@@ -1,4 +1,4 @@
-r"""Helper tools to perform loading operations"""
+r"""Helper tools to load checkpoints and models."""
 
 import torch
 import yaml
@@ -93,7 +93,7 @@ def load_optimizer(
     # Loading the checkpoint
     checkpoint = torch.load(path_tool, weights_only=True)
 
-    # Loading the  state in current optimizer
+    # Loading the  state in current optimizer (in-place)
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
 
@@ -115,5 +115,5 @@ def load_scheduler(
     # Loading the checkpoint
     checkpoint = torch.load(path_tool, weights_only=True)
 
-    # Loading the state in current scheduler
+    # Loading the state in current scheduler (in-place)
     scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
