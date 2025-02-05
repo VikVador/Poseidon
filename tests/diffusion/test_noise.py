@@ -5,41 +5,56 @@ import random
 import torch
 
 # isort: split
-from poseidon.diffusion.noise import PoseidonNoiseSchedule
+from poseidon.diffusion.noise import (
+    PoseidonNormalLogNoiseSchedule,
+    PoseidonUniformLogNoiseSchedule,
+)
 
 # Generating random noise values
-MU, SIGMA = torch.randn(1).item(), torch.randn(1).item()
+MU, SIGMA, SIGMA_MIN, SIGMA_MAX = (
+    torch.randn(1).item(),
+    torch.randn(1).item(),
+    random.uniform(1, 49),
+    random.uniform(50, 100),
+)
 
 
-def test_default_initialization():
-    """Testing the default initialization of the noise schedule."""
-    scheduler = PoseidonNoiseSchedule(
-        mu=MU,
-        sigma=SIGMA,
+def test_initialization():
+    """Testing the initialization of the noise schedules."""
+
+    scheduler_normal, scheduler_uniform = (
+        PoseidonNormalLogNoiseSchedule(
+            mu=MU,
+            sigma=SIGMA,
+        ),
+        PoseidonUniformLogNoiseSchedule(
+            sigma_min=SIGMA_MIN,
+            sigma_max=SIGMA_MAX,
+        ),
     )
+
     assert torch.allclose(
-        scheduler.mu, torch.tensor(MU)
-    ), f"ERROR - Default mu value is incorrect: {scheduler.mu.item()}"
+        scheduler_normal.mu, torch.tensor(MU)
+    ), f"ERROR (NormalLog) - Mean value is incorrect: {scheduler_normal.mu.item()}"
+
     assert torch.allclose(
-        scheduler.sigma, torch.tensor(SIGMA)
-    ), f"ERROR - Default sigma value is incorrect: {scheduler.sigma.item()}"
+        scheduler_normal.sigma, torch.tensor(SIGMA)
+    ), f"ERROR (NormalLog) - Standard deviation value is incorrect: {scheduler_normal.sigma.item()}"
+
+    assert torch.allclose(
+        torch.exp(scheduler_uniform.log_sigma_min), torch.tensor(SIGMA_MIN)
+    ), f"ERROR - (UniformLog) Sigma min is incorrect: {scheduler_uniform.log_sigma_min.item()}"
+
+    assert torch.allclose(
+        torch.exp(scheduler_uniform.log_sigma_max), torch.tensor(SIGMA_MAX)
+    ), f"ERROR - (UniformLog) Sigma max is incorrect: {scheduler_uniform.log_sigma_max.item()}"
 
 
-def test_random_initialization():
-    """Testing random initialization of mu and sigma."""
-    mu, sigma = random.uniform(-2.0, 2.0), random.uniform(0.1, 2.0)
-    scheduler = PoseidonNoiseSchedule(mu=mu, sigma=sigma)
-    assert torch.allclose(
-        scheduler.mu, torch.tensor(mu)
-    ), f"ERROR - Custom mu value is incorrect: {scheduler.mu.item()}"
-    assert torch.allclose(
-        scheduler.sigma, torch.tensor(sigma)
-    ), f"ERROR - Custom sigma value is incorrect: {scheduler.sigma.item()}"
-
-
-def test_forward_output_dtype():
+@pytest.mark.parametrize(
+    "scheduler", [PoseidonNormalLogNoiseSchedule(), PoseidonUniformLogNoiseSchedule()]
+)
+def test_forward_output_dtype(scheduler):
     """Testing that the forward method returns the correct dtype."""
-    scheduler = PoseidonNoiseSchedule()
     output = scheduler(10)
     assert (
         output.dtype == torch.float32
@@ -47,9 +62,11 @@ def test_forward_output_dtype():
 
 
 @pytest.mark.parametrize("batch_size", [1, 10, 100])
-def test_forward_variable_sizes(batch_size):
-    """Testing forward method with varying input sizes."""
-    scheduler = PoseidonNoiseSchedule()
+@pytest.mark.parametrize(
+    "scheduler", [PoseidonNormalLogNoiseSchedule(), PoseidonUniformLogNoiseSchedule()]
+)
+def test_forward_variable_sizes(scheduler, batch_size):
+    """Testing forward method with varying batch sizes."""
     output = scheduler(batch_size)
     assert output.shape == (
         batch_size,
