@@ -17,7 +17,7 @@ from poseidon.data.dataloaders import get_dataloaders, get_toy_dataloaders
 from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.loss import PoseidonLoss
-from poseidon.diffusion.noise import PoseidonNoiseSchedule
+from poseidon.diffusion.noise import PoseidonUniformLogNoiseSchedule
 from poseidon.diffusion.sampler import PoseidonEulerSampler
 from poseidon.training.load import load_backbone
 from poseidon.training.optimizer import get_optimizer
@@ -182,7 +182,7 @@ def training(
             total_steps=int(steps_training / steps_gradient_accumulation),
             config_scheduler=config_scheduler,
         ),
-        PoseidonNoiseSchedule(),
+        PoseidonUniformLogNoiseSchedule(),
     )
 
     loss_aoas, progress_bar = (
@@ -305,11 +305,13 @@ def training(
                         denoiser=poseidon_denoiser.module
                         if torch.cuda.device_count() > 1
                         else poseidon_denoiser,
-                        parallelize=False,
+                        rho=2,
+                        sigma_min=0.02,
+                        sigma_max=80,
                     )
 
                     # Forecasts dimensions
-                    fore_size, traj_size, steps = 5, 12, 64
+                    fore_size, traj_size, steps = 3, 7, 128
 
                     euler_trajectory = sampler.forward(
                         trajectory_size=traj_size,
