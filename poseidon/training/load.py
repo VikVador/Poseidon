@@ -1,9 +1,10 @@
-r"""Helper tools to perform loading operations"""
+r"""Helper tools to load checkpoints and models."""
 
 import torch
 import yaml
 
 from pathlib import Path
+from torch.optim import Optimizer, lr_scheduler
 
 # isort: split
 from poseidon.config import PATH_MESH, PATH_MODEL
@@ -71,3 +72,48 @@ def load_backbone(
 
     # By default, training mode
     return backbone_loaded.train()
+
+
+def load_optimizer(
+    name_model: str,
+    optimizer: Optimizer,
+    path: Path = PATH_MODEL,
+) -> None:
+    r"""Loads an optimizer state from a saved file.
+
+    Arguments:
+        name_model: Name of the model trained with this tool.
+        optimizer: Optimizer instance to load the state into.
+        path: Path to folder containing saved optimizer.
+    """
+
+    path_tool = path / f"{name_model}" / "tools" / "optimizer.pth"
+    assert path_tool.exists(), f"ERROR - Optimizer file not found at {path_tool}"
+
+    # Loading the checkpoint
+    checkpoint = torch.load(path_tool, weights_only=True)
+
+    # Loading the  state in current optimizer (in-place)
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+
+
+def load_scheduler(
+    name_model: str,
+    scheduler: lr_scheduler,
+    path: Path = PATH_MODEL,
+) -> None:
+    r"""Loads a scheduler state from a saved file.
+
+    Arguments:
+        name_model: Name of the model trained with this tool.
+        scheduler: Scheduler instance to load the state into.
+        path: Path to folder containing saved scheduler.
+    """
+    path_tool = path / f"{name_model}" / "tools" / "scheduler.pth"
+    assert path_tool.exists(), f"ERROR - Scheduler file not found at {path_tool}"
+
+    # Loading the checkpoint
+    checkpoint = torch.load(path_tool, weights_only=True)
+
+    # Loading the state in current scheduler (in-place)
+    scheduler.load_state_dict(checkpoint["scheduler_state_dict"])

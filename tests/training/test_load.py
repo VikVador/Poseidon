@@ -6,10 +6,13 @@ import random
 import torch
 import xarray as xr
 
+from torch.optim import Adam
+from torch.optim.lr_scheduler import StepLR
+
 # isort: split
 from poseidon.data.const import TOY_DATASET_REGION
 from poseidon.diffusion.backbone import PoseidonBackbone
-from poseidon.training.load import load_backbone
+from poseidon.training.load import load_backbone, load_optimizer, load_scheduler
 from poseidon.training.save import PoseidonSave
 
 # Generating random dimensions for testing
@@ -96,6 +99,63 @@ def fake_backbone(fake_zarr_mesh, fake_configurations):
     )
 
 
+@pytest.fixture
+def fake_optimizer(fake_backbone):
+    """Initialize an optimizer instance."""
+    optimizer = Adam(fake_backbone.parameters(), lr=0.01)
+    optimizer.param_groups[0]["lr"] = 0.02  # Simulate step
+    return optimizer
+
+
+@pytest.fixture
+def fake_scheduler(fake_optimizer):
+    """Initialize an scheduler instance."""
+    scheduler = StepLR(fake_optimizer, step_size=1, gamma=0.9)
+    scheduler.step()
+    return scheduler
+
+
+@pytest.fixture
+def save_optimizer_state(fake_optimizer, tmp_path):
+    """Save the state of an optimizer."""
+    path = tmp_path / "test_model" / "tools"
+    path.mkdir(parents=True, exist_ok=True)
+    torch.save({"optimizer_state_dict": fake_optimizer.state_dict()}, path / "optimizer.pth")
+    return tmp_path
+
+
+@pytest.fixture
+def save_scheduler_state(fake_scheduler, tmp_path):
+    """Save the state of an scheduler."""
+    path = tmp_path / "test_model" / "tools"
+    path.mkdir(parents=True, exist_ok=True)
+    torch.save({"scheduler_state_dict": fake_scheduler.state_dict()}, path / "scheduler.pth")
+    return tmp_path
+
+
+def test_load_optimizer(fake_backbone, save_optimizer_state):
+    """Testing if optimizer is properly loaded from checkpoint."""
+
+    new_optimizer = Adam(fake_backbone.parameters(), lr=0.01)
+    initial_state = new_optimizer.state_dict()
+    load_optimizer("test_model", new_optimizer, path=save_optimizer_state)
+    assert (
+        new_optimizer.state_dict() != initial_state
+    ), "ERROR - Optimizer state was not updated after loading."
+
+
+def test_load_scheduler(fake_backbone, save_scheduler_state):
+    """Testing if scheduler is properly loaded from checkpoint."""
+
+    new_optimizer = Adam(fake_backbone.parameters(), lr=0.01)
+    new_scheduler = StepLR(new_optimizer, step_size=1, gamma=0.9)
+    initial_state = new_scheduler.state_dict()
+    load_scheduler("test_model", new_scheduler, path=save_scheduler_state)
+    assert (
+        new_scheduler.state_dict() != initial_state
+    ), "ERROR - Scheduler state was not updated after loading."
+
+
 def test_load_backbone(temp_dir, fake_backbone, fake_zarr_mesh, fake_configurations):
     """Testing if a PoseidonBackbone is save and loaded correctly."""
 
@@ -126,7 +186,6 @@ def test_load_backbone(temp_dir, fake_backbone, fake_zarr_mesh, fake_configurati
         backup=False,
     )
 
-    # Assertions
     assert isinstance(
         loaded_model, PoseidonBackbone
     ), "ERROR - Loaded model is not a PoseidonBackbone."

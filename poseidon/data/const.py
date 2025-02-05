@@ -23,17 +23,20 @@ TOY_DATASET_DATES_VALIDATION = ("2020-01-01", "2020-12-31")
 TOY_DATASET_DATES_TEST       = ("2022-01-01", "2022-12-31")
 
 TOY_DATASET_REGION = {
-    "latitude":  slice(75, 107),
-    "longitude": slice(75, 107),
-    "level":     slice(0, 4),
+    "latitude":  slice(104, 232),
+    "longitude": slice(25, 281),
+    "level":     slice(0, 1),
 }
 
 TOY_DATASET_VARIABLES_ATMOSPHERE = [
     "DOX",
+    "CHL",
+    "vosaline",
+    "votemper",
 ]
 
 TOY_DATASET_VARIABLES_SURFACE = [
-    # None
+    "ssh",
 ]
 
 TOY_DATASET_VARIABLES = \
