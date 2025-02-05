@@ -25,24 +25,18 @@ class PoseidonScorePrior(nn.Module):
 
     Arguments:
         denoiser: A trained :class:`PoseidonDenoiser` model.
-        parallelize: Wether or not parallelize the forward pass of the denoiser.
     """
 
     def __init__(
         self,
         denoiser: PoseidonDenoiser,
-        parallelize: bool = False,
     ):
         super().__init__()
 
-        self.blanket_neighbors, self.blanket_size = (
+        self.denoiser, self.blanket_neighbors, self.blanket_size = (
+            denoiser.to(DEVICE),
             denoiser.backbone.K // 2,
             denoiser.backbone.K,
-        )
-
-        # Parallelizing is needed only for long trajectories prediction
-        self.denoiser = (
-            self._parallelize(denoiser).to(DEVICE) if parallelize else denoiser.to(DEVICE)
         )
 
     def forward(self, x: Tensor, sigma: Tensor) -> Tensor:
@@ -83,14 +77,6 @@ class PoseidonScorePrior(nn.Module):
 
         # Determine the score of the trajectory
         return self._extract_score_trajectory(x)
-
-    def _parallelize(self, denoiser: PoseidonDenoiser):
-        r"""Parallelize the forward pass of the denoiser model."""
-        return (
-            nn.DataParallel(denoiser, device_ids=DEVICE_LIST)
-            if torch.cuda.device_count() > 1
-            else denoiser
-        )
 
     def _create_blankets(self, x: Tensor) -> Tensor:
         r"""Creates blankets of size (K) for each state of a trajectory.
