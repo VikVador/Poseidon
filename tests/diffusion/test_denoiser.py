@@ -19,7 +19,7 @@ MESH_LEVELS, (MESH_LAT, MESH_LON) = (
 )
 
 (INPUT_B, INPUT_C, INPUT_K), INPUT_H, INPUT_W = (
-    (random.randint(3, 5) for _ in range(3)),
+    (random.choice([3, 5]) for _ in range(3)),
     10,
     10,
 )
@@ -128,6 +128,11 @@ def test_denoiser_initialization(backbone):
 
 def testing_denoiser_forward_consistency(denoiser, fake_input, fake_noise):
     """Testing the forward pass consistency."""
+    print("====")
+    print(fake_input.shape)
+    print(fake_noise.shape)
+    print(denoiser.backbone.K)
+    print("====")
     output1 = denoiser.forward(fake_input, fake_noise)
     output2 = denoiser.forward(fake_input, fake_noise)
     assert output1.shape == output2.shape, "ERROR - Inconsistent output shapes."
