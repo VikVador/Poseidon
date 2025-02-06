@@ -19,7 +19,7 @@ MESH_LEVELS, (MESH_LAT, MESH_LON) = (
 )
 
 (INPUT_B, INPUT_C, INPUT_K), INPUT_H, INPUT_W = (
-    (random.randint(3, 5) for _ in range(3)),
+    (random.choice([3, 5]) for _ in range(3)),
     10,
     10,
 )
