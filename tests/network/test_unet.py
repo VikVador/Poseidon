@@ -37,10 +37,11 @@ def test_unet(
         in_channels=in_channels,
         out_channels=out_channels,
         mod_features=mod_features,
+        kernel_size=3,
+        blanket_size=time,
+        stride=2,
         hid_channels=hid_channels,
         hid_blocks=hid_blocks,
-        kernel_size=3,
-        stride=2,
         dropout=dropout,
     )
 

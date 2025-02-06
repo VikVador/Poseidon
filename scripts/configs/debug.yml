@@ -28,7 +28,7 @@ Training Pipeline:
     "toy_problem":              [True]
 
   config_dataloader:
-    "batch_size":      [8]
+    "batch_size":      [1]
     "num_workers":     [0]
     "prefetch_factor": [null]
     "shuffle":         [[True, False, False]]
@@ -37,9 +37,9 @@ Training Pipeline:
   config_training:
     "blanket_neighbors":           [1]
     "steps_training":              [128000]
-    "steps_gradient_accumulation": [4]
-    "steps_logging":               [4]
-    "steps_validation":            [8]
+    "steps_gradient_accumulation": [2]
+    "steps_logging":               [2]
+    "steps_validation":            [12]
 
   config_optimizer:
     "betas":         [[0.9, 0.999, 0.999]]
@@ -56,7 +56,7 @@ Training Pipeline:
     "hid_channels":    [[32, 64, 128]]
     "hid_blocks":      [[1, 1, 1]]
     "dropout":         [0.1]
-    "attention_heads": [{"0": 8}, {"1": 8}, {"2": 8}]
+    "attention_heads": [{"-1": 8}]
 
   config_siren:
       "features": [16]

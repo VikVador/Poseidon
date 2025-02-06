@@ -63,6 +63,7 @@ class PoseidonBackbone(nn.Module):
         self.unet = UNet(
             in_channels,
             in_channels,
+            blanket_size=self.K,
             **config_unet,
         )
 
