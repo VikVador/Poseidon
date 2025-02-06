@@ -13,10 +13,9 @@ from typing import Dict, Optional, Sequence
 
 # isort: split
 from poseidon.network.attention import SelfAttentionNd
-from poseidon.network.convolution import ConvNd, Convolution2DBlock
+from poseidon.network.convolution import ConvNd
 from poseidon.network.modulation import Modulator
 from poseidon.network.normalization import LayerNorm
-from poseidon.network.upsample import UpsampleBlock
 
 
 class UNetBlock(nn.Module):
@@ -93,12 +92,13 @@ class UNet(nn.Module):
     Arguments:
         in_channels: Number of input channels (C_i)
         out_channels: Number of output channels (C_o).
-        mod_features: Number of features (D) in the modulating vector (B, D).
+        mod_features: Number of features (D) in modulating vector.
+        kernel_size: Kernel size of all convolutions.
+        blanket_size: Size of the temporal convolution.
+        stride: Stride of the spatial downsampling convolutions.
+        dropout: Dropout probability for regularization [0, 1].
         hid_channels: Numbers of channels at each depth.
         hid_blocks: Numbers of hidden blocks at each depth.
-        kernel_size: Kernel size of all convolutions.
-        stride: Stride of the downsampling convolutions.
-        dropout: Dropout probability for regularization [0, 1].
         attention_heads: The number of attention heads at each depth.
 
     Example:
@@ -108,6 +108,7 @@ class UNet(nn.Module):
                         hid_channels=[64, 128, 256],
                         hid_blocks=[2, 3, 3],
                         kernel_size=3,
+                        blanket_size=3,
                         stride=2,
                         dropout=0.1)
     """
@@ -117,11 +118,12 @@ class UNet(nn.Module):
         in_channels: int,
         out_channels: int,
         mod_features: int,
-        hid_channels: Sequence[int] = (64, 128, 256),
-        hid_blocks: Sequence[int] = (2, 3, 3),
-        kernel_size: int = 3,
+        kernel_size: int,
+        blanket_size: int,
         stride: int = 2,
         dropout: Optional[float] = None,
+        hid_blocks: Sequence[int] = (1, 1, 1),
+        hid_channels: Sequence[int] = (32, 64, 128),
         attention_heads: Dict[str, int] = {},  # noqa: B006
     ):
         super().__init__()
@@ -130,27 +132,34 @@ class UNet(nn.Module):
             hid_channels
         ), "ERROR (UNet) - Mismatched number of hidden blocks and channels."
 
-        # UNet block and concatenation block parameters
         kwargs = dict(
-            kernel_size=kernel_size,
-            padding=kernel_size // 2,
+            kernel_size=(
+                blanket_size,
+                kernel_size,
+                kernel_size,
+            ),
+            padding=(
+                blanket_size // 2,
+                kernel_size // 2,
+                kernel_size // 2,
+            ),
         )
 
         # Contains the blocks for the descent and ascent of the UNet
         self.descent, self.ascent = nn.ModuleList(), nn.ModuleList()
 
         for i, blocks in enumerate(hid_blocks):
-            # Contains blocks at a stage of the UNet
+            # Contains the blocks for the descent and ascent of the UNet
             do, up = nn.ModuleList(), nn.ModuleList()
 
-            # Filling the stage with blocks
+            # Blocks - Descent and Ascent Residual Blocks
             for _ in range(blocks):
                 do.append(
                     UNetBlock(
                         hid_channels[i],
                         mod_features,
-                        attention_heads=attention_heads.get(str(i), None),
-                        dropout=dropout,
+                        attention_heads.get(str(i), None),
+                        dropout,
                         **kwargs,
                     )
                 )
@@ -158,21 +167,22 @@ class UNet(nn.Module):
                     UNetBlock(
                         hid_channels[i],
                         mod_features,
-                        attention_heads=attention_heads.get(str(i), None),
-                        dropout=dropout,
+                        attention_heads.get(str(i), None),
+                        dropout,
                         **kwargs,
                     )
                 )
 
-            # Adding blocks for downsampling and upsampling
+            # Sampling - Downsampling and Upsampling
             if i > 0:
                 do.insert(
                     index=0,
                     module=nn.Sequential(
-                        Convolution2DBlock(
+                        ConvNd(
                             hid_channels[i - 1],
                             hid_channels[i],
-                            stride=stride,
+                            spatial=3,
+                            stride=(1, stride, stride),
                             **kwargs,
                         ),
                         LayerNorm(dim=1),
@@ -182,10 +192,11 @@ class UNet(nn.Module):
                 up.append(
                     nn.Sequential(
                         LayerNorm(dim=1),
-                        UpsampleBlock(scale_factor=stride),
+                        nn.Upsample(scale_factor=(1, stride, stride), mode="nearest"),
                     )
                 )
-            # First and last projection blocks
+
+            # Projections - Initial and final stages
             else:
                 do.insert(
                     0,
@@ -201,11 +212,12 @@ class UNet(nn.Module):
                         hid_channels[i],
                         out_channels,
                         spatial=3,
-                        kernel_size=1,  # Removes aliasing artifacts
+                        kernel_size=(blanket_size, 1, 1),  # Removes aliasing
+                        padding=(1, 0, 0),
                     )
                 )
 
-            # Projection for concatening tensors (beginning of each ascent stage)
+            # Projection - Connecting stages
             if i + 1 < len(hid_blocks):
                 up.insert(
                     0,
@@ -222,7 +234,8 @@ class UNet(nn.Module):
             self.ascent.insert(0, up)
 
     def forward(self, x: Tensor, mod: Tensor) -> Tensor:
-        r"""
+        r"""A forward pass through the UNet.
+
         Arguments:
             x: Input tensor (B, Ci, T, H, W).
             mod: Modulation vector (B, D).
@@ -230,10 +243,10 @@ class UNet(nn.Module):
         Returns:
             Tensor: Output tensor (B, Co, T, H, W).
         """
-        # Saves end stage tensors
+
         memory = []
 
-        # Descent
+        # === Descent ===
         for blocks in self.descent:
             for block in blocks:
                 if isinstance(block, UNetBlock):
@@ -243,7 +256,7 @@ class UNet(nn.Module):
 
             memory.append(x)
 
-        # Ascent
+        # === Ascent ===
         for blocks in self.ascent:
             y = memory.pop()
             if x is not y:
