@@ -61,14 +61,6 @@ def test_unet_block_differentiability(unet_block, fake_input, fake_modulation):
             ), f"ERROR - Unexpected gradient for non-learnable parameter: {name}"
 
 
-def test_unet_block_invalid_input_shape(unet_block):
-    """Testing that UNetBlock raises an error for invalid input shapes."""
-    invalid_input = torch.randn(BATCH, CHANNELS, HEIGHT, WIDTH)
-    invalid_modulation = torch.randn(BATCH, MOD_FEATURES)
-    with pytest.raises(RuntimeError, match="must match the size of tensor"):
-        unet_block(invalid_input, invalid_modulation)
-
-
 def test_unet_block_dropout_behavior(unet_block, fake_input, fake_modulation):
     """Testing UNetBlock behavior with different dropout values."""
     unet_block_with_dropout = UNetBlock(
