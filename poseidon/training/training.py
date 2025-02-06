@@ -2,8 +2,6 @@ r"""Training."""
 
 import dask
 import gc
-import matplotlib.pyplot as plt
-import numpy as np
 import torch
 import wandb
 
@@ -12,13 +10,18 @@ from typing import Dict
 
 # isort: split
 from poseidon.config import PATH_MODEL
-from poseidon.data.const import DATASET_REGION, TOY_DATASET_REGION
+from poseidon.data.const import (
+    DATASET_REGION,
+    DATASET_VARIABLES,
+    TOY_DATASET_REGION,
+    TOY_DATASET_VARIABLES,
+)
 from poseidon.data.dataloaders import get_dataloaders, get_toy_dataloaders
+from poseidon.diagnostics.plots import visualize
 from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.loss import PoseidonLoss
 from poseidon.diffusion.noise import PoseidonUniformLogNoiseSchedule
-from poseidon.diffusion.sampler import PoseidonEulerSampler
 from poseidon.training.load import load_backbone
 from poseidon.training.optimizer import get_optimizer
 from poseidon.training.save import PoseidonSave
@@ -84,6 +87,8 @@ def training(
         model_saving,
         model_checkpoint_name,
         model_checkpoint_version,
+        wandb_mode,
+        black_sea_variables,
         black_sea_region,
     ) = (
         config_training["blanket_neighbors"],           # Neighbors on each side
@@ -95,6 +100,10 @@ def training(
         config_problem["model_saving"],                 # Whether to save the model or not
         config_problem["model_checkpoint_name"],        # Name of the model checkpoint (if any)
         config_problem["model_checkpoint_version"],     # Version of the model checkpoint (best or last)
+        config_wandb["mode"],                           # Wether to use Weights & Biases for logging or not
+        TOY_DATASET_VARIABLES                           # Variables of interest
+        if config_problem["toy_problem"]
+        else DATASET_VARIABLES,
         TOY_DATASET_REGION                              # Region of interest
         if config_problem["toy_problem"]
         else DATASET_REGION,
@@ -261,82 +270,57 @@ def training(
         # ========================
         # ====== VALIDATING ======
         # ========================
-        if ((step + 1) % steps_validation == 0 and step != 0) or (step == steps_training - 2):
-            with torch.no_grad():
-                # === Average Validation Loss ===
-                #
-                loss_avg_val = 0.0
-
-                for x_val, _ in dataloader_validation:
+        if wandb_mode == "online":
+            if ((step + 1) % steps_validation == 0 and step != 0) or (step == steps_training - 2):
+                with torch.no_grad():
+                    # === Average Validation Loss ===
                     #
-                    x_val = preprocessing_for_diffusion(
-                        x=x_val,
-                        k=blanket_neighbors,
-                    )
+                    loss_avg_val = 0.0
 
-                    # Generating noise
-                    noise_val = scheduler_noise(batch_size=x_val.shape[0])
+                    for x_val, _ in dataloader_validation:
+                        #
+                        x_val = preprocessing_for_diffusion(
+                            x=x_val,
+                            k=blanket_neighbors,
+                        )
 
-                    # Noising the clean state
-                    x_noised_val = x_val + noise_val * torch.randn_like(x_val)
+                        # Generating noise
+                        noise_val = scheduler_noise(batch_size=x_val.shape[0])
 
-                    # Pushing everything to the device
-                    x_val, x_noised_val, noise_val = (
-                        x_val.to(DEVICE),
-                        x_noised_val.to(DEVICE),
-                        noise_val.to(DEVICE),
-                    )
+                        # Noising the clean state
+                        x_noised_val = x_val + noise_val * torch.randn_like(x_val)
 
-                    loss_avg_val += PoseidonLoss(
-                        x=x_val,
-                        x_denoised=poseidon_denoiser(x_noised_val, noise_val),
-                        sigma=noise_val,
-                    ).item()
+                        # Pushing everything to the device
+                        x_val, x_noised_val, noise_val = (
+                            x_val.to(DEVICE),
+                            x_noised_val.to(DEVICE),
+                            noise_val.to(DEVICE),
+                        )
 
-                wandb.log({
-                    "Validation/Loss (Averaged)": loss_avg_val
-                    / config_dataloader_additional["linspace_samples"][1],
-                })
+                        loss_avg_val += PoseidonLoss(
+                            x=x_val,
+                            x_denoised=poseidon_denoiser(x_noised_val, noise_val),
+                            sigma=noise_val,
+                        ).item()
 
-                # === Visualisation ===
-                #
-                if config_wandb["mode"] == "online":
-                    sampler = PoseidonEulerSampler(
+                    wandb.log({
+                        "Validation/Loss (Averaged)": loss_avg_val
+                        / config_dataloader_additional["linspace_samples"][1],
+                    })
+
+                    # === Visualisation ===
+                    #
+                    # Visualizing the forecast
+                    visualize(
                         denoiser=poseidon_denoiser.module
                         if torch.cuda.device_count() > 1
                         else poseidon_denoiser,
-                        rho=2,
-                        sigma_min=0.02,
-                        sigma_max=80,
+                        variables=black_sea_variables,
+                        region=black_sea_region,
+                        wandb_mode=wandb_mode,
                     )
 
-                    # Forecasts dimensions
-                    fore_size, traj_size, steps = 3, 7, 128
 
-                    euler_trajectory = sampler.forward(
-                        trajectory_size=traj_size,
-                        forecast_size=fore_size,
-                        steps=steps,
-                    )
-
-                    fig, axs = plt.subplots(fore_size, traj_size, figsize=(15, 5))
-                    for i in range(fore_size):
-                        for j in range(traj_size):
-                            q_min, q_max = np.quantile(
-                                euler_trajectory[i, 0, j].detach().cpu().numpy(), [0.10, 0.90]
-                            )
-                            axs[i, j].imshow(
-                                euler_trajectory[i, 0, j].detach().cpu().numpy(),
-                                cmap="RdYlBu_r",
-                                vmin=q_min,
-                                vmax=q_max,
-                            )
-                            axs[i, j].axis("off")
-                    plt.tight_layout()
-
-                    wandb.log({
-                        "Validation/Trajectory": wandb.Image(fig),
-                    })
 
         # ========================
         # ======= UPDATING =======
