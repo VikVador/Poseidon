@@ -213,7 +213,7 @@ class UNet(nn.Module):
                         out_channels,
                         spatial=3,
                         kernel_size=(blanket_size, 1, 1),  # Removes aliasing
-                        padding=(1, 0, 0),
+                        padding=(blanket_size // 2, 0, 0),
                     )
                 )
 
