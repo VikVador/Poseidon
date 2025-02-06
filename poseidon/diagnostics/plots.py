@@ -48,7 +48,7 @@ def visualize(
 
     forecasts, levels, trajectory_size, _, _ = (
         dataset.sizes["batch"],
-        4,
+        dataset.sizes["level"] if "level" in dataset.sizes else 1,
         dataset.sizes["trajectory"],
         dataset.sizes["latitude"],
         dataset.sizes["longitude"],
