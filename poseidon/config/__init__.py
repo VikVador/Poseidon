@@ -24,9 +24,12 @@ PATH_OBS   = SCRATCH  / "data"       / "observations"
 PATH_STAT  = POSEIDON / "statistics" / "statistics.zarr"
 PATH_PTRC  = POSEIDON / "paths"      / "ptrc_T.txt"
 PATH_GRID  = POSEIDON / "paths"      / "grid_T.txt"
+
+PATH_MASKV = POSEIDON / "mask_variables.zarr"
 PATH_MASK  = POSEIDON / "mask.zarr"
 PATH_MESH  = POSEIDON / "mesh.zarr"
 PATH_MODEL = POSEIDON / "models"
+
 
 # ----- Observations
 #
