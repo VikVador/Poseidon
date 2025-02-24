@@ -6,9 +6,10 @@ import xarray as xr
 from einops import rearrange
 from pathlib import Path
 from torch import Tensor
-from typing import Dict
+from typing import Dict, Sequence, Tuple
 
 # isort: split
+from poseidon.config import PATH_MASKV
 from poseidon.network.encoding import SineEncoding
 
 
@@ -41,3 +42,27 @@ def generate_encoded_mesh(
     )
 
     return mesh.to(dtype=torch.float32)
+
+
+def get_mask_variables(
+    variables: Sequence[str], region: Dict[str, Tuple[int, int]], blanket_size: int
+) -> torch.Tensor:
+    r"""Creates a mask for selected physical variables as a single tensor.
+
+    Arguments:
+        variables: Variable names to retain from the preprocessed dataset.
+        region: Region of interest to extract from the dataset.
+        blanket_size: Total number of elements in a blanket.
+
+    Returns:
+        Tensor of shape (1, z_total, blanket_size, latitude, longitude).
+    """
+    # Load and preprocess the mask dataset
+    mask = xr.open_zarr(PATH_MASKV)[variables].isel(**region)
+    mask = mask.to_stacked_array(
+        new_dim="z_total", sample_dims=("longitude", "latitude")
+    ).transpose("z_total", ...)
+
+    # Convert to PyTorch tensor and apply transformations
+    mask = torch.as_tensor(mask.load().data.copy())
+    return mask.unsqueeze(1).repeat(1, blanket_size, 1, 1).unsqueeze(0)
