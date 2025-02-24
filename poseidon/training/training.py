@@ -196,9 +196,10 @@ def training(
         ),
         PoseidonUniformLogNoiseSchedule(),
         PoseidonLoss(
-        variables=black_sea_variables,
-        region=black_sea_region,
-        blanket_size=blanket_size,),
+            variables=black_sea_variables,
+            region=black_sea_region,
+            blanket_size=blanket_size,
+        ),
         rearrange(
             get_mask_variables(
                 variables=black_sea_variables,
@@ -206,7 +207,7 @@ def training(
                 blanket_size=blanket_size,
             ),
             "B ... -> B (...)",
-        )
+        ),
     )
 
     # Setting up tools to display information
