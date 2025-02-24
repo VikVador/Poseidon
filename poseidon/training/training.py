@@ -5,6 +5,7 @@ import gc
 import torch
 import wandb
 
+from einops import rearrange
 from tqdm import tqdm
 from typing import Dict
 
@@ -13,6 +14,7 @@ from poseidon.config import PATH_MODEL
 from poseidon.data.const import (
     DATASET_REGION,
     DATASET_VARIABLES,
+    NAN_FILL,
     TOY_DATASET_REGION,
     TOY_DATASET_VARIABLES,
 )
@@ -22,6 +24,7 @@ from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.loss import PoseidonLoss
 from poseidon.diffusion.noise import PoseidonUniformLogNoiseSchedule
+from poseidon.diffusion.tools import get_mask_variables
 from poseidon.training.load import load_backbone
 from poseidon.training.optimizer import get_optimizer
 from poseidon.training.save import PoseidonSave
@@ -109,7 +112,7 @@ def training(
         else DATASET_REGION,
     )
 
-    # Loading dataloaders
+    # Additional parameters for dataloaders
     config_dataloader_additional = {
         "infinite": [True, False, False],      # Infinite iterator configuration
         "steps": [steps_training, None, None], # Maximum number of steps before stopping training
@@ -136,7 +139,7 @@ def training(
     # Dimension of Black Sea state trajectory
     (B, C, _, H, W) = next(dataloader_training)[0].shape
 
-    # Setting up denoising network from scratch or loading from checkpoint
+    # Setting up denoiser (scratch or loading from checkpoint)
     poseidon_backbone = (
         PoseidonBackbone(
             dimensions=(B, C, blanket_size, H, W),
@@ -161,7 +164,7 @@ def training(
         ),
     })
 
-    # Placing the model on multiple GPUs
+    # Multiple GPUs support
     if torch.cuda.device_count() > 1:
         poseidon_denoiser = torch.nn.DataParallel(
             poseidon_denoiser,
@@ -179,21 +182,34 @@ def training(
         saving=model_saving,
     )
 
-    # Setting up training tool
+    # Setting up training tools
     optimizer = get_optimizer(
         nn_parameters=poseidon_denoiser.parameters(),
         config_optimizer=config_optimizer,
     )
 
-    scheduler_lr, scheduler_noise = (
+    scheduler_lr, scheduler_noise, loss_function, mask_variables = (
         get_scheduler(
             optimizer=optimizer,
             total_steps=int(steps_training / steps_gradient_accumulation),
             config_scheduler=config_scheduler,
         ),
         PoseidonUniformLogNoiseSchedule(),
+        PoseidonLoss(
+        variables=black_sea_variables,
+        region=black_sea_region,
+        blanket_size=blanket_size,),
+        rearrange(
+            get_mask_variables(
+                variables=black_sea_variables,
+                region=black_sea_region,
+                blanket_size=blanket_size,
+            ),
+            "B ... -> B (...)",
+        )
     )
 
+    # Setting up tools to display information
     loss_aoas, progress_bar = (
         0,
         tqdm(
@@ -219,6 +235,9 @@ def training(
         # Noising the clean state
         x_noised = x + noise * torch.randn_like(x)
 
+        # Filling land with fixed constant
+        x_noised[:, mask_variables[0] == 0] = NAN_FILL
+
         # Pushing everything to the device
         x, x_noised, noise = (
             x.to(DEVICE),
@@ -227,7 +246,7 @@ def training(
         )
 
         # Denoising the noisy state and computing the loss between clean and denoised states
-        loss = PoseidonLoss(
+        loss = loss_function(
             x=x,
             x_denoised=poseidon_denoiser(x_noised, noise),
             sigma=noise,
@@ -290,6 +309,9 @@ def training(
                         # Noising the clean state
                         x_noised_val = x_val + noise_val * torch.randn_like(x_val)
 
+                        # Filling land with fixed constant
+                        x_noised_val[:, mask_variables[0] == 0] = NAN_FILL
+
                         # Pushing everything to the device
                         x_val, x_noised_val, noise_val = (
                             x_val.to(DEVICE),
@@ -297,7 +319,7 @@ def training(
                             noise_val.to(DEVICE),
                         )
 
-                        loss_avg_val += PoseidonLoss(
+                        loss_avg_val += loss_function(
                             x=x_val,
                             x_denoised=poseidon_denoiser(x_noised_val, noise_val),
                             sigma=noise_val,
