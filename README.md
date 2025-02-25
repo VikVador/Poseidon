@@ -15,7 +15,7 @@ This repository contains the first project of my PhD thesis: a **3D generative n
 </p>
 <hr>
 
-This is the name of the tool we are developping ! To set-up everything, it is necessary to have access to a [Slurm](https://slurm.schedmd.com) cluster, to login to a [Weights & Biases](https://wandb.ai) account and to install the [posiedon](poseidon) module as a package. First, create a new Python environment, for example with [conda](https://docs.conda.io).
+This is the name of the tool we are developping ! To set-up everything, it is necessary to have access to a [Slurm](https://slurm.schedmd.com) cluster, to login to a [Weights & Biases](https://wandb.ai) account and to install the [poseidon](poseidon) module as a package. First, create a new Python environment, for example with [conda](https://docs.conda.io).
 
 ```
 conda create -n poseidon python=3.11
