@@ -9,7 +9,7 @@ This repository contains code for developing a 3D neural network-based simulator
 
 <hr>
 <p  align="center">
-<b  style="font-size:30vw;">Poseidon</b>
+<b  style="font-size:30vw;">P.O.S.E.I.D.O.N</b>
 </p>
 <hr>
 
