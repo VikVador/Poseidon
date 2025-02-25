@@ -7,7 +7,7 @@
 </p>
 <hr>
 
-This repository contains the first project of my PhD thesis: a **3D generative neural network-based simulator for modeling the Black Sea's state**. The model leverages deep learning to predict physical and environmental conditions such as temperature, salinity, and currents. Ultimately, it will support forecasting and assimilate various observations, including satellite (EO) data and float measurements.  
+This repository contains the first project of my PhD thesis: a **3D generative neural network-based simulator for modeling the Black Sea's state**. The model leverages deep learning to predict physical and environmental conditions such as temperature, salinity, and currents. Ultimately, it will be able to support tasks of forecasting and data assimilation of various observations, including satellite (EO) data and float measurements.  
 
 <hr>
 <p  align="center">
