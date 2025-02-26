@@ -66,7 +66,7 @@ def get_toy_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
         Only the training dataset is shuffled (by default).
 
     Splits:
-        Training: 2017-01-01 to 2017-12-31.
+        Training: 2015-01-01 to 2017-12-31.
         Validation: 2020-01-01 to 2020-12-31.
         Test: 2022-01-01 to 2022-12-31.
 

@@ -4,10 +4,9 @@ r"""Information about our datasets"""
 #
 # ----- Preprocessing & Datasets
 #
-# In case of missing values
-NAN_FILL = 0
+LAND_VALUE = 0
 
-# Defining values domain for each variable
+# Defining each variable physical domain
 VARIABLES_CLIPPING = {
     "DOX":      (0, None),
     "CHL":      (0, None),
@@ -18,14 +17,14 @@ VARIABLES_CLIPPING = {
 
 # ----- Dataset: Debug
 #
-TOY_DATASET_DATES_TRAINING   = ("2017-01-01", "2017-12-31")
+TOY_DATASET_DATES_TRAINING   = ("2015-01-01", "2017-12-31")
 TOY_DATASET_DATES_VALIDATION = ("2020-01-01", "2020-12-31")
 TOY_DATASET_DATES_TEST       = ("2022-01-01", "2022-12-31")
 
 TOY_DATASET_REGION = {
     "latitude":  slice(104, 232),
     "longitude": slice(25, 281),
-    "level":     slice(0, 1),
+    "level":     slice(0, 2),
 }
 
 TOY_DATASET_VARIABLES_ATMOSPHERE = [

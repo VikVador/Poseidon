@@ -17,7 +17,7 @@ from poseidon.data.const import (
     DATASET_DATES_VALIDATION,
     DATASET_REGION,
     DATASET_VARIABLES,
-    NAN_FILL,
+    LAND_VALUE,
     TOY_DATASET_DATES_TEST,
     TOY_DATASET_DATES_TRAINING,
     TOY_DATASET_DATES_VALIDATION,
@@ -104,7 +104,7 @@ class PoseidonDataset(Dataset):
         # Handle large data by splitting into smaller chunks
         with dask.config.set(**{"array.slicing.split_large_chunks": True}):
             sample = self.dataset.isel(time=slice(step_start, step_end))
-            sample = sample.fillna(NAN_FILL)
+            sample = sample.fillna(LAND_VALUE)
             time = [get_date_features(sample.time[i].values) for i in range(sample.time.size)]
             time = torch.stack(time, dim=0)
             sample = sample.to_stacked_array(
@@ -179,7 +179,7 @@ def get_toy_datasets(
         Black Sea Continental Shelf (Debugging).
 
     Splits:
-        Training: 2017-01-01 to 2017-12-31.
+        Training: 2015-01-01 to 2017-12-31.
         Validation: 2020-01-01 to 2020-12-31.
         Test: 2022-01-01 to 2022-12-31.
 
