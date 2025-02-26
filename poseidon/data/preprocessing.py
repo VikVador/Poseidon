@@ -4,7 +4,12 @@ import wandb
 import xarray as xr
 
 from pathlib import Path
-from typing import Dict, Optional, Sequence, Tuple
+from typing import (
+    Dict,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 # isort: split
 from poseidon.config import PATH_MASK

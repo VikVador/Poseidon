@@ -1,27 +1,30 @@
-r"""Mappings between data representations."""
+r"""A collection of tools handling mapping between data representation."""
 
 import xarray as xr
 
 from pathlib import Path
 from torch import Tensor
-from typing import Dict, Sequence, Tuple
+from typing import (
+    Dict,
+    Sequence,
+    Tuple,
+)
 
 # isort: split
 from poseidon.config import PATH_DATA
-from poseidon.data.const import DATASET_REGION, DATASET_VARIABLES
 
 
 def from_tensor_to_indices(
+    variables: Sequence[str],
+    region: Dict[str, slice],
     path: Path = PATH_DATA,
-    variables: Sequence[str] = DATASET_VARIABLES,
-    region: Dict[str, slice] = DATASET_REGION,
 ) -> Dict[str, Tuple[int, int]]:
     r"""Determine variables position in a stacked tensor.
 
     Arguments:
-        path: Path to the original .zarr dataset containing the variables.
-        variables: Variable present in the stacked torch tensor.
-        region: Region of interest to extract from the dataset.
+        variables: Variable present in the stacked tensor.
+        region: Region used to extract the data from original dataset.
+        path: Path to the original dataset.
 
     Returns:
         Mapping dictionary [variable, (pos_start, pos_end)]
@@ -29,7 +32,6 @@ def from_tensor_to_indices(
 
     dataset = xr.open_zarr(path)[variables]
 
-    # Creation of the mapping
     idx_start, mapping, total_levels = 0, {}, region["level"].stop
     for v in dataset:
         idx_end = idx_start + (total_levels if "level" in dataset[v].dims else 1)
@@ -41,22 +43,23 @@ def from_tensor_to_indices(
 
 def from_tensor_to_xarray(
     x: Tensor,
+    variables: Sequence[str],
+    region: Dict[str, slice],
     path: Path = PATH_DATA,
-    variables: Sequence[str] = DATASET_VARIABLES,
-    region: Dict[str, slice] = DATASET_REGION,
 ) -> xr.Dataset:
-    r"""Transform a stacked tensor to an xarray dataset.
+    r"""Transform a (batch of) stacked tensor into an :class:`Xarray dataset`.
 
     Arguments:
-        x: Input tensor (*, Z, T, X, Y).
-        path: Path to the original .zarr dataset containing the variables.
-        variables: Variable present in the stacked torch tensor.
-        region: Region of interest to extract from the dataset.
+        x: Input tensor (C, T, X, Y).
+        variables: Variable present in the stacked tensor.
+        region: Region used to extract the data from original dataset.
+        path: Path to the original dataset.
     """
-    assert x.ndim >= 4, "ERROR - Input tensor must have shape (*, Z, T, X, Y)"
+    assert 4 <= x.ndim < 6, "ERROR - Input tensor must have shape (C, T, X, Y)"
     while x.ndim < 5:
         x = x.unsqueeze(dim=0)
 
+    # Extracting data associated to each variable
     data_slices = {
         v: x[:, idx_start:idx_end]
         for v, (idx_start, idx_end) in from_tensor_to_indices(
@@ -66,7 +69,7 @@ def from_tensor_to_xarray(
         ).items()
     }
 
-    # Creating xarray dataset
+    # Creating Xarray dataset
     data_arrays = []
     for v, data in data_slices.items():
         data_array = xr.DataArray(
@@ -75,7 +78,7 @@ def from_tensor_to_xarray(
             name=v,
         )
 
-        if data_array.shape[1] == 1:  # Surface variables
+        if data_array.shape[1] == 1:
             data_array = data_array.squeeze(dim="level")
         data_arrays.append(data_array)
 
