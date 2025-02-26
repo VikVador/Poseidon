@@ -15,11 +15,15 @@ class LayerNorm(nn.Module):
        | https://arxiv.org/abs/1607.06450
 
     Arguments:
-        dim: The dimension(s) along which to standardize.
-        eps: A small value added for numerical stability.
+        dim: Dimension(s) along which to standardize.
+        eps: Small value added for numerical stability.
     """
 
-    def __init__(self, dim: Union[int, Sequence[int]], eps: float = 1e-5):
+    def __init__(
+        self,
+        dim: Union[int, Sequence[int]],
+        eps: float = 1e-5,
+    ):
         super().__init__()
 
         self.dim = dim if isinstance(dim, int) else tuple(dim)
@@ -29,10 +33,10 @@ class LayerNorm(nn.Module):
         r"""Standardizes the input tensor along the specified dimension(s).
 
         Arguments:
-            x: The input tensor with any shape.
+            x: Input tensor.
 
         Returns:
-            A standardized tensor with the same shape as the input.
+            Standardized tensor.
         """
         variance, mean = torch.var_mean(x, dim=self.dim, keepdim=True)
         return (x - mean) / (variance + self.eps).sqrt()

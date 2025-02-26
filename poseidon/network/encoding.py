@@ -15,13 +15,17 @@ class SineEncoding(nn.Module):
 
     Arguments:
         features: Number of embedding features (F). Must be even.
-        omega: The maximum frequency omega.
+        omega: Maximum frequency omega.
     """
 
-    def __init__(self, features: int, omega: float = 1e3):
+    def __init__(
+        self,
+        features: int,
+        omega: float = 1e3,
+    ):
         super().__init__()
-        assert features % 2 == 0, "ERROR (SineEncoding) - The number of features must be even."
 
+        assert features % 2 == 0, "ERROR (SineEncoding) - The number of features must be even."
         freqs = torch.linspace(0, 1, features // 2, dtype=torch.float64)
         freqs = omega ** (-freqs)
         self.freqs = freqs.to(dtype=torch.float32)
@@ -29,10 +33,10 @@ class SineEncoding(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         r"""
         Arguments:
-            x: A tensor to encode (*)
+            x: Tensor to encode (*)
 
         Returns:
-            Tensor: Embedded vector (*, F)
+            Embedded tensor (*, F)
         """
         x = x[..., None]
         return torch.cat(

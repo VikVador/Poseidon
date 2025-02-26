@@ -62,7 +62,13 @@ class SirenEmbedding(nn.Module):
         omega_0: Boosting factor of the layer (described in supplement Sec. 1.5 or original paper).
     """
 
-    def __init__(self, in_features: int, out_features: int, n_layers: int, omega_0: float = 30.0):
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        n_layers: int,
+        omega_0: float = 30.0,
+    ):
         super().__init__()
         layers = []
         layers.append(

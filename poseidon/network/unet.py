@@ -1,7 +1,7 @@
-r"""UNet Architecture for 3-dimensional convolutions.
+r"""3-Dimensional UNet Architecture.
 
 References:
-    Inspired by the implementation in:
+    Thanks @François Rozet from:
     https://github.com/probabilists/azula
 """
 
@@ -67,14 +67,18 @@ class UNetBlock(nn.Module):
             self.block.append(LayerNorm(dim=1))
             self.block.append(SelfAttentionNd(channels, heads=attention_heads))
 
-    def forward(self, x: Tensor, mod: Tensor) -> Tensor:
+    def forward(
+        self,
+        x: Tensor,
+        mod: Tensor,
+    ) -> Tensor:
         r"""
         Arguments:
-            x: Input tensor (B, C, T, H, W).
+            x: Input tensor (B, C, T, X, Y).
             mod: Modulation vector (B, D).
 
         Returns:
-            Tensor: Output tensor (B, C, T, H, W).
+            Tensor: Output tensor (B, C, T, X, Y).
         """
         mod_factor, mod_bias, mod_scaling = self.modulator(mod)
 
@@ -87,7 +91,7 @@ class UNetBlock(nn.Module):
 
 
 class UNet(nn.Module):
-    r"""Creates a U-Net model for 3-dimensional convolutions.
+    r"""Creates a 3-dimensional U-Net.
 
     Arguments:
         in_channels: Number of input channels (C_i)
@@ -100,17 +104,6 @@ class UNet(nn.Module):
         hid_channels: Numbers of channels at each depth.
         hid_blocks: Numbers of hidden blocks at each depth.
         attention_heads: The number of attention heads at each depth.
-
-    Example:
-        >>> unet = UNet(in_channels=64,
-                        out_channels=64,
-                        mod_features=128,
-                        hid_channels=[64, 128, 256],
-                        hid_blocks=[2, 3, 3],
-                        kernel_size=3,
-                        blanket_size=3,
-                        stride=2,
-                        dropout=0.1)
     """
 
     def __init__(
@@ -173,7 +166,7 @@ class UNet(nn.Module):
                     )
                 )
 
-            # Sampling - Downsampling and Upsampling
+            # Downsampling and Upsampling
             if i > 0:
                 do.insert(
                     index=0,
@@ -233,39 +226,38 @@ class UNet(nn.Module):
             self.descent.append(do)
             self.ascent.insert(0, up)
 
-    def forward(self, x: Tensor, mod: Tensor) -> Tensor:
+    def forward(
+        self,
+        x: Tensor,
+        mod: Tensor,
+    ) -> Tensor:
         r"""A forward pass through the UNet.
 
         Arguments:
-            x: Input tensor (B, Ci, T, H, W).
+            x: Input tensor (B, C_in, T, X, Y).
             mod: Modulation vector (B, D).
 
         Returns:
-            Tensor: Output tensor (B, Co, T, H, W).
+            Output tensor (B, C_out, T, X, Y).
         """
 
         memory = []
 
-        # === Descent ===
         for blocks in self.descent:
             for block in blocks:
                 if isinstance(block, UNetBlock):
                     x = block(x, mod)
                 else:
                     x = block(x)
-
             memory.append(x)
 
-        # === Ascent ===
         for blocks in self.ascent:
             y = memory.pop()
             if x is not y:
                 for i in range(2, x.ndim):
                     if x.shape[i] > y.shape[i]:
                         x = torch.narrow(x, i, 0, y.shape[i])
-
                 x = torch.cat((x, y), dim=1)
-
             for block in blocks:
                 if isinstance(block, UNetBlock):
                     x = block(x, mod)

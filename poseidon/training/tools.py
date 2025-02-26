@@ -31,7 +31,7 @@ def extract_blankets_in_trajectories(x: Tensor, k: int, blankets_center_idx: Ten
     r"""Extracts blankets from tensor given indices of their centers.
 
     Arguments:
-        x: Input tensor (B, C, T, H, W).
+        x: Input tensor (B, C, T, X, Y).
         k: Number of neighbors on each side of the blanket.
         blankets_center_idx: Position of blankets center (B).
 
@@ -60,7 +60,7 @@ def preprocessing_for_diffusion(x: Tensor, k: int) -> Tensor:
     r"""Extracts random blankets from tensor and flattens it.
 
     Arguments:
-        x: Input tensor (B, C, T, H, W).
+        x: Input tensor (B, C, T, X, Y).
         k: Number of neighbors on each side of the blanket.
 
     Returns:

@@ -12,10 +12,15 @@ class Modulator(nn.Module):
     Arguments:
         channels: Number of channels (C) in the target signal (B, C, *).
         mod_features: Number of features (D) in the modulating vector (B, D).
-        spatial: Number of spatial dimensions (used for convolution) in the target signal.
+        spatial: Number of spatial dimensions in the target signal.
     """
 
-    def __init__(self, channels: int, mod_features: int, spatial: int):
+    def __init__(
+        self,
+        channels: int,
+        mod_features: int,
+        spatial: int,
+    ):
         super().__init__()
 
         self.ada_zero = nn.Sequential(
@@ -36,6 +41,6 @@ class Modulator(nn.Module):
             mod: Modulating vector (B, D).
 
         Returns:
-            Tensor: Modulating vectors with shape (3, B, C, SPATIAL)
+            Tensor: Modulating vectors with shape (3, B, C, *)
         """
         return self.ada_zero(mod)

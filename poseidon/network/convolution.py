@@ -3,12 +3,17 @@ r"""Convolutional blocks."""
 import torch.nn as nn
 
 
-def ConvNd(in_channels: int, out_channels: int, spatial: int, **kwargs) -> nn.Module:
+def ConvNd(
+    in_channels: int,
+    out_channels: int,
+    spatial: int,
+    **kwargs,
+) -> nn.Module:
     r"""Returns an N-dimensional convolutional layer.
 
     Arguments:
-        in_channels: Number of input channels.
-        out_channels: Number of output channels.
+        in_channels: Number of input channels (C_in).
+        out_channels: Number of output channels (C_out).
         spatial: Number of spatial dimensions on which the convolution is applied.
         kwargs: Keyword arguments passed to :class:`torch.nn.Conv2d`.
     """
