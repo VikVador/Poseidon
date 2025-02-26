@@ -5,7 +5,6 @@ import gc
 import torch
 import wandb
 
-from einops import rearrange
 from tqdm import tqdm
 from typing import Dict
 
@@ -14,7 +13,6 @@ from poseidon.config import PATH_MODEL
 from poseidon.data.const import (
     DATASET_REGION,
     DATASET_VARIABLES,
-    NAN_FILL,
     TOY_DATASET_REGION,
     TOY_DATASET_VARIABLES,
 )
@@ -24,14 +22,13 @@ from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.loss import PoseidonLoss
 from poseidon.diffusion.noise import PoseidonUniformLogNoiseSchedule
-from poseidon.diffusion.tools import get_mask_variables
+from poseidon.tools import wandb_get_hyperparameter_score
 from poseidon.training.load import load_backbone
 from poseidon.training.optimizer import get_optimizer
 from poseidon.training.save import PoseidonSave
 from poseidon.training.scheduler import get_scheduler
 from poseidon.training.tools import preprocessing_for_diffusion
 
-# fmt: off
 #
 # Constants
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -74,6 +71,12 @@ def training(
             "UNet": config_unet,
             "Siren": config_siren,
             "Cluster": config_cluster,
+            "Scores": wandb_get_hyperparameter_score([
+                config_dataloader,
+                config_training,
+                config_optimizer,
+                config_unet,
+            ]),
         },
     )
 
@@ -94,30 +97,32 @@ def training(
         black_sea_variables,
         black_sea_region,
     ) = (
-        config_training["blanket_neighbors"],           # Neighbors on each side
-        config_training["blanket_neighbors"] * 2 + 1,   # Complete blanket dimension
-        config_training["steps_training"],              # One-step is one day
-        config_training["steps_validation"],            # Number of steps before validation
-        config_training["steps_gradient_accumulation"], # Number of steps before optimizer step
-        config_training["steps_logging"],               # Number of steps before logging
-        config_problem["model_saving"],                 # Whether to save the model or not
-        config_problem["model_checkpoint_name"],        # Name of the model checkpoint (if any)
-        config_problem["model_checkpoint_version"],     # Version of the model checkpoint (best or last)
-        config_wandb["mode"],                           # Wether to use Weights & Biases for logging or not
-        TOY_DATASET_VARIABLES                           # Variables of interest
+        config_training["blanket_neighbors"],  # Neighbors on each side
+        config_training["blanket_neighbors"] * 2 + 1,  # Complete blanket dimension
+        config_training["steps_training"],  # One-step is one day
+        config_training["steps_validation"],  # Number of steps before validation
+        config_training["steps_gradient_accumulation"],  # Number of steps before optimizer step
+        config_training["steps_logging"],  # Number of steps before logging
+        config_problem["model_saving"],  # Whether to save the model or not
+        config_problem["model_checkpoint_name"],  # Name of the model checkpoint (if any)
+        config_problem[
+            "model_checkpoint_version"
+        ],  # Version of the model checkpoint (best or last)
+        config_wandb["mode"],  # Wether to use Weights & Biases for logging or not
+        TOY_DATASET_VARIABLES  # Variables of interest
         if config_problem["toy_problem"]
         else DATASET_VARIABLES,
-        TOY_DATASET_REGION                              # Region of interest
+        TOY_DATASET_REGION  # Region of interest
         if config_problem["toy_problem"]
         else DATASET_REGION,
     )
 
     # Additional parameters for dataloaders
     config_dataloader_additional = {
-        "infinite": [True, False, False],      # Infinite iterator configuration
-        "steps": [steps_training, None, None], # Maximum number of steps before stopping training
-        "linspace": [False, True, True],       # Linear temporal subsampling for validation and testing
-        "linspace_samples": [                  # Number of samples for each subsampling, ~1 sample/week for robustness
+        "infinite": [True, False, False],  # Infinite iterator configuration
+        "steps": [steps_training, None, None],  # Maximum number of steps before stopping training
+        "linspace": [False, True, True],  # Linear temporal subsampling for validation and testing
+        "linspace_samples": [  # Number of samples for each subsampling, ~1 sample/week for robustness
             None,
             3 * 12,
             2 * 12,
@@ -142,6 +147,7 @@ def training(
     # Setting up denoiser (scratch or loading from checkpoint)
     poseidon_backbone = (
         PoseidonBackbone(
+            variables=black_sea_variables,
             dimensions=(B, C, blanket_size, H, W),
             config_unet=config_unet,
             config_siren=config_siren,
@@ -188,7 +194,7 @@ def training(
         config_optimizer=config_optimizer,
     )
 
-    scheduler_lr, scheduler_noise, loss_function, mask_variables = (
+    scheduler_lr, scheduler_noise, loss_function = (
         get_scheduler(
             optimizer=optimizer,
             total_steps=int(steps_training / steps_gradient_accumulation),
@@ -199,14 +205,6 @@ def training(
             variables=black_sea_variables,
             region=black_sea_region,
             blanket_size=blanket_size,
-        ),
-        rearrange(
-            get_mask_variables(
-                variables=black_sea_variables,
-                region=black_sea_region,
-                blanket_size=blanket_size,
-            ),
-            "B ... -> B (...)",
         ),
     )
 
@@ -236,9 +234,6 @@ def training(
         # Noising the clean state
         x_noised = x + noise * torch.randn_like(x)
 
-        # Filling land with fixed constant
-        x_noised[:, mask_variables[0] == 0] = NAN_FILL
-
         # Pushing everything to the device
         x, x_noised, noise = (
             x.to(DEVICE),
@@ -248,9 +243,9 @@ def training(
 
         # Denoising the noisy state and computing the loss between clean and denoised states
         loss = loss_function(
-            x=x,
-            x_denoised=poseidon_denoiser(x_noised, noise),
-            sigma=noise,
+            x_0=x,
+            x_0_denoised=poseidon_denoiser(x_noised, noise),
+            sigma_t=noise,
         )
 
         # Computing gradients with scaled loss for gradient accumulation
@@ -309,9 +304,6 @@ def training(
 
                         # Noising the clean state
                         x_noised_val = x_val + noise_val * torch.randn_like(x_val)
-
-                        # Filling land with fixed constant
-                        x_noised_val[:, mask_variables[0] == 0] = NAN_FILL
 
                         # Pushing everything to the device
                         x_val, x_noised_val, noise_val = (

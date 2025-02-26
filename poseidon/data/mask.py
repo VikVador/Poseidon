@@ -32,7 +32,7 @@ def generate_trajectory_mask(
     Arguments:
         variables: Variable names to retain from the dataset.
         region: Region of interest to extract from the dataset.
-        trajectory_size: Total number of masks needed to cover the entire trajectory.
+        trajectory_size: Total number of masks needed to cover the entire trajectory (T).
         path: Path to custom mask dataset (each physical variable and its corresponding mask).
 
     Returns:
