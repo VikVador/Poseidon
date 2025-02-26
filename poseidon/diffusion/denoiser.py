@@ -52,9 +52,4 @@ class PoseidonDenoiser(nn.Module):
         c_in    = 1       / torch.sqrt(sigma_t**2 + 1)  # Modulates the input tensor to account for noise level
         c_noise = 1e1     * torch.log(sigma_t)          # Logarithmic noise level used in conditioning, scaled by 1e1 to have a wider range for learning
 
-        x_0_denoised = self.backbone(
-            x_t     = c_in * x_t,
-            sigma_t = c_noise,
-        )
-
-        return c_skip * x_t + c_out * x_0_denoised
+        return c_skip * x_t + c_out * self.backbone(x_t = c_in * x_t, sigma_t = c_noise)

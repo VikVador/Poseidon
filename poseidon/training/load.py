@@ -12,6 +12,8 @@ from poseidon.data.const import DATASET_REGION, TOY_DATASET_REGION
 from poseidon.diffusion.backbone import PoseidonBackbone
 
 
+# fmt: off
+#
 def load_backbone(
     name_model: str,
     path: Path = PATH_MODEL,
@@ -19,7 +21,7 @@ def load_backbone(
     best: bool = True,
     backup: bool = False,
 ) -> PoseidonBackbone:
-    r"""Loads a `PoseidonBackbone` model.
+    r"""Loads a :class:`PoseidonBackbone` model.
 
     Arguments:
         name_model: Name of Backbone model to load.
@@ -40,11 +42,15 @@ def load_backbone(
     model_ckpt = torch.load(model_path, weights_only="True", map_location="cpu")
 
     # Loading configuration files
-    path_cfg = path / name_model / "configurations"
+    path_cfg            = path / name_model / "configurations"
+    path_cfg_variables  = path_cfg / "variables.yml"
     path_cfg_dimensions = path_cfg / "dimensions.yml"
-    path_cfg_problem = path_cfg / "problem.yml"
-    path_cfg_unet = path_cfg / "unet.yml"
-    path_cfg_siren = path_cfg / "siren.yml"
+    path_cfg_problem    = path_cfg / "problem.yml"
+    path_cfg_unet       = path_cfg / "unet.yml"
+    path_cfg_siren      = path_cfg / "siren.yml"
+
+    with open(path_cfg_variables, "r") as file:
+        variables = yaml.safe_load(file)
 
     with open(path_cfg_dimensions, "r") as file:
         dimensions = yaml.safe_load(file)
@@ -58,8 +64,8 @@ def load_backbone(
     with open(path_cfg_siren, "r") as file:
         siren = yaml.safe_load(file)
 
-    # Loading backbone
     backbone_loaded = PoseidonBackbone(
+        variables=variables["variables"],
         dimensions=dimensions["dimensions"],
         config_unet=unet,
         config_siren=siren,
@@ -67,7 +73,7 @@ def load_backbone(
         path_mesh=path_mesh,
     )
 
-    # Loading weights
+    # Loading model state into the backbone
     backbone_loaded.load_state_dict(model_ckpt["model_state_dict"])
 
     # By default, training mode
@@ -89,11 +95,7 @@ def load_optimizer(
 
     path_tool = path / f"{name_model}" / "tools" / "optimizer.pth"
     assert path_tool.exists(), f"ERROR - Optimizer file not found at {path_tool}"
-
-    # Loading the checkpoint
     checkpoint = torch.load(path_tool, weights_only=True)
-
-    # Loading the  state in current optimizer (in-place)
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
 
@@ -111,9 +113,5 @@ def load_scheduler(
     """
     path_tool = path / f"{name_model}" / "tools" / "scheduler.pth"
     assert path_tool.exists(), f"ERROR - Scheduler file not found at {path_tool}"
-
-    # Loading the checkpoint
     checkpoint = torch.load(path_tool, weights_only=True)
-
-    # Loading the state in current scheduler (in-place)
     scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
