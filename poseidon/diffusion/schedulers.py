@@ -2,7 +2,6 @@ r"""Diffusion schedulers."""
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from torch import Tensor
 from typing import Sequence
@@ -36,7 +35,7 @@ class PoseidonTimeScheduler(nn.Module):
         Returns:
             Tensor (B, 1).
         """
-        return torch.rand(batch_size)
+        return torch.rand(batch_size).unsqueeze(1)
 
     def get_timesteps(self, index: int, steps: int, batch_size: int) -> Tensor:
         r"""Computes a fixed timestep value for a given index.
@@ -52,7 +51,7 @@ class PoseidonTimeScheduler(nn.Module):
         assert (
             index < steps
         ), "ERROR (PoseidonTimeScheduler) - Index must be less than the number of steps."
-        return torch.full((batch_size,), index / steps)
+        return torch.full((batch_size,), index / steps).unsqueeze(1)
 
 
 class PoseidonNoiseScheduler(nn.Module):
@@ -65,9 +64,7 @@ class PoseidonNoiseScheduler(nn.Module):
 
     def __init__(self, noise_levels: Sequence[float] = DATASET_COV_SQRT_EIGEN_VALUES):
         super().__init__()
-
-        self.noise_levels = torch.tensor(noise_levels, dtype=torch.float32).view(1, 1, -1)
-        self.num_levels = len(noise_levels)
+        self.register_buffer("noise_levels", torch.tensor(noise_levels, dtype=torch.float32))
 
     def forward(self, timesteps: Tensor) -> Tensor:
         r"""Computes interpolated noise levels (`sigma`) for given timesteps.
@@ -78,22 +75,16 @@ class PoseidonNoiseScheduler(nn.Module):
         Returns:
             A Tensor of shape (B, 1) containing the interpolated noise levels.
         """
+        assert (
+            timesteps.ndim == 2 and timesteps.shape[1] == 1
+        ), "ERROR (PoseidonNoiseScheduler) - Timesteps must have shape (B, 1)"
 
-        assert (0 <= timesteps).all() and (
-            timesteps <= 1
-        ).all(), "ERROR (PoseidonNoiseScheduler) - Timesteps must be in range [0, 1]."
+        N = self.noise_levels.shape[0]
+        indices = timesteps * (N - 1)
+        lower_idx = torch.floor(indices).long()
+        upper_idx = torch.ceil(indices).long().clamp(max=N - 1)
+        lower_values = self.noise_levels[lower_idx]
+        upper_values = self.noise_levels[upper_idx]
+        weights = indices - lower_idx
 
-        # Compute scaled timesteps for interpolation
-        scaled_t = (timesteps * (self.num_levels - 1)).view(1, -1, 1)
-
-        # Determine noise levels using interpolation
-        return (
-            F.interpolate(
-                self.noise_levels,
-                scale_factor=scaled_t.shape[1] / self.num_levels,
-                mode="linear",
-                align_corners=True,
-            )
-            .squeeze(0)
-            .view(-1, 1)
-        )
+        return (1 - weights) * lower_values + weights * upper_values
