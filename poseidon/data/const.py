@@ -24,7 +24,7 @@ TOY_DATASET_DATES_TEST       = ("2022-01-01", "2022-12-31")
 TOY_DATASET_REGION = {
     "latitude":  slice(104, 232),
     "longitude": slice(25, 281),
-    "level":     slice(0, 2),
+    "level":     slice(0, 1),
 }
 
 TOY_DATASET_VARIABLES_ATMOSPHERE = [
