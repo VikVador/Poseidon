@@ -6,6 +6,7 @@ import torch.nn as nn
 from torch import Tensor
 from typing import Sequence
 
+# fmt: off
 # isort: split
 from poseidon.diffusion.const import DATASET_COV_SQRT_EIGEN_VALUES
 
@@ -37,22 +38,6 @@ class PoseidonTimeScheduler(nn.Module):
         """
         return torch.rand(batch_size).unsqueeze(1)
 
-    def get_timesteps(self, index: int, steps: int, batch_size: int) -> Tensor:
-        r"""Computes a fixed timestep value for a given index.
-
-        Arguments:
-            index: Position in the linearly discretized time axis.
-            steps: Total number of time steps.
-            batch_size: Number of times to replicate the computed timestep.
-
-        Returns:
-            Tensor (B, 1).
-        """
-        assert (
-            index < steps
-        ), "ERROR (PoseidonTimeScheduler) - Index must be less than the number of steps."
-        return torch.full((batch_size,), index / steps).unsqueeze(1)
-
 
 class PoseidonNoiseScheduler(nn.Module):
     r"""A custom noise scheduler for diffusion models.
@@ -79,12 +64,12 @@ class PoseidonNoiseScheduler(nn.Module):
             timesteps.ndim == 2 and timesteps.shape[1] == 1
         ), "ERROR (PoseidonNoiseScheduler) - Timesteps must have shape (B, 1)"
 
-        N = self.noise_levels.shape[0]
-        indices = timesteps * (N - 1)
-        lower_idx = torch.floor(indices).long()
-        upper_idx = torch.ceil(indices).long().clamp(max=N - 1)
+        N            = self.noise_levels.shape[0]
+        indices      = timesteps * (N - 1)
+        lower_idx    = torch.floor(indices).long()
+        upper_idx    = torch.ceil(indices).long().clamp(max=N - 1)
         lower_values = self.noise_levels[lower_idx]
         upper_values = self.noise_levels[upper_idx]
-        weights = indices - lower_idx
+        weights      = indices - lower_idx
 
         return (1 - weights) * lower_values + weights * upper_values
