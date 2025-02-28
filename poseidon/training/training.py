@@ -251,10 +251,10 @@ def training(
         loss_aoas += loss.item()
         loss.backward()
 
-        # =============================================================
-        #                           LOGGING
-        # =============================================================
-        if (step % steps_logging == 0) or (step == steps_training - 2):
+        # =========================================================================
+        #                                 LOGGING
+        # =========================================================================
+        if (step % steps_logging == 0 & step != 0) or (step == steps_training - 2):
 
             # Weights & Biases
             wandb.log({
@@ -321,6 +321,7 @@ def training(
                 #                VISUALIZATION
                 # ===========================================
                 if wandb_mode == "online":
+
                     visualize(
                         wandb_mode=wandb_mode,
                         variables=black_sea_variables,
