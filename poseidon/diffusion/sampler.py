@@ -40,8 +40,8 @@ class PoseidonEDMSampler(nn.Module):
         # Extracting dimensions of the region
         self.C, self.H, self.W = (
             denoiser.backbone.C,
-            denoiser.backbone.H,
-            denoiser.backbone.W,
+            denoiser.backbone.X,
+            denoiser.backbone.Y,
         )
 
         # Properties of timesteps
@@ -106,7 +106,6 @@ class PoseidonEDMSampler(nn.Module):
                 ) * torch.randn(self.C, trajectory_size, self.H, self.W).to(DEVICE)
 
                 for s in range(0, steps - 1):
-
                     x_i = self.step(
                         x_i=x_i,
                         t_i=self.get_timestep(s),
