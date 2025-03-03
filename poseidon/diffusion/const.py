@@ -7,12 +7,6 @@ Information:
     the signal, completely destroying it.
 """
 
-# Statistics for rescaling noise levels in denoiser
-LOG_SIGMA_MEAN, LOG_SIGMA_STD = (
-    2.322,
-    1.356,
-)
-
 DATASET_COV_SQRT_EIGEN_VALUES = [
     0.001000000000000000,
     0.002200000000000000,
