@@ -62,7 +62,6 @@ class PoseidonLoss(nn.Module):
             x_0_denoised: Estimate of clean tensor (B, C * K * X * Y).
             sigma_t: Associated noise levels (B, 1).
         """
-
         if self.use_mask:
             x_0, x_0_denoised = (
                 x_0         [:, self.mask[0] == 1],
