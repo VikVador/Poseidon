@@ -1,14 +1,10 @@
 r"""Diffusion schedulers."""
 
+import math
 import torch
 import torch.nn as nn
 
 from torch import Tensor
-from typing import Sequence
-
-# fmt: off
-# isort: split
-from poseidon.diffusion.const import DATASET_COV_SQRT_EIGEN_VALUES
 
 
 class PoseidonTimeScheduler(nn.Module):
@@ -40,36 +36,30 @@ class PoseidonTimeScheduler(nn.Module):
 
 
 class PoseidonNoiseScheduler(nn.Module):
-    r"""A custom noise scheduler for diffusion models.
+    r"""Creates a log-logit noise schedule.
 
-    Information:
-        This scheduler determines noise levels (`sigma`) based on a predefined
-        sequence of values, using piece-wise linear interpolation.
+    Mathematics:
+        sigma_t = sqrt(sigma_min * sigma_max) * exp(rho * logit(t))
+
+    Arguments:
+        sigma_min: Initial noise scale.
+        sigma_max: Final noise scale.
+        spread: Spread factor for the noise scale.
+
+    Returns
+        Tensor (B, 1).
     """
 
-    def __init__(self, noise_levels: Sequence[float] = DATASET_COV_SQRT_EIGEN_VALUES):
+    def __init__(self, sigma_min: float = 1e-3, sigma_max: float = 1e5, spread: float = 2.0):
         super().__init__()
-        self.register_buffer("noise_levels", torch.tensor(noise_levels, dtype=torch.float32))
 
-    def forward(self, timesteps: Tensor) -> Tensor:
-        r"""Computes interpolated noise levels (`sigma`) for given timesteps.
+        self.spread = spread
+        self.eps = math.sqrt(sigma_min / sigma_max) ** (1 / spread)
+        self.log_sigma_min = math.log(sigma_min)
+        self.log_sigma_max = math.log(sigma_max)
+        self.log_sigma_med = math.log(sigma_min * sigma_max) / 2
 
-        Arguments:
-            timesteps: Tensor of shape (B, 1), where each value is a timestep in [0,1].
-
-        Returns:
-            A Tensor of shape (B, 1) containing the interpolated noise levels.
-        """
-        assert (
-            timesteps.ndim == 2 and timesteps.shape[1] == 1
-        ), "ERROR (PoseidonNoiseScheduler) - Timesteps must have shape (B, 1)"
-
-        N            = self.noise_levels.shape[0]
-        indices      = timesteps * (N - 1)
-        lower_idx    = torch.floor(indices).long()
-        upper_idx    = torch.ceil(indices).long().clamp(max=N - 1)
-        lower_values = self.noise_levels[lower_idx]
-        upper_values = self.noise_levels[upper_idx]
-        weights      = indices - lower_idx
-
-        return (1 - weights) * lower_values + weights * upper_values
+    def forward(self, t: Tensor) -> Tensor:
+        return torch.exp(
+            self.spread * torch.logit(t * (1 - 2 * self.eps) + self.eps) + self.log_sigma_med
+        )
