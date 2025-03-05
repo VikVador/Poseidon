@@ -126,5 +126,5 @@ class PoseidonBackbone(nn.Module):
 
         x_t = x_t + mesh_embedding
 
-        # Estimating clean signal
+        # Estimating (unscaled) clean signal
         return rearrange(self.unet(x_t, sigma_t), "B C K X Y -> B (C K X Y)")
