@@ -32,7 +32,7 @@ Training Pipeline:
     "num_workers":     [0]
     "prefetch_factor": [null]
     "shuffle":         [[True, False, False]]
-    "trajectory_size": [5]
+    "trajectory_size": [4]
 
   config_training:
     "blanket_neighbors":           [1]
@@ -45,7 +45,7 @@ Training Pipeline:
     "betas":         [[0.9, 0.999, 0.999]]
     "learning_rate": [0.001]
     "optimizer":     ["soap"]
-    "weight_decay":  [0.005]
+    "weight_decay":  [0.0]
 
   config_scheduler:
     "scheduler": ["constant"]
@@ -55,7 +55,7 @@ Training Pipeline:
     "mod_features":    [1]
     "hid_channels":    [[32, 64, 128]]
     "hid_blocks":      [[1, 1, 1]]
-    "dropout":         [0.1]
+    "dropout":         [0.0]
     "attention_heads": [{"-1": 8}]
 
   config_siren:
