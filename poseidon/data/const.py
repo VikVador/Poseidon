@@ -17,15 +17,17 @@ VARIABLES_CLIPPING = {
 
 # ----- Dataset: Debug
 #
-TOY_DATASET_DATES_TRAINING   = ("2015-01-01", "2017-12-31")
-TOY_DATASET_DATES_VALIDATION = ("2020-01-01", "2020-12-31")
-TOY_DATASET_DATES_TEST       = ("2022-01-01", "2022-12-31")
+TOY_DATASET_DATES_TRAINING   = ("1995-01-01", "2017-12-31")
+TOY_DATASET_DATES_VALIDATION = ("2018-01-01", "2020-12-31")
+TOY_DATASET_DATES_TEST       = ("2021-01-01", "2022-12-31")
+
 
 TOY_DATASET_REGION = {
     "latitude":  slice(104, 232),
     "longitude": slice(25, 281),
     "level":     slice(0, 1),
 }
+
 
 TOY_DATASET_VARIABLES_ATMOSPHERE = [
     "DOX",
@@ -35,7 +37,7 @@ TOY_DATASET_VARIABLES_ATMOSPHERE = [
 ]
 
 TOY_DATASET_VARIABLES_SURFACE = [
-    "ssh",
+    "ssh"
 ]
 
 TOY_DATASET_VARIABLES = \
@@ -51,7 +53,7 @@ DATASET_DATES_TEST           = ("2021-01-01", "2022-12-31")
 DATASET_REGION = {
     "latitude":  slice(104, 232),
     "longitude": slice(25, 281),
-    "level":     slice(0, 56),
+    "level":     slice(0, 32),
 }
 
 DATASET_VARIABLES_ATMOSPHERE = [
