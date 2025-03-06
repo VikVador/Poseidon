@@ -31,9 +31,9 @@ def visualize(
     """
 
     forecast_size, trajectory_size, steps = (
-        4,
-        7,
-        256,
+        3,
+        12,
+        64,
     )
 
     trajectory = PoseidonEulerSampler(denoiser).forward(
@@ -85,7 +85,7 @@ def visualize(
             fig, axes = plt.subplots(
                 forecasts + 1,
                 trajectory_size,
-                figsize=(15, 10),
+                figsize=(24, 12),
             )
 
             # Ensure axes is always 2D for consistent indexing
