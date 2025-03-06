@@ -28,9 +28,9 @@ class PoseidonEDMSampler(nn.Module):
     def __init__(
         self,
         denoiser: PoseidonDenoiser,
-        rho: float = 2,
-        sigma_min: float = 0.01,
-        sigma_max: float = 80,
+        rho: float = 6.0,
+        sigma_min: float = 1e-3,
+        sigma_max: float = 1e5,
     ):
         super().__init__()
 
