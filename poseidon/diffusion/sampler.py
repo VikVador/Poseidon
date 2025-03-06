@@ -105,7 +105,7 @@ class PoseidonEDMSampler(nn.Module):
                     t=self.get_timestep(0),
                 ) * torch.randn(self.C, trajectory_size, self.H, self.W).to(DEVICE)
 
-                for s in range(0, steps - 1):
+                for s in range(0, steps):
                     x_i = self.step(
                         x_i=x_i,
                         t_i=self.get_timestep(s),

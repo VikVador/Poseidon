@@ -230,7 +230,7 @@ def training(
 
         # Generating noise levels
         sigma_t = scheduler_noise(
-            timesteps = scheduler_time(batch_size = x_0.shape[0])
+            t = scheduler_time(batch_size = x_0.shape[0])
         )
 
         # Generating noisy states
@@ -240,9 +240,11 @@ def training(
         x_0, x_t, sigma_t = x_0.to(DEVICE), x_t.to(DEVICE), sigma_t.to(DEVICE)
 
         # Estimating clean trajectories and measuring error
+        x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t)
+
         loss = loss_function(
             x_0 = x_0,
-            x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t),
+            x_0_denoised = x_0_denoised,
             sigma_t = sigma_t,
         )
 
@@ -254,7 +256,7 @@ def training(
         # =========================================================================
         #                                 LOGGING
         # =========================================================================
-        if (step % steps_logging == 0 & step != 0) or (step == steps_training - 2):
+        if (step % steps_logging == 0) or (step == steps_training - 2):
 
             # Weights & Biases
             wandb.log({
@@ -298,7 +300,7 @@ def training(
 
                     # Generating noise levels
                     v_sigma_t = scheduler_noise(
-                        timesteps = scheduler_time(batch_size = v_x_0.shape[0])
+                        t = scheduler_time(batch_size = v_x_0.shape[0])
                     )
 
                     # Generating noisy states

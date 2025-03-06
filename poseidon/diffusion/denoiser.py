@@ -7,10 +7,6 @@ from torch import Tensor
 
 # isort: split
 from poseidon.diffusion.backbone import PoseidonBackbone
-from poseidon.diffusion.const import (
-    LOG_SIGMA_MEAN,
-    LOG_SIGMA_STD,
-)
 
 
 class PoseidonDenoiser(nn.Module):
@@ -49,9 +45,10 @@ class PoseidonDenoiser(nn.Module):
             Cleaned tensor (B, C * K * X * Y).
         """
         # fmt:off
-        c_skip  = 1       / (sigma_t**2 + 1)                            # Retains part of the original noisy signal
-        c_out   = sigma_t / torch.sqrt(sigma_t**2 + 1)                  # Scales the denoised output
-        c_in    = 1       / torch.sqrt(sigma_t**2 + 1)                  # Modulates the input tensor to account for noise level
-        c_noise = (torch.log(sigma_t) - LOG_SIGMA_MEAN) / LOG_SIGMA_STD # Custom standardization of noise levels
+        c_skip  = 1       / (sigma_t**2 + 1)            # Retains part of the original noisy signal
+        c_out   = sigma_t / torch.sqrt(sigma_t**2 + 1)  # Scales the denoised output
+        c_in    = 1       / torch.sqrt(sigma_t**2 + 1)  # Modulates the input tensor to account for noise level
+        c_noise = 1e1     * torch.log(sigma_t)          # Rescaling noise levels
 
+        # Estimating (scaled) denoised state
         return c_skip * x_t + c_out * self.backbone(x_t = c_in * x_t, sigma_t = c_noise)
