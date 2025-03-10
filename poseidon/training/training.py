@@ -328,6 +328,7 @@ def training(
                         wandb_mode=wandb_mode,
                         variables=black_sea_variables,
                         region=black_sea_region,
+                        dimensions=(C, X, Y),
                         denoiser=poseidon_denoiser.module
                         if torch.cuda.device_count() > 1
                         else poseidon_denoiser,

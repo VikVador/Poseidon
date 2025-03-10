@@ -7,11 +7,10 @@ import xarray as xr
 from einops import rearrange
 from pathlib import Path
 from torch import Tensor
-from typing import Dict
+from typing import Dict, Tuple
 
 # isort: split
 from poseidon.network.encoding import SineEncoding
-from typing import Tuple
 
 
 def generate_encoded_mesh(
