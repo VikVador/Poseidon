@@ -11,8 +11,8 @@ class SelfAttentionNd(nn.MultiheadAttention):
 
     Information:
         In our context, the self attention layer is applied along the
-        (T, X, Y) dimensions of the input trajectory. This means that we
-        force each level to attend to itself along the temporal axis.
+        (X, Y) dimensions of the input trajectory. This means that we
+        force each level to attend to itself spatially.
 
     Arguments:
         channels: Number of channels (C)
@@ -36,13 +36,13 @@ class SelfAttentionNd(nn.MultiheadAttention):
     def forward(self, x: Tensor) -> Tensor:
         r"""
         Arguments:
-            x: Input tensor shape (B, C, T, X, Y).
+            x: Input tensor shape (B, (C * K), X, Y).
 
         Attention:
-            Along (T, X, Y).
+            Along (X, Y).
 
         Returns:
-            Ouput tensor (B, C, T, X, Y).
+            Ouput tensor (B, (C * K), X, Y).
         """
 
         y = rearrange(x, "B C ...  -> B (...) C")

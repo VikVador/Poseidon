@@ -1,8 +1,9 @@
-r"""3-Dimensional UNet Architecture.
+r"""UNet Architecture.
 
-References:
-    Thanks @François Rozet from:
-    https://github.com/probabilists/azula
+From:
+  | azula library (François Rozet)
+  | https://github.com/francois-rozet/azula
+
 """
 
 import torch
@@ -42,7 +43,7 @@ class UNetBlock(nn.Module):
         self.modulator = Modulator(
             channels=channels,
             mod_features=mod_features,
-            spatial=3,
+            spatial=2,
         )
 
         self.block = nn.Sequential(
@@ -50,7 +51,7 @@ class UNetBlock(nn.Module):
             ConvNd(
                 channels,
                 channels,
-                spatial=3,
+                spatial=2,
                 **kwargs,
             ),
             nn.SiLU(),
@@ -58,7 +59,7 @@ class UNetBlock(nn.Module):
             ConvNd(
                 channels,
                 channels,
-                spatial=3,
+                spatial=2,
                 **kwargs,
             ),
         )
@@ -74,11 +75,11 @@ class UNetBlock(nn.Module):
     ) -> Tensor:
         r"""
         Arguments:
-            x: Input tensor (B, C, T, X, Y).
+            x: Input tensor (B, (C * K), X, Y).
             mod: Modulation vector (B, D).
 
         Returns:
-            Tensor: Output tensor (B, C, T, X, Y).
+            Tensor: Output tensor (B, (C * K), X, Y).
         """
         mod_factor, mod_bias, mod_scaling = self.modulator(mod)
 
@@ -91,7 +92,7 @@ class UNetBlock(nn.Module):
 
 
 class UNet(nn.Module):
-    r"""Creates a 3-dimensional U-Net.
+    r"""Creates a U-Net.
 
     Arguments:
         in_channels: Number of input channels (C_i)
@@ -127,12 +128,10 @@ class UNet(nn.Module):
 
         kwargs = dict(
             kernel_size=(
-                blanket_size,
                 kernel_size,
                 kernel_size,
             ),
             padding=(
-                blanket_size // 2,
                 kernel_size // 2,
                 kernel_size // 2,
             ),
@@ -174,8 +173,8 @@ class UNet(nn.Module):
                         ConvNd(
                             hid_channels[i - 1],
                             hid_channels[i],
-                            spatial=3,
-                            stride=(1, stride, stride),
+                            spatial=2,
+                            stride=(stride, stride),
                             **kwargs,
                         ),
                         LayerNorm(dim=1),
@@ -185,7 +184,7 @@ class UNet(nn.Module):
                 up.append(
                     nn.Sequential(
                         LayerNorm(dim=1),
-                        nn.Upsample(scale_factor=(1, stride, stride), mode="nearest"),
+                        nn.Upsample(scale_factor=(stride, stride), mode="nearest"),
                     )
                 )
 
@@ -196,7 +195,7 @@ class UNet(nn.Module):
                     ConvNd(
                         in_channels,
                         hid_channels[i],
-                        spatial=3,
+                        spatial=2,
                         **kwargs,
                     ),
                 )
@@ -204,9 +203,9 @@ class UNet(nn.Module):
                     ConvNd(
                         hid_channels[i],
                         out_channels,
-                        spatial=3,
-                        kernel_size=(blanket_size, 1, 1),  # Removes aliasing
-                        padding=(blanket_size // 2, 0, 0),
+                        spatial=2,
+                        kernel_size=(1, 1),  # Removes aliasing
+                        padding=(0, 0),
                     )
                 )
 
@@ -217,7 +216,7 @@ class UNet(nn.Module):
                     ConvNd(
                         hid_channels[i] + hid_channels[i + 1],
                         hid_channels[i],
-                        spatial=3,
+                        spatial=2,
                         **kwargs,
                     ),
                 )
@@ -234,11 +233,11 @@ class UNet(nn.Module):
         r"""A forward pass through the UNet.
 
         Arguments:
-            x: Input tensor (B, C_in, T, X, Y).
+            x: Input tensor (B, C_in, X, Y).
             mod: Modulation vector (B, D).
 
         Returns:
-            Output tensor (B, C_out, T, X, Y).
+            Output tensor (B, C_out, X, Y).
         """
 
         memory = []
