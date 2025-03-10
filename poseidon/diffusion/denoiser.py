@@ -3,10 +3,13 @@ r"""Diffusion denoiser."""
 import torch
 import torch.nn as nn
 
+from functools import partial
 from torch import Tensor
+from typing import Callable
 
 # isort: split
 from poseidon.diffusion.backbone import PoseidonBackbone
+from poseidon.math import gmres
 
 
 class PoseidonDenoiser(nn.Module):
@@ -52,3 +55,74 @@ class PoseidonDenoiser(nn.Module):
 
         # Estimating (scaled) denoised state
         return c_skip * x_t + c_out * self.backbone(x_t = c_in * x_t, sigma_t = c_noise)
+
+
+class PoseidonMMPSDenoiser(nn.Module):
+    r"""Denoiser model with MMPS-style observation conditioning.
+
+    References:
+        | Learning Diffusion Priors from Observations by Expectation Maximization (Rozet et al., 2024)
+        | https://arxiv.org/abs/2405.13712
+
+    Arguments:
+        denoiser: A Gaussian denoiser.
+        y: An observation y ~ 𝒩(Ax, Σᵧ) of shape (M).
+        A: The forward operator x ↦ Ax. It should take in a vector x of shape (B, D) and return a vector of shape (M, B).
+        cov_y: The covariance matrix or the noise variance Σᵧ if the covariance is diagonal, with shape (), (D), or (D, D).
+        tweedie_covariance: Whether to use the Tweedie covariance formula or not. If False, use Σₜ instead.
+        iterations: The number of solver iterations.
+    """
+
+    def __init__(
+        self,
+        denoiser: PoseidonDenoiser,
+        y: Tensor,
+        A: Callable[[Tensor], Tensor],
+        cov_y: Tensor,
+        tweedie_covariance: bool = True,
+        iterations: int = 1,
+    ):
+        super().__init__()
+
+        self.A = A
+        self.denoiser = denoiser
+        self.tweedie_covariance = tweedie_covariance
+        self.register_buffer("y", torch.as_tensor(y))
+        self.register_buffer("cov_y", torch.as_tensor(cov_y))
+
+        self.solve = partial(gmres, iterations=iterations)
+
+    def forward(self, x_t: Tensor, sigma_t: Tensor, **kwargs):
+        r"""Denoising with MMPS-style observation conditioning."""
+
+        cov_t = sigma_t**2
+
+        with torch.enable_grad():
+            x_t = x_t.detach().requires_grad_()
+            x_hat = self.denoiser(x_t, sigma_t, **kwargs)
+            y_hat = self.A(x_hat)
+
+        def A_lin(v):
+            return torch.func.jvp(self.A, (x_hat,), (v,))[-1]
+
+        def At(v):
+            return torch.autograd.grad(y_hat, x_hat, v, retain_graph=True)[0]
+
+        if self.tweedie_covariance:
+            if len(self.cov_y.shape) <= 1:
+                cov_y = lambda v: self.cov_y * v + A_lin(
+                    cov_t * torch.autograd.grad(x_hat, x_t, At(v), retain_graph=True)[0]
+                )
+            else:
+                # Matrix - batched vector product: (D, D) @ (B, D) -> (B, D)
+                cov_y = lambda v: torch.einsum("ij, bj->bi", self.cov_y, v) + A_lin(
+                    cov_t * torch.autograd.grad(x_hat, x_t, At(v), retain_graph=True)[0]
+                )
+        else:
+            cov_y = lambda v: cov_t * v
+
+        grad = self.y - y_hat
+        grad = self.solve(A=cov_y, b=grad)
+        score = torch.autograd.grad(y_hat, x_t, grad)[0]
+
+        return x_hat + cov_t * score
