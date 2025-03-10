@@ -73,9 +73,10 @@ class PoseidonBackbone(nn.Module):
         emb_channels = self.mesh.shape[-1]
         in_channels = self.C
 
+        # 2D UNet
         self.unet = UNet(
-            in_channels,
-            in_channels,
+            in_channels=in_channels * self.K,
+            out_channels=in_channels * self.K,
             blanket_size=self.K,
             **config_unet,
         )
@@ -126,5 +127,15 @@ class PoseidonBackbone(nn.Module):
 
         x_t = x_t + mesh_embedding
 
+        # Merging time and levels into channels
+        x_t = rearrange(x_t, "B C K X Y -> B (C K) X Y")
+
         # Estimating (unscaled) clean signal
-        return rearrange(self.unet(x_t, sigma_t), "B C K X Y -> B (C K X Y)")
+        return rearrange(
+            self.unet(x_t, sigma_t),
+            "B (C K) X Y -> B (C K X Y)",
+            C=self.C,
+            K=self.K,
+            X=self.X,
+            Y=self.Y,
+        )
