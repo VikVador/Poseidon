@@ -13,7 +13,7 @@ dependencies = [
   "xarray==2024.6.0",
   "zarr==2.18.2",
   "netCDF4==1.7.0",
-  "wandb==0.17.1",
+  "wandb==0.19.8",
 ]
 
 [project.optional-dependencies]
