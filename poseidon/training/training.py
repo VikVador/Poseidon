@@ -120,8 +120,8 @@ def training(
         "linspace": [False, True, True],
         "linspace_samples": [
             None,
-            3 * 52,
-            2 * 52,
+            3 * 4,
+            2 * 4,
         ],
     }
 
@@ -260,7 +260,7 @@ def training(
 
             # Weights & Biases
             wandb.log({
-                "Training/Loss (AoAS)": loss_aoas,
+                "Training/Loss (AoAS)": loss_aoas * steps_gradient_accumulation if step == 0 else loss_aoas,
                 "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
                 "Training/Step [-]": (step + 1),
                 "Training/Samples Seen [-]": B * (step + 1),
