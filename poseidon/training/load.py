@@ -70,7 +70,6 @@ def load_backbone(
         config_unet=unet,
         config_siren=siren,
         config_region=TOY_DATASET_REGION if problem["toy_problem"] else DATASET_REGION,
-        path_mesh=path_mesh,
     )
 
     # Loading model state into the backbone
