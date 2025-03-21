@@ -53,11 +53,13 @@ class PoseidonBackbone(nn.Module):
             ),
         )
 
+        # Total number of channels
+        channels = self.C * self.K
+
         # 2D UNet
         self.unet = UNet(
-            in_channels=self.C * self.K,
-            out_channels=self.C * self.K,
-            blanket_size=self.K,
+            in_channels=channels,
+            out_channels=channels,
             config_region=config_region,
             config_siren=config_siren,
             **config_unet,

@@ -39,4 +39,4 @@ class LayerNorm(nn.Module):
             Standardized tensor.
         """
         variance, mean = torch.var_mean(x, dim=self.dim, keepdim=True)
-        return (x - mean) / (variance + self.eps).sqrt()
+        return (x - mean) * torch.rsqrt(variance + self.eps)

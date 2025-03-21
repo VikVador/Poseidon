@@ -68,7 +68,7 @@ class PoseidonLoss(nn.Module):
                 x_0_denoised[:, self.mask[0] == 1],
             )
 
-        weight   = (1 / sigma_t ** 2) + 1
+        weight   = 1 + 1 / (sigma_t ** 2)
         se       = (x_0_denoised - x_0) ** 2
         mse      = torch.mean(se, dim=-1, keepdim=True)
         wmse     = weight * mse

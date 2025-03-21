@@ -9,11 +9,6 @@ from torch import Tensor
 class SelfAttentionNd(nn.MultiheadAttention):
     r"""Creates an N-dimensional self-attention layer.
 
-    Information:
-        In our context, the self attention layer is applied along the
-        (X, Y) dimensions of the input trajectory. This means that we
-        force each level to attend to itself spatially.
-
     Arguments:
         channels: Number of channels (C)
         heads: Number of attention heads (N).
@@ -36,10 +31,7 @@ class SelfAttentionNd(nn.MultiheadAttention):
     def forward(self, x: Tensor) -> Tensor:
         r"""
         Arguments:
-            x: Input tensor shape (B, (C * K), X, Y).
-
-        Attention:
-            Along (X, Y).
+            x: Input tensor shape (B, (C * K), X, Y)
 
         Returns:
             Ouput tensor (B, (C * K), X, Y).
