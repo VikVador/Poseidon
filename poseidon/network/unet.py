@@ -9,12 +9,17 @@ From:
 import torch
 import torch.nn as nn
 
+from einops import rearrange
 from torch import Tensor
 from typing import Dict, Optional, Sequence
 
 # isort: split
+from poseidon.config import PATH_MESH
+from poseidon.diffusion.tools import generate_encoded_mesh
 from poseidon.network.attention import SelfAttentionNd
 from poseidon.network.convolution import ConvNd
+from poseidon.network.embedding import SirenEmbedding
+from poseidon.network.encoding import SineEncoding
 from poseidon.network.modulation import Modulator
 from poseidon.network.normalization import LayerNorm
 
@@ -25,8 +30,11 @@ class UNetBlock(nn.Module):
     Arguments:
         channels: Number of channels (C) in the input tensor.
         mod_features: Number of features (D) in the modulation vector.
-        dropout: Dropout probability for regularization [0, 1].
+        spatial_scaling: Scaling factor for the spatial region.
+        config_region: Configuration for the spatial region.
+        config_siren: Configuration for the Siren architecture.
         attention_heads: Number of attention heads.
+        dropout: Dropout probability for regularization [0, 1].
         **kwargs: Additional arguments passed to the residual blocks.
     """
 
@@ -34,18 +42,50 @@ class UNetBlock(nn.Module):
         self,
         channels: int,
         mod_features: int,
+        spatial_scaling: int,
+        config_region: Dict,
+        config_siren: Dict,
         attention_heads: Optional[int] = None,
         dropout: Optional[float] = None,
         **kwargs,
     ):
         super().__init__()
 
-        self.modulator = Modulator(
-            channels=channels,
-            mod_features=mod_features,
-            spatial=2,
+        # Spatial mesh
+        mesh = generate_encoded_mesh(
+            path=PATH_MESH,
+            features=config_siren["features"],
+            region=config_region,
         )
 
+        X, Y, _ = mesh.shape
+
+        self.register_buffer(
+            "mesh",
+            mesh[: X // (2**spatial_scaling), : Y // (2**spatial_scaling), :],
+        )
+
+        # Spatial mesh (Embedding)
+        self.norm, self.siren = (
+            LayerNorm(dim=1),
+            SirenEmbedding(
+                in_features=mesh.shape[-1],
+                out_features=channels,
+                n_layers=config_siren["n_layers"],
+            ),
+        )
+
+        # Modulator (for diffusion step)
+        self.encoder, self.modulator = (
+            SineEncoding(features=mod_features),
+            Modulator(
+                channels=channels,
+                mod_features=mod_features,
+                spatial=2,
+            ),
+        )
+
+        # Residual block
         self.block = nn.Sequential(
             LayerNorm(dim=1),
             ConvNd(
@@ -81,12 +121,15 @@ class UNetBlock(nn.Module):
         Returns:
             Tensor: Output tensor (B, (C * K), X, Y).
         """
-        mod_factor, mod_bias, mod_scaling = self.modulator(mod)
 
-        y = (mod_factor + 1) * x + mod_bias
+        mod_factor, mod_bias, mod_scaling = self.modulator(self.encoder(mod).squeeze(1))
+
+        c = rearrange(self.siren(self.mesh), "X Y C -> 1 C X Y")
+
+        y = (mod_factor + 1) * self.norm(x + c) + mod_bias
         y = self.block(y)
         y = x + mod_scaling * y
-        y = y / torch.sqrt(1 + mod_scaling * mod_scaling)
+        y = y * torch.rsqrt(1 + mod_scaling * mod_scaling)
 
         return y
 
@@ -100,6 +143,8 @@ class UNet(nn.Module):
         mod_features: Number of features (D) in modulating vector.
         kernel_size: Kernel size of all convolutions.
         blanket_size: Size of the temporal convolution.
+        config_region: Configuration for the spatial region.
+        config_siren: Configuration for the Siren architecture.
         stride: Stride of the spatial downsampling convolutions.
         dropout: Dropout probability for regularization [0, 1].
         hid_channels: Numbers of channels at each depth.
@@ -114,6 +159,8 @@ class UNet(nn.Module):
         mod_features: int,
         kernel_size: int,
         blanket_size: int,
+        config_region: Dict,
+        config_siren: Dict,
         stride: int = 2,
         dropout: Optional[float] = None,
         hid_blocks: Sequence[int] = (1, 1, 1),
@@ -150,6 +197,9 @@ class UNet(nn.Module):
                     UNetBlock(
                         hid_channels[i],
                         mod_features,
+                        i,
+                        config_region,
+                        config_siren,
                         attention_heads.get(str(i), None),
                         dropout,
                         **kwargs,
@@ -159,6 +209,9 @@ class UNet(nn.Module):
                     UNetBlock(
                         hid_channels[i],
                         mod_features,
+                        i,
+                        config_region,
+                        config_siren,
                         attention_heads.get(str(i), None),
                         dropout,
                         **kwargs,
