@@ -3,7 +3,6 @@ r"""Diffusion backbone."""
 import torch.nn as nn
 
 from einops import rearrange
-from pathlib import Path
 from torch import Tensor
 from typing import (
     Dict,
@@ -12,12 +11,8 @@ from typing import (
 )
 
 # isort: split
-
-from poseidon.config import PATH_MESH
 from poseidon.data.const import LAND_VALUE
 from poseidon.data.mask import generate_trajectory_mask
-from poseidon.diffusion.tools import generate_encoded_mesh
-from poseidon.network.embedding import SirenEmbedding
 from poseidon.network.unet import UNet
 
 
@@ -43,7 +38,6 @@ class PoseidonBackbone(nn.Module):
         config_unet: Dict,
         config_siren: Dict,
         config_region: Dict,
-        path_mesh: Path = PATH_MESH,
     ):
         super().__init__()
 
@@ -59,32 +53,14 @@ class PoseidonBackbone(nn.Module):
             ),
         )
 
-        # Encoded mesh
-        self.register_buffer(
-            "mesh",
-            generate_encoded_mesh(
-                path=path_mesh,
-                features=config_siren["features"],
-                region=config_region,
-            ),
-        )
-
-        # Total embedded size of the mesh
-        emb_channels = self.mesh.shape[-1]
-        in_channels = self.C
-
         # 2D UNet
         self.unet = UNet(
-            in_channels=in_channels * self.K,
-            out_channels=in_channels * self.K,
+            in_channels=self.C * self.K,
+            out_channels=self.C * self.K,
             blanket_size=self.K,
+            config_region=config_region,
+            config_siren=config_siren,
             **config_unet,
-        )
-
-        self.siren = SirenEmbedding(
-            emb_channels,
-            in_channels * self.K,  # One embedding per element of the blanket
-            config_siren["n_layers"],
         )
 
     def forward(
@@ -114,20 +90,7 @@ class PoseidonBackbone(nn.Module):
         # Masking land
         x_t[:, self.mask[0] == 0] = LAND_VALUE
 
-        # Adding embedded mesh
-        mesh_embedding = self.siren(self.mesh)
-        mesh_embedding = rearrange(
-            mesh_embedding,
-            "X Y (C K) -> 1 C K X Y",
-            C=self.C,
-            K=self.K,
-            X=self.X,
-            Y=self.Y,
-        )
-
-        x_t = x_t + mesh_embedding
-
-        # Merging time and levels into channels
+        # Merging time and levels into channels (UNet 2D)
         x_t = rearrange(x_t, "B C K X Y -> B (C K) X Y")
 
         # Estimating (unscaled) clean signal
