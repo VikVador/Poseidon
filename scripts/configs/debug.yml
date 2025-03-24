@@ -53,6 +53,7 @@ Training Pipeline:
   config_unet:
     "kernel_size":     [3]
     "mod_features":    [4]
+    "ffn_scaling":     [1]
     "hid_channels":    [[32, 64, 128]]
     "hid_blocks":      [[1, 1, 1]]
     "dropout":         [0.0]
