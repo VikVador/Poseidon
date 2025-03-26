@@ -38,7 +38,7 @@ Training Pipeline:
     "blanket_neighbors":           [1]
     "steps_training":              [32]
     "steps_gradient_accumulation": [1]
-    "steps_logging":               [2]
+    "steps_logging":               [1]
     "steps_validation":            [4]
 
   config_optimizer:
@@ -52,13 +52,13 @@ Training Pipeline:
 
   config_unet:
     "kernel_size":     [3]
-    "mod_features":    [4]
+    "mod_features":    [2]
     "ffn_scaling":     [1]
-    "hid_channels":    [[32, 64, 128]]
+    "hid_channels":    [[16, 32, 64]]
     "hid_blocks":      [[1, 1, 1]]
     "dropout":         [0.0]
     "attention_heads": [{"-1": 1}]
 
   config_siren:
-      "features": [4]
+      "features": [2]
       "n_layers": [1]
