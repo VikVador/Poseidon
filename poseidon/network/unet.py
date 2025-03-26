@@ -53,10 +53,20 @@ class UNetBlock(nn.Module):
 
         # Feed-Forward Network
         self.ffn = nn.Sequential(
-            ConvNd(channels, channels * ffn_scaling, spatial=2, **kwargs),
+            ConvNd(
+                channels,
+                channels * ffn_scaling,
+                spatial=3,
+                **kwargs,
+            ),
             nn.SiLU(),
             nn.Identity() if dropout is None else nn.Dropout(dropout),
-            ConvNd(channels * ffn_scaling, channels, spatial=2, **kwargs),
+            ConvNd(
+                channels * ffn_scaling,
+                channels,
+                spatial=3,
+                **kwargs,
+            ),
         )
 
         # Spatial mesh embedding
@@ -69,12 +79,12 @@ class UNetBlock(nn.Module):
 
         # Modulator
         self.norm, self.encoder, self.modulator = (
-            LayerNorm(1),
+            LayerNorm(dim=1),
             SineEncoding(features=mod_features),
             Modulator(
                 channels=channels,
                 mod_features=mod_features,
-                spatial=2,
+                spatial=3,
             ),
         )
 
@@ -85,11 +95,11 @@ class UNetBlock(nn.Module):
     ) -> Tensor:
         r"""
         Arguments:
-            x: Input tensor (B, (C * K), X, Y).
+            x: Input tensor (B, C_i, K, X, Y).
             mod: Modulation vector (B, D).
 
         Returns:
-            Tensor: Output tensor (B, (C * K), X, Y).
+            Tensor: Output tensor (B, C_o, K, X, Y).
         """
 
         # Encoding modulation vector
@@ -150,10 +160,12 @@ class UNet(nn.Module):
 
         kwargs = dict(
             kernel_size=(
+                3,
                 kernel_size,
                 kernel_size,
             ),
             padding=(
+                3 // 2,
                 kernel_size // 2,
                 kernel_size // 2,
             ),
@@ -203,8 +215,8 @@ class UNet(nn.Module):
                         ConvNd(
                             hid_channels[i - 1],
                             hid_channels[i],
-                            spatial=2,
-                            stride=(stride, stride),
+                            spatial=3,
+                            stride=(1, stride, stride),
                             **kwargs,
                         ),
                     ),
@@ -212,7 +224,7 @@ class UNet(nn.Module):
 
                 up.append(
                     nn.Sequential(
-                        nn.Upsample(scale_factor=(stride, stride), mode="nearest"),
+                        nn.Upsample(scale_factor=(1, stride, stride), mode="nearest"),
                     )
                 )
 
@@ -223,7 +235,7 @@ class UNet(nn.Module):
                     ConvNd(
                         in_channels,
                         hid_channels[i],
-                        spatial=2,
+                        spatial=3,
                         **kwargs,
                     ),
                 )
@@ -231,7 +243,7 @@ class UNet(nn.Module):
                     ConvNd(
                         hid_channels[i],
                         out_channels,
-                        spatial=2,
+                        spatial=3,
                         **kwargs,
                     )
                 )
@@ -243,7 +255,7 @@ class UNet(nn.Module):
                     ConvNd(
                         hid_channels[i] + hid_channels[i + 1],
                         hid_channels[i],
-                        spatial=2,
+                        spatial=3,
                         **kwargs,
                     ),
                 )
@@ -257,14 +269,14 @@ class UNet(nn.Module):
         x: Tensor,
         mod: Tensor,
     ) -> Tensor:
-        r"""A forward pass through the UNet.
+        r"""Forward pass through the UNet.
 
         Arguments:
-            x: Input tensor (B, C_in, X, Y).
+            x: Input tensor (B, C_i, K, X, Y).
             mod: Modulation vector (B, D).
 
         Returns:
-            Output tensor (B, C_out, X, Y).
+            Output tensor (B, C_o, K, X, Y).
         """
 
         memory = []

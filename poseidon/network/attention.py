@@ -31,10 +31,10 @@ class SelfAttentionNd(nn.MultiheadAttention):
     def forward(self, x: Tensor) -> Tensor:
         r"""
         Arguments:
-            x: Input tensor shape (B, (C * K), X, Y)
+            x: Input tensor (B, C, K, X, Y)
 
         Returns:
-            Ouput tensor (B, (C * K), X, Y).
+            Ouput tensor (B, C, K, X, Y).
         """
 
         y = rearrange(x, "B C ...  -> B (...) C")

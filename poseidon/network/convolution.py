@@ -12,8 +12,8 @@ def ConvNd(
     r"""Returns an N-dimensional convolutional layer.
 
     Arguments:
-        in_channels: Number of input channels (C_in).
-        out_channels: Number of output channels (C_out).
+        in_channels: Number of input channels (C_i).
+        out_channels: Number of output channels (C_o).
         spatial: Number of spatial dimensions on which the convolution is applied.
         kwargs: Keyword arguments passed to :class:`torch.nn.Conv2d`.
     """

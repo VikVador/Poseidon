@@ -102,11 +102,11 @@ class SirenEmbedding(nn.Module):
 
 
 class MeshEmbedding(nn.Module):
-    r"""Creates a block which generates a spatial mesh embedding.
+    r"""Generates a spatial mesh embedding.
 
     Arguments:
         channels: Number of channels on which projecting the spatial mesh.
-        features: Number of features to encode the spatial mesh.
+        features: Number of features used to encode the spatial mesh.
         n_layers: Number of layers for the Siren embedding.
         spatial_scaling: Upscaling factor for the spatial mesh.
         config_region: Configuration for the region.
@@ -152,4 +152,4 @@ class MeshEmbedding(nn.Module):
         mesh = self.siren(self.mesh)
 
         # Rearranging for broadcasting
-        return rearrange(mesh, "X Y C -> 1 C X Y")
+        return rearrange(mesh, "X Y C -> 1 C 1 X Y")

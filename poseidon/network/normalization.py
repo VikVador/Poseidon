@@ -30,13 +30,6 @@ class LayerNorm(nn.Module):
         self.register_buffer("eps", torch.as_tensor(eps))
 
     def forward(self, x: Tensor) -> Tensor:
-        r"""Standardizes the input tensor along the specified dimension(s).
-
-        Arguments:
-            x: Input tensor.
-
-        Returns:
-            Standardized tensor.
-        """
+        r"""Standardizes the input tensor along the specified dimension(s)."""
         variance, mean = torch.var_mean(x, dim=self.dim, keepdim=True)
         return (x - mean) * torch.rsqrt(variance + self.eps)
