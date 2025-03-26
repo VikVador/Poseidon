@@ -39,13 +39,13 @@ def get_toy_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
     r"""Returns the toy training, validation, and test dataloaders.
 
     Region:
-        Black Sea Continental Shelf (Debugging).
+        Black Sea Continental Shelf (Surface only).
 
     Shuffling:
         Only the training dataset is shuffled (by default).
 
     Splits:
-        Training: 2015-01-01 to 2017-12-31.
+        Training: 1995-01-01 to 2017-12-31.
         Validation: 2020-01-01 to 2020-12-31.
         Test: 2022-01-01 to 2022-12-31.
 
@@ -116,13 +116,13 @@ def _get_dataloaders_from_datasets(
         if inf:
             assert (
                 stp is not None
-            ), "ERROR - Maximum number of steps needed to create an 'infinite' dataloaders."
+            ), "ERROR - Maximum number of steps needed to create an 'infinite' dataloader."
 
     for lin, lin_s in zip(linspace, linspace_samples):
         if lin:
             assert (
                 lin_s is not None
-            ), "ERROR - Number of samples needed to create a 'linspace' dataloaders"
+            ), "ERROR - Number of samples `linspace_samples` needed to create a 'linspace' dataloader"
 
     datasets = get_datasets(
         trajectory_size=trajectory_size,

@@ -108,7 +108,7 @@ class PoseidonDataset(Dataset):
             step_end: End index of the sample.
 
         Returns:
-            sample: A trajectory sample.
+            sample: Trajectory sample (C, T, X, Y).
             time: Date features corresponding to each day of the trajectory.
         """
 
@@ -134,10 +134,10 @@ def get_toy_datasets(
     r"""Returns the toy training, validation, and test :class:`PoseidonDataset`.
 
     Region:
-        Black Sea Continental Shelf (Debugging).
+        Black Sea Continental Shelf (Surface only).
 
     Splits:
-        Training: 2015-01-01 to 2017-12-31.
+        Training: 1995-01-01 to 2017-12-31.
         Validation: 2020-01-01 to 2020-12-31.
         Test: 2022-01-01 to 2022-12-31.
 
