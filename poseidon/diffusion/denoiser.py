@@ -1,4 +1,4 @@
-r"""Diffusion denoiser."""
+r"""Diffusion denoisers."""
 
 import torch
 import torch.nn as nn
@@ -9,6 +9,7 @@ from typing import Callable
 
 # isort: split
 from poseidon.diffusion.backbone import PoseidonBackbone
+from poseidon.diffusion.tools import PoseidonTrajectoryWrapper
 from poseidon.math import gmres
 
 
@@ -37,9 +38,6 @@ class PoseidonDenoiser(nn.Module):
     ) -> Tensor:
         r"""Denoising using EDM-style preconditioning.
 
-        Information:
-            Since the dataset is standardized, sigma(data)^2 = 1.
-
         Arguments:
             x_t: Noisy input tensor (B, C * K * X * Y).
             sigma_t: Associated noise levels (B, 1).
@@ -64,18 +62,21 @@ class PoseidonMMPSDenoiser(nn.Module):
         | Learning Diffusion Priors from Observations by Expectation Maximization (Rozet et al., 2024)
         | https://arxiv.org/abs/2405.13712
 
+    Information:
+        Be careful to wrap the denoiser model with :class:`PoseidonTrajectoryWrapper`.
+
     Arguments:
         denoiser: A Gaussian denoiser.
         y: An observation y ~ 𝒩(Ax, Σᵧ) of shape (M).
-        A: The forward operator x ↦ Ax. It should take in a vector x of shape (B, D) and return a vector of shape (M, B).
-        cov_y: The covariance matrix or the noise variance Σᵧ if the covariance is diagonal, with shape (), (D), or (D, D).
+        A: Observation operator x ↦ Ax. It should take in a vector x of shape (B, D) and return a vector of shape (B, M).
+        cov_y: Covariance matrix or the noise variance Σᵧ if the covariance is diagonal, with shape (), (D), or (D, D).
         tweedie_covariance: Whether to use the Tweedie covariance formula or not. If False, use Σₜ instead.
-        iterations: The number of solver iterations.
+        iterations: Number of solver iterations.
     """
 
     def __init__(
         self,
-        denoiser: PoseidonDenoiser,
+        denoiser: PoseidonTrajectoryWrapper,
         y: Tensor,
         A: Callable[[Tensor], Tensor],
         cov_y: Tensor,

@@ -8,16 +8,10 @@ from torch import Tensor
 
 
 class PoseidonTimeScheduler(nn.Module):
-    r"""A custom time scheduler for diffusion models.
+    r"""A uniformly sampled time scheduler.
 
     Mathematics:
         t ~ U(0, 1)
-
-    Information:
-        This scheduler samples timesteps uniformly from [0, 1]
-        to be used in the diffusion process. Biasing the
-        sampling of timesteps does not appear to
-        improve model training.
     """
 
     def __init__(self):

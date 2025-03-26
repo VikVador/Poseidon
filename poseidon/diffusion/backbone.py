@@ -17,11 +17,7 @@ from poseidon.network.unet import UNet
 
 
 class PoseidonBackbone(nn.Module):
-    r"""Helper module used to add conditionning before denoising.
-
-    References:
-        | Elucidating the Design Space of Diffusion-Based Generative Models (Karras et al., 2022).
-        | https://arxiv.org/abs/2206.00364
+    r"""Helper module to preprocess data before denoising.
 
     Arguments:
         variables: Variable names to retain from the dataset.
@@ -53,13 +49,9 @@ class PoseidonBackbone(nn.Module):
             ),
         )
 
-        # Total number of channels
-        channels = self.C * self.K
-
-        # 2D UNet
         self.unet = UNet(
-            in_channels=channels,
-            out_channels=channels,
+            in_channels=self.C,
+            out_channels=self.C,
             config_region=config_region,
             config_siren=config_siren,
             **config_unet,
@@ -80,6 +72,7 @@ class PoseidonBackbone(nn.Module):
             Cleaned tensor (B, C * K * X * Y).
         """
 
+        # Reshaping for UNet
         x_t = rearrange(
             x_t,
             "B (C K X Y) -> B C K X Y",
@@ -92,15 +85,14 @@ class PoseidonBackbone(nn.Module):
         # Masking land
         x_t[:, self.mask[0] == 0] = LAND_VALUE
 
-        # Merging time and levels into channels (UNet 2D)
-        x_t = rearrange(x_t, "B C K X Y -> B (C K) X Y")
-
         # Estimating (unscaled) clean signal
-        return rearrange(
+        x_t = rearrange(
             self.unet(x_t, sigma_t),
-            "B (C K) X Y -> B (C K X Y)",
+            "B C K X Y -> B (C K X Y)",
             C=self.C,
             K=self.K,
             X=self.X,
             Y=self.Y,
         )
+
+        return x_t

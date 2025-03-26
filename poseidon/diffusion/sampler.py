@@ -37,7 +37,7 @@ class Sampler(nn.Module):
     Arguments:
         denoiser: A denoiser model d(xₜ) ≈ E[x | xₜ]
         schedule: A noise schedule.
-        dimensions: Dimensions of the trajectory (C, X, Y).
+        dimensions: Spatial dimensions of the trajectory (C, X, Y).
     """
 
     def __init__(
@@ -45,8 +45,6 @@ class Sampler(nn.Module):
         denoiser: PoseidonDenoiser,
         schedule: nn.Module,
         dimensions: Tuple[int, int, int],
-        *args,
-        **kwargs,
     ):
         super().__init__()
 
@@ -60,10 +58,10 @@ class Sampler(nn.Module):
     def forward(self, x1: Tensor) -> Tensor:
         r"""
         Arguments:
-            x1: A noise tensor from p(x₁), with shape (*, D).
+            x1: Noisy tensor from p(x₁), with shape (*, D).
 
         Returns:
-            A data tensor from p(x₀ | x₁), with shape (*, D).
+            Data tensor from p(x₀ | x₁), with shape (*, D).
         """
         pass
 
@@ -120,6 +118,7 @@ class LMSSampler(Sampler):
         # Adams-Bashforth coefficients
         return gauss_legendre(lj, tj[-1], ti, n=order // 2 + 1)
 
+
     @torch.no_grad()
     def forward(
         self,
@@ -154,7 +153,6 @@ class LMSSampler(Sampler):
             # Stores N past derivatives for Adams-Bashforth
             derivatives = []
 
-            # Solving reverse-time diffusion
             for s, sigma_t in enumerate(sigmas[:-1]):
 
                 # Estimating reconstructed state
@@ -173,14 +171,11 @@ class LMSSampler(Sampler):
                 coefficients = coefficients.to(xt)
                 delta        = sum(c * d for c, d in zip(coefficients, derivatives))
 
-                # Updating state
                 xt = xt + delta
 
-                # Progression bar
                 if s % forecast_size == 0:
                     progression.update(1)
 
-            # Storing forecast
             forecasts.append(xt)
 
         return torch.stack(forecasts, dim=0)
