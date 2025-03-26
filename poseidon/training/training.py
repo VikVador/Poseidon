@@ -56,7 +56,7 @@ def training(
         config_optimizer: Configuration for the optimizer.
         config_scheduler: Configuration for the scheduler.
         config_unet: Configuration for the UNet (denoiser).
-        config_siren: Configuration for the Siren network (spatial embedding).
+        config_siren: Configuration for the Siren network.
         config_wandb: Configuration for Weights & Biases.
         config_cluster: Configuration of the Cluster.
     """
@@ -120,8 +120,8 @@ def training(
         "linspace": [False, True, True],
         "linspace_samples": [
             None,
-            3 * 4,
-            2 * 4,
+            3 * 12,
+            2 * 12,
         ],
     }
 
@@ -337,13 +337,14 @@ def training(
         # ===========================================================================
         #                             OPTIMIZATION STEP
         # ===========================================================================
-        if (step % steps_gradient_accumulation == 0) or (step == steps_training - 2):
+        if 0 < step:
+            if (step % steps_gradient_accumulation == 0) or (step == steps_training - 2):
 
-            optimizer.step()
-            scheduler_lr.step()
-            optimizer.zero_grad()
-            loss_aoas = 0.0
-            gc.collect()
+                optimizer.step()
+                scheduler_lr.step()
+                optimizer.zero_grad()
+                loss_aoas = 0.0
+                gc.collect()
 
         # Cleaning
         del x_0, x_t, sigma_t, loss

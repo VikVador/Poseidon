@@ -1,11 +1,4 @@
-r"""PyTorch implementation of SOAP
-
-Adapted from https://github.com/nikhilvyas/SOAP
-
-References:
-    | SOAP: Improving and Stabilizing Shampoo using Adam (Vyas et al., 2024)
-    | https://arxiv.org/abs/2409.11321
-"""
+r"""PyTorch implementation of SOAP optimizer."""
 
 import torch
 
@@ -14,6 +7,10 @@ from typing import Iterable, Tuple
 
 class SOAP(torch.optim.Optimizer):
     r"""Configure the optimizer with Shampoo and Adam parameters.
+
+    References:
+    | SOAP: Improving and Stabilizing Shampoo using Adam (Vyas et al., 2024)
+    | https://arxiv.org/abs/2409.11321
 
     Arguments:
         lr: The learning rate.

@@ -7,7 +7,7 @@ from pathlib import Path
 from torch.optim import Optimizer, lr_scheduler
 
 # isort: split
-from poseidon.config import PATH_MESH, PATH_MODEL
+from poseidon.config import PATH_MODEL
 from poseidon.data.const import DATASET_REGION, TOY_DATASET_REGION
 from poseidon.diffusion.backbone import PoseidonBackbone
 
@@ -17,7 +17,6 @@ from poseidon.diffusion.backbone import PoseidonBackbone
 def load_backbone(
     name_model: str,
     path: Path = PATH_MODEL,
-    path_mesh: Path = PATH_MESH,
     best: bool = True,
     backup: bool = False,
 ) -> PoseidonBackbone:
@@ -26,7 +25,6 @@ def load_backbone(
     Arguments:
         name_model: Name of Backbone model to load.
         path: Path to folder in which save the model.
-        path_mesh: Path to the mesh file used by the backbone.
         best: Weather to load the best model or the last one.
         backup: Weather to load the backup model.
     """

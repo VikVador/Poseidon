@@ -36,7 +36,7 @@ def extract_blankets_in_trajectories(x: Tensor, k: int, blankets_center_idx: Ten
         blankets_center_idx: Position of blankets center (B).
 
     Returns:
-        Blankets from input tensor (B, C, 2k+1, X, Y)
+        Blankets from input tensor (B, C, K, X, Y)
     """
     _, _, T, _, _ = x.shape
 
