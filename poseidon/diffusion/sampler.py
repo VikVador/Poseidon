@@ -1,4 +1,10 @@
-r"""Diffusion samplers."""
+r"""Diffusion samplers.
+
+From:
+  | azula library (François Rozet)
+  | https://github.com/francois-rozet/azula
+
+"""
 
 import torch
 import torch.nn as nn
@@ -6,10 +12,12 @@ import torch.nn as nn
 from abc import abstractmethod
 from torch import Tensor
 from tqdm import tqdm
+from typing import Tuple
 
 # isort: split
 from poseidon.diffusion.denoiser import PoseidonDenoiser
-from poseidon.score.prior import PoseidonScorePrior
+from poseidon.diffusion.schedulers import PoseidonNoiseScheduler
+from poseidon.math import gauss_legendre
 
 # fmt: off
 #
@@ -17,129 +25,157 @@ from poseidon.score.prior import PoseidonScorePrior
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 
-class PoseidonEDMSampler(nn.Module):
+class Sampler(nn.Module):
     r"""Template to create a diffusion sampler
 
-    References:
-        | Elucidating the Design Space of Diffusion-Based Generative Models (Karras et al., 2022).
-        | https://arxiv.org/abs/2206.00364
+    Mathematics:
+
+            xₛ = xₜ - τ (xₜ - d(xₜ)) + σₛ √τ ε
+
+    where τ is determined by the noise schedule.
+
+    Arguments:
+        denoiser: A denoiser model d(xₜ) ≈ E[x | xₜ]
+        schedule: A noise schedule.
+        dimensions: Spatial dimensions of the trajectory (C, X, Y).
     """
 
     def __init__(
         self,
         denoiser: PoseidonDenoiser,
-        rho: float = 2,
-        sigma_min: float = 0.01,
-        sigma_max: float = 80,
+        schedule: nn.Module,
+        dimensions: Tuple[int, int, int],
     ):
         super().__init__()
 
-        # Computes unconditional score
-        self.score_prior = PoseidonScorePrior(denoiser)
+        self.C, self.X, self.Y = dimensions
 
-        # Extracting dimensions of the region
-        self.C, self.H, self.W = (
-            denoiser.backbone.C,
-            denoiser.backbone.H,
-            denoiser.backbone.W,
-        )
-
-        # Properties of timesteps
-        self.steps, self.rho, self.sigma_min_rho_, self.sigma_max_rho_ = (
-            1,
-            rho,
-            sigma_min ** (1 / rho),
-            sigma_max ** (1 / rho),
-        )
-
-    def get_timestep(self, i: int) -> Tensor:
-        r"""Computes timestep at a given step of the reverse diffusion process."""
-        return (
-            self.sigma_max_rho_
-            + (i / (self.steps - 1)) * (self.sigma_min_rho_ - self.sigma_max_rho_)
-        ) ** self.rho
-
-    def get_noise(self, t: int) -> Tensor:
-        r"""Computes noise."""
-        return torch.tensor([t]).to(DEVICE)
-
-    def get_noise_derivative(self, t: int) -> Tensor:
-        r"""Computes noise derivative."""
-        return torch.tensor([1]).to(DEVICE)
-
-    def evaluate(self, x: Tensor, t: int) -> Tensor:
-        r"""Evaluates the function f(x_i, t_i)."""
-        return (
-            -self.get_noise_derivative(t)
-            * self.get_noise(t)
-            * self.score_prior.forward(x, self.get_noise(t).unsqueeze(0))
-        )
+        self.denoiser = denoiser
+        self.schedule = schedule
+        self.steps    = 1
 
     @abstractmethod
-    def step(self, x_i: Tensor, t_i: int, h_i: float) -> Tensor:
-        r"""Computes one-step of diffusion."""
-        raise NotImplementedError
+    def forward(self, x1: Tensor) -> Tensor:
+        r"""
+        Arguments:
+            x1: Noisy tensor from p(x₁), with shape (*, D).
 
+        Returns:
+            Data tensor from p(x₀ | x₁), with shape (*, D).
+        """
+        pass
+
+
+class LMSSampler(Sampler):
+    r"""Creates a linear multi-step (LMS) sampler.
+
+    References:
+        | k-diffusion (Katherine Crowson)
+        | https://github.com/crowsonkb/k-diffusion
+
+    Arguments:
+        denoiser: A denoiser model d(xₜ) ≈ E[x | xₜ].
+        schedule: A noise schedule.
+        order: Order of the multi-step method.
+        kwargs: Keyword arguments passed to Sampler.
+    """
+
+    def __init__(
+        self,
+        denoiser: PoseidonDenoiser,
+        schedule: PoseidonNoiseScheduler,
+        dimensions: Tuple[int, int, int],
+        order: int = 3,
+    ):
+        super().__init__(denoiser=denoiser, schedule=schedule, dimensions=dimensions)
+        self.order = order
+
+    @staticmethod
+    def adams_bashforth(t: Tensor, i: int, order: int = 3) -> Tensor:
+        r"""Returns the coefficients of the N-th order Adams-Bashforth method.
+
+        Wikipedia:
+            https://wikipedia.org/wiki/Linear_multistep_method
+
+        Arguments:
+            t: Integration variable, with shape (T).
+            i: Integration step.
+            order: Method order N.
+
+        Returns:
+            Adams-Bashforth coefficients, with shape (N).
+        """
+
+        ti = t[i]
+        tj = t[i - order : i]
+        tk = torch.cat((tj, tj)).unfold(0, order, 1)[:order, 1:]
+        tj_tk = tj[..., None] - tk
+
+        # Lagrange basis
+        def lj(t):
+            return torch.prod((t[..., None, None] - tk) / tj_tk, dim=-1)
+
+        # Adams-Bashforth coefficients
+        return gauss_legendre(lj, tj[-1], ti, n=order // 2 + 1)
+
+
+    @torch.no_grad()
     def forward(
         self,
         trajectory_size: int,
-        forecast_size: int = 3,
-        steps: int = 64,
+        forecast_size: int,
+        steps: int = 32,
     ) -> Tensor:
         r"""Generating forecasts."""
-        with torch.no_grad():
 
-            forecasts, self.steps, progression = (
-                [],
-                steps,
-                tqdm(
-                    total=steps,
-                    desc="| POSEIDON | Diffusion",
-                ),
-            )
+        forecasts, self.steps, progression = (
+            [],
+            steps,
+            tqdm(
+                total=steps,
+                desc="| POSEIDON | Diffusion",
+            ),
+        )
 
-            for _ in range(forecast_size):
+        for _ in range(forecast_size):
 
-                # Initial state (random Gaussian noise)
-                x_i = self.get_noise(
-                    t=self.get_timestep(0),
-                ) * torch.randn(self.C, trajectory_size, self.H, self.W).to(DEVICE)
+            # Initial Noise
+            sigma_t = self.schedule(torch.tensor([1]))
 
-                for s in range(0, steps - 1):
+            # Initial state (random Gaussian noise)
+            xt = (sigma_t * torch.randn(self.C, trajectory_size, self.X, self.Y)).to(DEVICE)
 
-                    x_i = self.step(
-                        x_i=x_i,
-                        t_i=self.get_timestep(s),
-                        h_i=self.get_timestep(s + 1) - self.get_timestep(s),
-                    )
+            # Other initializations
+            time   = torch.linspace(1, 0, self.steps + 1).to(DEVICE)
+            sigmas = self.schedule(time).squeeze()
+            ratio  = sigmas.double()
 
-                    if s % forecast_size == 0:
-                        progression.update(1)
+            # Stores N past derivatives for Adams-Bashforth
+            derivatives = []
 
-                forecasts.append(x_i)
+            for s, sigma_t in enumerate(sigmas[:-1]):
 
-            return torch.stack(forecasts, dim=0)
+                # Estimating reconstructed state
+                q_t = self.denoiser(xt, sigma_t)
 
+                # Computing noise to remove
+                z_t = (xt - q_t) / sigma_t
 
-class PoseidonEulerSampler(PoseidonEDMSampler):
-    r"""A numerical solver using Euler (1st Order) solver."""
+                # Storing derivatives
+                derivatives.append(z_t)
+                if len(derivatives) > self.order:
+                    derivatives.pop(0)
 
-    def step(self, x_i: Tensor, t_i: int, h_i: float) -> Tensor:
-        r"""Perfoms one-step of diffusion."""
-        return x_i + h_i * self.evaluate(x_i, t_i)
+                # Adams-Bashforth coefficients
+                coefficients = self.adams_bashforth(ratio, s + 1, order=len(derivatives))
+                coefficients = coefficients.to(xt)
+                delta        = sum(c * d for c, d in zip(coefficients, derivatives))
 
+                xt = xt + delta
 
-class PoseidonHeunSampler(PoseidonEDMSampler):
-    r"""A numerical solver using Heun (2nd Order) solver."""
+                if s % forecast_size == 0:
+                    progression.update(1)
 
-    def step(self, x_i: Tensor, t_i: int, h_i: float) -> Tensor:
-        r"""Perfoms one-step of diffusion."""
+            forecasts.append(xt)
 
-        # Storing the evaluation to only call twice the model
-        f_i = self.evaluate(x_i, t_i)
-
-        # Euler Step
-        x = x_i + h_i * f_i
-
-        # Correction (Heun)
-        return x_i + (h_i / 2) * (f_i + self.evaluate(x=x, t=(t_i + h_i)))
+        return torch.stack(forecasts, dim=0)

@@ -1,9 +1,4 @@
-r"""UNet Architecture for 3-dimensional convolutions.
-
-References:
-    Inspired by the implementation in:
-    https://github.com/probabilists/azula
-"""
+r"""UNet Architecture."""
 
 import torch
 import torch.nn as nn
@@ -14,6 +9,8 @@ from typing import Dict, Optional, Sequence
 # isort: split
 from poseidon.network.attention import SelfAttentionNd
 from poseidon.network.convolution import ConvNd
+from poseidon.network.embedding import MeshEmbedding
+from poseidon.network.encoding import SineEncoding
 from poseidon.network.modulation import Modulator
 from poseidon.network.normalization import LayerNorm
 
@@ -24,8 +21,12 @@ class UNetBlock(nn.Module):
     Arguments:
         channels: Number of channels (C) in the input tensor.
         mod_features: Number of features (D) in the modulation vector.
-        dropout: Dropout probability for regularization [0, 1].
+        ffn_scaling: Scaling factor for the feed-forward network.
+        spatial_scaling: Scaling factor for the spatial region.
+        config_region: Configuration for the spatial region.
+        config_siren: Configuration for the Siren architecture.
         attention_heads: Number of attention heads.
+        dropout: Dropout probability for regularization [0, 1].
         **kwargs: Additional arguments passed to the residual blocks.
     """
 
@@ -33,93 +34,118 @@ class UNetBlock(nn.Module):
         self,
         channels: int,
         mod_features: int,
+        ffn_scaling: int,
+        spatial_scaling: int,
+        config_region: Dict,
+        config_siren: Dict,
         attention_heads: Optional[int] = None,
         dropout: Optional[float] = None,
         **kwargs,
     ):
         super().__init__()
 
-        self.modulator = Modulator(
-            channels=channels,
-            mod_features=mod_features,
-            spatial=3,
+        # Attention
+        self.attn = (
+            SelfAttentionNd(channels, heads=attention_heads)
+            if attention_heads is not None
+            else None
         )
 
-        self.block = nn.Sequential(
-            LayerNorm(dim=1),
+        # Feed-Forward Network
+        self.ffn = nn.Sequential(
             ConvNd(
                 channels,
-                channels,
+                channels * ffn_scaling,
                 spatial=3,
                 **kwargs,
             ),
             nn.SiLU(),
             nn.Identity() if dropout is None else nn.Dropout(dropout),
             ConvNd(
-                channels,
+                channels * ffn_scaling,
                 channels,
                 spatial=3,
                 **kwargs,
             ),
         )
 
-        if attention_heads is not None:
-            self.block.append(LayerNorm(dim=1))
-            self.block.append(SelfAttentionNd(channels, heads=attention_heads))
+        # Spatial mesh embedding
+        self.mesh_embedding = MeshEmbedding(
+            channels=channels,
+            spatial_scaling=spatial_scaling,
+            config_region=config_region,
+            **config_siren,
+        )
 
-    def forward(self, x: Tensor, mod: Tensor) -> Tensor:
+        # Modulator
+        self.norm, self.encoder, self.modulator = (
+            LayerNorm(dim=1),
+            SineEncoding(features=mod_features),
+            Modulator(
+                channels=channels,
+                mod_features=mod_features,
+                spatial=3,
+            ),
+        )
+
+    def forward(
+        self,
+        x: Tensor,
+        mod: Tensor,
+    ) -> Tensor:
         r"""
         Arguments:
-            x: Input tensor (B, C, T, H, W).
+            x: Input tensor (B, C_i, K, X, Y).
             mod: Modulation vector (B, D).
 
         Returns:
-            Tensor: Output tensor (B, C, T, H, W).
+            Tensor: Output tensor (B, C_o, K, X, Y).
         """
-        mod_factor, mod_bias, mod_scaling = self.modulator(mod)
 
-        y = (mod_factor + 1) * x + mod_bias
-        y = self.block(y)
-        y = x + mod_scaling * y
-        y = y / torch.sqrt(1 + mod_scaling * mod_scaling)
+        # Encoding modulation vector
+        mod = self.encoder(mod).squeeze(1)
+
+        # Mesh embedding
+        mesh = self.mesh_embedding()
+
+        # Modulation
+        a, b, c = self.modulator(mod)
+
+        y = (a + 1) * self.norm(x + mesh) + b
+        y = y if self.attn is None else y + self.attn(y)
+        y = self.ffn(y)
+        y = (x + c * y) * torch.rsqrt(1 + c * c)
 
         return y
 
 
 class UNet(nn.Module):
-    r"""Creates a U-Net model for 3-dimensional convolutions.
+    r"""Creates a U-Net.
 
     Arguments:
         in_channels: Number of input channels (C_i)
         out_channels: Number of output channels (C_o).
-        mod_features: Number of features (D) in modulating vector.
         kernel_size: Kernel size of all convolutions.
-        blanket_size: Size of the temporal convolution.
+        mod_features: Number of features (D) in modulating vector.
+        ffn_scaling: Scaling factor for the feed-forward network.
+        config_region: Configuration for the spatial region.
+        config_siren: Configuration for the Siren architecture.
         stride: Stride of the spatial downsampling convolutions.
         dropout: Dropout probability for regularization [0, 1].
         hid_channels: Numbers of channels at each depth.
         hid_blocks: Numbers of hidden blocks at each depth.
         attention_heads: The number of attention heads at each depth.
-
-    Example:
-        >>> unet = UNet(in_channels=64,
-                        out_channels=64,
-                        mod_features=128,
-                        hid_channels=[64, 128, 256],
-                        hid_blocks=[2, 3, 3],
-                        kernel_size=3,
-                        blanket_size=3,
-                        stride=2,
-                        dropout=0.1)
     """
 
     def __init__(
         self,
         in_channels: int,
         out_channels: int,
-        mod_features: int,
         kernel_size: int,
-        blanket_size: int,
+        mod_features: int,
+        ffn_scaling: int,
+        config_region: Dict,
+        config_siren: Dict,
         stride: int = 2,
         dropout: Optional[float] = None,
         hid_blocks: Sequence[int] = (1, 1, 1),
@@ -134,12 +160,12 @@ class UNet(nn.Module):
 
         kwargs = dict(
             kernel_size=(
-                blanket_size,
+                3,
                 kernel_size,
                 kernel_size,
             ),
             padding=(
-                blanket_size // 2,
+                3 // 2,
                 kernel_size // 2,
                 kernel_size // 2,
             ),
@@ -158,6 +184,10 @@ class UNet(nn.Module):
                     UNetBlock(
                         hid_channels[i],
                         mod_features,
+                        ffn_scaling,
+                        i,
+                        config_region,
+                        config_siren,
                         attention_heads.get(str(i), None),
                         dropout,
                         **kwargs,
@@ -167,13 +197,17 @@ class UNet(nn.Module):
                     UNetBlock(
                         hid_channels[i],
                         mod_features,
+                        ffn_scaling,
+                        i,
+                        config_region,
+                        config_siren,
                         attention_heads.get(str(i), None),
                         dropout,
                         **kwargs,
                     )
                 )
 
-            # Sampling - Downsampling and Upsampling
+            # Downsampling and Upsampling
             if i > 0:
                 do.insert(
                     index=0,
@@ -185,13 +219,11 @@ class UNet(nn.Module):
                             stride=(1, stride, stride),
                             **kwargs,
                         ),
-                        LayerNorm(dim=1),
                     ),
                 )
 
                 up.append(
                     nn.Sequential(
-                        LayerNorm(dim=1),
                         nn.Upsample(scale_factor=(1, stride, stride), mode="nearest"),
                     )
                 )
@@ -212,8 +244,7 @@ class UNet(nn.Module):
                         hid_channels[i],
                         out_channels,
                         spatial=3,
-                        kernel_size=(blanket_size, 1, 1),  # Removes aliasing
-                        padding=(blanket_size // 2, 0, 0),
+                        **kwargs,
                     )
                 )
 
@@ -233,39 +264,38 @@ class UNet(nn.Module):
             self.descent.append(do)
             self.ascent.insert(0, up)
 
-    def forward(self, x: Tensor, mod: Tensor) -> Tensor:
-        r"""A forward pass through the UNet.
+    def forward(
+        self,
+        x: Tensor,
+        mod: Tensor,
+    ) -> Tensor:
+        r"""Forward pass through the UNet.
 
         Arguments:
-            x: Input tensor (B, Ci, T, H, W).
+            x: Input tensor (B, C_i, K, X, Y).
             mod: Modulation vector (B, D).
 
         Returns:
-            Tensor: Output tensor (B, Co, T, H, W).
+            Output tensor (B, C_o, K, X, Y).
         """
 
         memory = []
 
-        # === Descent ===
         for blocks in self.descent:
             for block in blocks:
                 if isinstance(block, UNetBlock):
                     x = block(x, mod)
                 else:
                     x = block(x)
-
             memory.append(x)
 
-        # === Ascent ===
         for blocks in self.ascent:
             y = memory.pop()
             if x is not y:
                 for i in range(2, x.ndim):
                     if x.shape[i] > y.shape[i]:
                         x = torch.narrow(x, i, 0, y.shape[i])
-
                 x = torch.cat((x, y), dim=1)
-
             for block in blocks:
                 if isinstance(block, UNetBlock):
                     x = block(x, mod)

@@ -5,7 +5,11 @@ import yaml
 
 from pathlib import Path
 from torch.optim import Optimizer, lr_scheduler
-from typing import Dict, Optional
+from typing import (
+    Dict,
+    Optional,
+    Sequence,
+)
 
 # isort: split
 from poseidon.diffusion.backbone import PoseidonBackbone
@@ -17,10 +21,10 @@ class PoseidonSave:
     Arguments:
         path: Path to root folder.
         name_model: Name of the model.
-        dimensions: Input tensor dimensions (B, C, K, H, W).
-        config_unet: Configuration the UNet architecture.
-        config_siren: Configuration for the Siren architecture.
-        config_problem: Configuration of the problem.
+        dimensions: Input tensor dimensions (B, C, K, X, Y).
+        config_unet: Configuration of UNet architecture.
+        config_siren: Configuration of Siren architecture.
+        config_problem: Configuration of problem.
         saving: Whether to save or not.
     """
 
@@ -28,6 +32,7 @@ class PoseidonSave:
         self,
         path: Path,
         name_model: str,
+        variables: Sequence[str],
         dimensions: tuple,
         config_unet: dict,
         config_siren: dict,
@@ -49,11 +54,14 @@ class PoseidonSave:
                     {
                         "dimensions": list(dimensions),
                     },
+                    {
+                        "variables": variables,
+                    },
                     config_unet,
                     config_siren,
                     config_problem,
                 ],
-                ["dimensions", "unet", "siren", "problem"],
+                ["dimensions", "variables", "unet", "siren", "problem"],
             )
 
             for config, name in zip(list_configs, list_names):
@@ -78,7 +86,7 @@ class PoseidonSave:
         if self.saving:
             #
             # Saving tools and last model with backup protection
-            for n in [self.name_model, self.name_model + "/__backup__"]:
+            for n in [self.name_model + "/__backup__", self.name_model]:
                 #
                 save_tools(
                     path=self.path,
@@ -115,7 +123,7 @@ def save_backbone(
     name_model: str,
     name_state: str,
 ) -> None:
-    r"""Saves a `PoseidonBackbone` model.
+    r"""Saves a :class:`PoseidonBackbone` model.
 
     Arguments:
         path: Path to folder in which save the model.

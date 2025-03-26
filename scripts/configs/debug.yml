@@ -10,7 +10,7 @@ Cluster:
   "gpus"     : [1]
   "partition": ["gpu"]
   "ram"      : ["60GB"]
-  "time"     : ["24:00:00"]
+  "time"     : ["48:00:00"]
 
 
 # ===== Diffusion Training Configuration =====
@@ -19,12 +19,12 @@ Training Pipeline:
 
   config_wandb:
     "project": ["Poseidon-Training-Black-Sea-Shelf-Debugging"]
-    "mode":    ["online"]
+    "mode":    ["disabled"]
 
   config_problem:
     "model_checkpoint_name":    [null]
     "model_checkpoint_version": [null]
-    "model_saving":             [True]
+    "model_saving":             [False]
     "toy_problem":              [True]
 
   config_dataloader:
@@ -32,32 +32,33 @@ Training Pipeline:
     "num_workers":     [0]
     "prefetch_factor": [null]
     "shuffle":         [[True, False, False]]
-    "trajectory_size": [5]
+    "trajectory_size": [4]
 
   config_training:
     "blanket_neighbors":           [1]
-    "steps_training":              [128000]
-    "steps_gradient_accumulation": [2]
-    "steps_logging":               [2]
-    "steps_validation":            [12]
+    "steps_training":              [32]
+    "steps_gradient_accumulation": [1]
+    "steps_logging":               [1]
+    "steps_validation":            [4]
 
   config_optimizer:
     "betas":         [[0.9, 0.999, 0.999]]
-    "learning_rate": [0.0001]
+    "learning_rate": [0.001]
     "optimizer":     ["soap"]
-    "weight_decay":  [0.005]
+    "weight_decay":  [0.0]
 
   config_scheduler:
-    "scheduler": ["cosine"]
+    "scheduler": ["constant"]
 
   config_unet:
     "kernel_size":     [3]
-    "mod_features":    [1]
-    "hid_channels":    [[32, 64, 128]]
+    "mod_features":    [2]
+    "ffn_scaling":     [1]
+    "hid_channels":    [[16, 32, 64]]
     "hid_blocks":      [[1, 1, 1]]
-    "dropout":         [0.1]
-    "attention_heads": [{"-1": 8}]
+    "dropout":         [0.0]
+    "attention_heads": [{"-1": 1}]
 
   config_siren:
-      "features": [16]
-      "n_layers": [4]
+      "features": [2]
+      "n_layers": [1]

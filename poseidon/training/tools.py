@@ -8,7 +8,7 @@ from typing import Dict, Tuple
 
 
 def compute_blanket_indices(trajectory_size: int, k: int) -> Dict[int, Tuple[int, int]]:
-    r"""Determine the position of each blanket in a trajectory.
+    r"""Determines the position of each blanket in a trajectory.
 
     Arguments:
         trajectory_size: Number of time steps in trajectory
@@ -31,12 +31,12 @@ def extract_blankets_in_trajectories(x: Tensor, k: int, blankets_center_idx: Ten
     r"""Extracts blankets from tensor given indices of their centers.
 
     Arguments:
-        x: Input tensor (B, C, T, H, W).
+        x: Input tensor (B, C, T, X, Y).
         k: Number of neighbors on each side of the blanket.
         blankets_center_idx: Position of blankets center (B).
 
     Returns:
-        Tensor: Blankets of input tensor (B, C, 2k+1, H, W)
+        Blankets from input tensor (B, C, K, X, Y)
     """
     _, _, T, _, _ = x.shape
 
@@ -56,15 +56,16 @@ def extract_blankets_in_trajectories(x: Tensor, k: int, blankets_center_idx: Ten
     return x_blankets
 
 
-def preprocessing_for_diffusion(x: Tensor, k: int) -> Tensor:
+def extract_random_blankets(x: Tensor, k: int, flatten: bool = True) -> Tensor:
     r"""Extracts random blankets from tensor and flattens it.
 
     Arguments:
-        x: Input tensor (B, C, T, H, W).
+        x: Input tensor (B, C, T, X, Y).
         k: Number of neighbors on each side of the blanket.
+        flatten: Whether to flatten the output tensor or not.
 
     Returns:
-        Tensor: Tensor of blankets (B, (C * 2k+1 * H * W))
+        Blankets from input tensor.
     """
 
     B, _, T, _, _ = x.shape
@@ -79,6 +80,6 @@ def preprocessing_for_diffusion(x: Tensor, k: int) -> Tensor:
         blankets_center_idx=torch.randint(0, T, (B,)),
     )
 
-    x = rearrange(x, "B ... -> B (...)")
+    x = rearrange(x, "B ... -> B (...)") if flatten else x
 
     return x
