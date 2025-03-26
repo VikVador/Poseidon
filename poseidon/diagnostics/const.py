@@ -4,7 +4,6 @@ import cmocean.cm as cmo
 
 # fmt: off
 #
-# Translation of the variables
 TRANSLATION = {
     "DOX"      : "Oxygen",
     "CHL"      : "Chlorophyll",
@@ -13,7 +12,22 @@ TRANSLATION = {
     "ssh"      : "Sea Surface Height",
 }
 
-# Colormaps used for surface plots
+TRANSLATION_LONG = {
+    "DOX"      : "Oxygen",
+    "CHL"      : "Chlorophyll",
+    "vosaline" : "Sea Water Practical Salinity",
+    "votemper" : "Sea Water Potential Temperature",
+    "ssh"      : "Sea Surface Height Above Geoid",
+}
+
+UNITS = {
+    "DOX"      : "[mmol/m^3]",
+    "CHL"      : "[mmol/m^3]",
+    "vosaline" : "[1e-3]",
+    "votemper" : "[degC]",
+    "ssh"      : "[m]",
+}
+
 CMAPS_SURF = {
     "DOX"      : "RdYlBu_r",
     "CHL"      : cmo.curl_r,

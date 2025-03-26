@@ -30,14 +30,14 @@ def visualize(
         denoiser: A denoiser model d(xₜ) ≈ E[x | xₜ]
         variables: Variable names to retain from the preprocessed dataset.
         region: Region of interest to extract from the dataset.
-        dimensions: Dimensions of the trajectory (C, X, Y).
+        dimensions: Spatial dimensions of the trajectory (C, X, Y).
         wandb_mode: Wether to use Weights & Biases for logging or not.
     """
 
     forecast_size, trajectory_size, steps = (
         3,
-        12,
-        32,
+        10,
+        64,
     )
 
     # Wrapping the denoiser into a full trajectory model
