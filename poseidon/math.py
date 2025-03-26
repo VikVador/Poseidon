@@ -1,6 +1,6 @@
 r"""A collection of mathematical tools.
 
-From:
+Adapted from:
   | zuko library (François Rozet)
   | https://github.com/probabilists/zuko/
 

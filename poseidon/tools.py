@@ -40,6 +40,15 @@ def wandb_get_hyperparameter_score(configs: Sequence[Dict]) -> Dict[str, float]:
             elif k == "weight_decay":
                 scores["Weight Decay"] = v
 
+            elif k == "kernel_size":
+                scores["Kernel Size"] = v
+
+            elif k == "mod_features":
+                scores["Modulation Features"] = v
+
+            elif k == "ffn_scaling":
+                scores["Feed-Forward Network Scaling"] = v
+
             elif k == "hid_channels":
                 scores["Number of Stages"] = len(v)
                 for i, h in enumerate(v):
@@ -55,6 +64,12 @@ def wandb_get_hyperparameter_score(configs: Sequence[Dict]) -> Dict[str, float]:
             elif k == "attention_heads":
                 for l in range(scores["Number of Stages"]):
                     scores[f"Attention Heads (Stage {l})"] = 0 if str(l) not in v else 1
+
+            elif k == "features":
+                scores["Mesh Encoding Size"] = v
+
+            elif k == "n_layers":
+                scores["Number of Layers (Siren)"] = v
 
     return scores
 
