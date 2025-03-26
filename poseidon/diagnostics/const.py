@@ -29,7 +29,7 @@ UNITS = {
 }
 
 CMAPS_SURF = {
-    "DOX"      : "RdYlBu_r",
+    "DOX"      : cmo.haline,
     "CHL"      : cmo.curl_r,
     "vosaline" : cmo.balance,
     "votemper" : cmo.thermal,

@@ -1,5 +1,6 @@
 r"""Visualisation tools."""
 
+import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 import wandb
@@ -8,9 +9,9 @@ import xarray as xr
 from typing import Dict, Optional, Sequence, Tuple
 
 # isort: split
-from poseidon.config import PATH_DATA, PATH_MASK
+from poseidon.config import PATH_DATA, PATH_MASK, PATH_STAT
 from poseidon.data.mappings import from_tensor_to_xarray
-from poseidon.diagnostics.const import CMAPS_SURF, TRANSLATION
+from poseidon.diagnostics.const import CMAPS_SURF, TRANSLATION, UNITS
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.sampler import LMSSampler
 from poseidon.diffusion.schedulers import PoseidonNoiseScheduler
@@ -35,9 +36,9 @@ def visualize(
     """
 
     forecast_size, trajectory_size, steps = (
-        3,
+        4,
         10,
-        64,
+        32,
     )
 
     # Wrapping the denoiser into a full trajectory model
@@ -84,6 +85,14 @@ def visualize(
         ),
     )
 
+    # Rescaling the data
+    ds_stats = xr.open_zarr(PATH_STAT).isel(level=region["level"])
+
+    dataset, dataset_gt = (
+        dataset * ds_stats.sel(statistic="std") + ds_stats.sel(statistic="mean"),
+        dataset_gt * ds_stats.sel(statistic="std") + ds_stats.sel(statistic="mean"),
+    )
+
     for v in dataset.data_vars:
         data, data_gt = (
             dataset[v],
@@ -101,40 +110,57 @@ def visualize(
             # Hidding the land
             x[:, :, mask == 0] = np.nan
 
-            # Generating a plot
-            fig, axes = plt.subplots(
+            fig = plt.figure(figsize=(26, 8))
+            gs = gridspec.GridSpec(
                 forecasts + 1,
-                trajectory_size,
-                figsize=(24, 12),
+                trajectory_size + 1,
+                height_ratios=[1] + [1] * forecasts,
+                width_ratios=[1] * trajectory_size + [0.1],
             )
 
-            # Ensure axes is always 2D for consistent indexing
-            axes = axes.reshape(forecasts + 1, trajectory_size)
-
-            # Plot example trajectory (first row)
+            # --- Example Trajectory (First Row) ---
             for t in range(trajectory_size):
                 q_min, q_max = np.nanquantile(x_gt[t], [0.05, 0.95])
-                ax = axes[0, t]
-                ax.imshow(x_gt[t], cmap=CMAPS_SURF[v], origin="lower", vmin=q_min, vmax=q_max)
+                ax = fig.add_subplot(gs[0, t])
+                im = ax.imshow(
+                    x_gt[t],
+                    cmap=CMAPS_SURF[v],
+                    origin="lower",
+                    vmin=q_min,
+                    vmax=q_max,
+                    aspect="auto",
+                )
                 ax.set_xticks([])
                 ax.set_yticks([])
                 if t == 0:
-                    ax.set_ylabel("Examples", fontsize=8)
-                    ax.set_title(TRANSLATION[v] + " - Level " + str(l))
+                    ax.set_ylabel("Examples", fontsize=10, labelpad=10)
+                if t == 1:
+                    ax.set_title(f"{TRANSLATION[v]} ${UNITS[v]}$ | Level {l}", fontsize=12)
 
-            # Plot forecast trajectories
+            # --- Forecasts (Rows) ---
             for f in range(forecasts):
+                cbar_ax = fig.add_subplot(gs[f + 1, -1])  # Colorbar position
                 for t in range(trajectory_size):
                     q_min, q_max = np.nanquantile(x[f, t], [0.05, 0.95])
-                    ax = axes[f + 1, t]
-                    ax.imshow(x[f, t], cmap=CMAPS_SURF[v], origin="lower", vmin=q_min, vmax=q_max)
+                    ax = fig.add_subplot(gs[f + 1, t])
+                    im = ax.imshow(
+                        x[f, t],
+                        cmap=CMAPS_SURF[v],
+                        origin="lower",
+                        vmin=q_min,
+                        vmax=q_max,
+                        aspect="auto",
+                    )
                     ax.set_xticks([])
                     ax.set_yticks([])
                     if t == 0:
-                        ax.set_ylabel(f"Forecast {f + 1}", fontsize=8)
+                        ax.set_ylabel(f"Forecast {f + 1}", fontsize=10, labelpad=10)
 
-            plt.subplots_adjust(hspace=-0.85)
-            plt.tight_layout()
+                # --- Colorbar for Forecasts ---
+                cb = fig.colorbar(im, cax=cbar_ax)
+                cb.ax.tick_params(labelsize=8)
+
+            plt.subplots_adjust(hspace=0.2, wspace=0.05)
 
             # Logging
             if wandb_mode != "disabled":
