@@ -11,6 +11,9 @@ import torch
 import torch.nn as nn
 
 from torch import Tensor
+from typing import (
+    Tuple,
+)
 
 
 def modulate(x, shift, scale) -> Tensor:
@@ -134,10 +137,10 @@ class TransformerBlock(nn.Module):
         self.attn = LinformerAttention(seq_len, dim, heads, k)
         self.ln_2 = nn.LayerNorm(dim, elementwise_affine=False, eps=1e-6)
         self.mlp = nn.Sequential(
-            nn.Linear(dim, mlp_dim),
+            nn.Linear(dim, dim * mlp_dim),
             nn.GELU(),
             nn.Dropout(rate),
-            nn.Linear(mlp_dim, dim),
+            nn.Linear(dim * mlp_dim, dim),
             nn.Dropout(rate),
         )
         self.gamma_1 = nn.Linear(dim, dim)
@@ -174,105 +177,66 @@ class TransformerBlock(nn.Module):
         return self.mlp(modulate(self.ln_2(x), shift_mlp, scale_mlp)) * gate_mlp + x
 
 
-class FinalLayer(nn.Module):
-    """Final layer of the model with linear projection and modulation.
-
-    Arguments:
-        dim: Feature dimension.
-        patch_size: Size of the patches.
-        out_channels: Number of output channels.
-    """
-
-    def __init__(
-        self,
-        dim,
-        patch_size,
-        out_channels,
-    ):
-        super().__init__()
-        self.ln_final = nn.LayerNorm(dim, elementwise_affine=False, eps=1e-6)
-        self.linear = nn.Linear(dim, patch_size * patch_size * out_channels, bias=True)
-        self.gamma = nn.Linear(dim, dim)
-        self.beta = nn.Linear(dim, dim)
-
-        # Initialize weights and biases to zero for modulation and linear layers
-        self._init_weights([self.linear, self.gamma, self.beta])
-
-    def _init_weights(self, layers):
-        for layer in layers:
-            nn.init.zeros_(layer.weight)
-            nn.init.zeros_(layer.bias)
-
-    def forward(self, x, c) -> Tensor:
-        """Applies the final layer with conditioning vector c."""
-        scale = self.gamma(c)
-        shift = self.beta(c)
-        x = modulate(self.ln_final(x), shift, scale)
-        x = self.linear(x)
-        return x
-
-
 class DiT(nn.Module):
     """Diffusion Transformer model."
 
     Arguments:
-        img_size: Size of the input image.
-        dim: Feature dimension.
-        patch_size: Size of the patches.
         depth: Number of transformer blocks.
         heads: Number of attention heads.
-        mlp_dim: Dimension of MLP hidden layer.
-        k: Low-rank projection dimension for Linformer.
-        in_channels: Number of input channels.
+        mlp_ratio: Ratio of MLP hidden dimension to input dimension.
+        embedding: Dimensionality of the embedding (diffusion step).
+        embedding_lfa: Projection dimension of linformer attention.
+        dimensions: Input tensor dimensions (B, C, K, X, Y).
     """
 
     def __init__(
         self,
-        img_size,
-        dim=64,
-        patch_size=4,
-        depth=3,
-        heads=4,
-        mlp_dim=512,
-        k=64,
-        in_channels=3,
+        depth: int,
+        heads: int,
+        mlp_ratio: int,
+        embedding: int,
+        embedding_lfa: int,
+        dimensions: Tuple[int, int, int, int, int],
     ):
         super(DiT, self).__init__()
-        self.dim = dim
-        self.n_patches = (img_size // patch_size) ** 2
-        self.depth = depth
-        self.pos_embedding = nn.Parameter(torch.randn(1, self.n_patches, dim))
-        self.patches = nn.Sequential(
-            nn.Conv2d(
-                in_channels, dim, kernel_size=patch_size, stride=patch_size, padding=0, bias=False
-            ),
+
+        self.B, self.C, self.K, self.X, self.Y = dimensions
+
+        # Initializations
+        self.depth, self.token_nb, self.token_dim = (
+            depth,
+            self.X * self.Y,
+            self.C * self.K,
         )
 
-        self.transformer = nn.ModuleList()
-        for _ in range(self.depth):
-            self.transformer.append(TransformerBlock(self.n_patches, dim, heads, mlp_dim, k))
+        # Positional embedding of tokens (B, X * Y, C * K)
+        self.pos_embedding = nn.Parameter(torch.randn(1, self.token_nb, self.token_dim))
 
-        self.emb = nn.Sequential(
-            PositionalEmbedding(dim),
-            nn.Linear(dim, dim),
+        # Transformer blocks
+        self.transformer = nn.ModuleList([
+            TransformerBlock(self.token_nb, self.token_dim, heads, mlp_ratio, embedding_lfa)
+            for _ in range(depth)
+        ])
+
+        # Diffusion timestep modulation
+        self.time_emb = nn.Sequential(
+            PositionalEmbedding(embedding),
+            nn.Linear(embedding, embedding),
             nn.SiLU(),
-            nn.Linear(dim, dim),
+            nn.Linear(embedding, self.token_dim),
         )
-
-        self.final = FinalLayer(dim, patch_size, in_channels)
-        self.ps = nn.PixelShuffle(patch_size)
 
     def forward(self, x, t) -> Tensor:
         """Forward pass of the model."""
-        t = self.emb(t)
-        x = self.patches(x)
-        B, C, H, W = x.shape
-        x = x.permute([0, 2, 3, 1]).reshape([B, H * W, C])
+
+        # Projecting diffusion timestep
+        t = self.time_emb(t)
+
+        # Adding positional embedding
         x += self.pos_embedding
+
+        # Applying transformer blocks
         for layer in self.transformer:
             x = layer(x, t)
 
-        x = self.final(x, t).permute([0, 2, 1])
-        x = x.reshape([B, -1, H, W])
-        x = self.ps(x)
         return x
