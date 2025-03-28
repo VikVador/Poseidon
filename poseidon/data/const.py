@@ -53,7 +53,7 @@ DATASET_DATES_TEST           = ("2021-01-01", "2022-12-31")
 DATASET_REGION = {
     "latitude":  slice(104, 232),
     "longitude": slice(25, 281),
-    "level":     slice(0, 32),
+    "level":     [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30],
 }
 
 DATASET_VARIABLES_ATMOSPHERE = [
