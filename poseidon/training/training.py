@@ -5,6 +5,7 @@ import gc
 import torch
 import wandb
 
+from torch.amp.grad_scaler import GradScaler
 from tqdm import tqdm
 from typing import Dict
 
@@ -24,7 +25,7 @@ from poseidon.diffusion.loss import PoseidonLoss
 from poseidon.diffusion.schedulers import PoseidonNoiseScheduler, PoseidonTimeScheduler
 from poseidon.tools import wandb_get_hyperparameter_score
 from poseidon.training.load import load_backbone
-from poseidon.training.optimizer import get_optimizer
+from poseidon.training.optimizer import get_optimizer, safe_gd_step
 from poseidon.training.save import PoseidonSave
 from poseidon.training.scheduler import get_scheduler
 from poseidon.training.tools import extract_random_blankets
@@ -210,6 +211,9 @@ def training(
         ),
     )
 
+    # initializing the gradient scaler
+    scaler = GradScaler(device=DEVICE)
+
     # Initializing tools to track the training
     loss_aoas, progress_bar = (
         0,
@@ -248,10 +252,10 @@ def training(
             sigma_t = sigma_t,
         )
 
-        # Gradient accumulation
+        # Gradients accumulation
         loss       = loss / steps_gradient_accumulation
         loss_aoas += loss.item()
-        loss.backward()
+        scaler.scale(loss).backward()
 
         # =========================================================================
         #                                 LOGGING
@@ -340,9 +344,8 @@ def training(
         if 0 < step:
             if (step % steps_gradient_accumulation == 0) or (step == steps_training - 2):
 
-                optimizer.step()
+                safe_gd_step(optimizer=optimizer, grad_clip=1, scaler=scaler)
                 scheduler_lr.step()
-                optimizer.zero_grad()
                 loss_aoas = 0.0
                 gc.collect()
 
