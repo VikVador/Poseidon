@@ -8,8 +8,8 @@ from torch import Tensor
 
 # isort: split
 from poseidon.network.attention import SelfAttentionNd
-from poseidon.network.encoding import SineEncoding
 from poseidon.network.modulation import Modulator
+from poseidon.network.normalization import LayerNorm
 
 
 class Patchify(nn.Module):
@@ -41,7 +41,14 @@ class Unpatchify(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    r"""Creates a transformer block."""
+    r"""Creates a transformer block.
+
+    Arguments:
+        channels: Number of channels (C) in the input tensor.
+        mod_features: Number of features (D) in the modulation vector.
+        ffn_scaling: Scaling factor for the feed-forward network.
+        heads: Number of attention heads.
+    """
 
     def __init__(
         self,
@@ -68,7 +75,7 @@ class TransformerBlock(nn.Module):
 
         # Modulator
         self.norm, self.modulator = (
-            nn.LayerNorm(channels, elementwise_affine=False),
+            LayerNorm(dim=2),
             Modulator(
                 channels=channels,
                 mod_features=mod_features,
@@ -87,7 +94,7 @@ class TransformerBlock(nn.Module):
             mod: Modulation vector (B, D).
 
         Returns:
-            Tensor (B, N, C).
+            Tensor: Output tensor (B, N, C).
         """
 
         # Modulation
@@ -131,11 +138,6 @@ class Transformer(nn.Module):
     ):
         super().__init__()
 
-        # Encodes diffusion timestep
-        self.encoder = SineEncoding(
-            features=mod_features,
-        )
-
         self.patchify, self.unpatchify = (
             Patchify(patch_size=patch_size),
             Unpatchify(patch_size=patch_size),
@@ -173,9 +175,6 @@ class Transformer(nn.Module):
             Tensor: Output tensor (B, C, K, X, Y).
         """
 
-        # Encoding modulation vector
-        mod = self.encoder(mod).squeeze(1)
-
         # Transforming spatial dimensions into patches
         x = self.patchify(x)
 
@@ -184,7 +183,7 @@ class Transformer(nn.Module):
 
         # Projecting to transformer channels
         x = self.project(
-            rearrange(x, "B C K X Y -> B (X Y) (C K)"),
+            rearrange(x, "B C K X Y -> B (X Y K) C"),
         )
 
         # Going through transformer blocks
@@ -194,7 +193,7 @@ class Transformer(nn.Module):
         # Projecting back to original UNet channels
         x = rearrange(
             self.unproject(x),
-            "B (X Y) (C K) -> B C K X Y",
+            "B (X Y K) C -> B C K X Y",
             X=X,
             Y=Y,
             C=C,

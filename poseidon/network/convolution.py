@@ -9,7 +9,6 @@ from typing import Dict, Optional
 # isort: split
 from poseidon.network.attention import SelfAttentionNd
 from poseidon.network.embedding import MeshEmbedding
-from poseidon.network.encoding import SineEncoding
 from poseidon.network.modulation import Modulator
 from poseidon.network.normalization import LayerNorm
 
@@ -36,18 +35,17 @@ def ConvNd(
     return Conv(in_channels, out_channels, **kwargs)
 
 
-class UNetBlock(nn.Module):
-    r"""Creates a UNet residual block.
+class ConvResidualBlock(nn.Module):
+    r"""Creates a convolution residual block.
 
     Arguments:
         channels: Number of channels (C) in the input tensor.
         mod_features: Number of features (D) in the modulation vector.
         ffn_scaling: Scaling factor for the feed-forward network.
         spatial_scaling: Scaling factor for the spatial region.
-        config_region: Configuration for the spatial region.
-        config_siren: Configuration for the Siren architecture.
+        config_siren: Configuration of the siren architecture.
+        config_region: Configuration of the spatial region.
         attention_heads: Number of attention heads.
-        dropout: Dropout probability for regularization [0, 1].
         **kwargs: Additional arguments passed to the residual blocks.
     """
 
@@ -57,8 +55,8 @@ class UNetBlock(nn.Module):
         mod_features: int,
         ffn_scaling: int,
         spatial_scaling: int,
-        config_region: Dict,
         config_siren: Dict,
+        config_region: Dict,
         attention_heads: Optional[int] = None,
         **kwargs,
     ):
@@ -97,9 +95,8 @@ class UNetBlock(nn.Module):
         )
 
         # Modulator
-        self.norm, self.encoder, self.modulator = (
+        self.norm, self.modulator = (
             LayerNorm(dim=1),
-            SineEncoding(features=mod_features),
             Modulator(
                 channels=channels,
                 mod_features=mod_features,
@@ -114,16 +111,14 @@ class UNetBlock(nn.Module):
     ) -> Tensor:
         r"""
         Arguments:
-            x: Input tensor (B, C_i, K, X, Y).
+            x: Input tensor (B, C, K, X, Y).
             mod: Modulation vector (B, D).
 
         Returns:
-            Tensor (B, C_o, K, X, Y).
+            Tensor (B, C, K, X, Y).
         """
-        # Encoding modulation vector
-        mod = self.encoder(mod).squeeze(1)
 
-        # Mesh embedding
+        # Siren embedding of the mesh
         mesh = self.mesh_embedding()
 
         # Modulation

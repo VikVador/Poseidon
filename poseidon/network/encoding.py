@@ -36,7 +36,7 @@ class SineEncoding(nn.Module):
             x: Tensor to encode (*)
 
         Returns:
-            Embedded tensor (*, F)
+            Tensor: Embedded tensor (*, F)
         """
         x = x[..., None]
         return torch.cat(

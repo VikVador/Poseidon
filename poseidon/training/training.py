@@ -58,7 +58,7 @@ def training(
         config_optimizer: Configuration for the optimizer.
         config_scheduler: Configuration for the scheduler.
         config_unet: Configuration for the UNet.
-        config_transformer: Configuration for the Transformer.
+        config_transformer: Configuration of the transformer.
         config_siren: Configuration for the Siren network.
         config_wandb: Configuration for Weights & Biases.
         config_cluster: Configuration of the Cluster.

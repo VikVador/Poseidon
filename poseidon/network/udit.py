@@ -1,4 +1,4 @@
-r"""UDiT Architecture."""
+r"""U-Net diffusion transformer architecture."""
 
 import torch
 import torch.nn as nn
@@ -7,7 +7,8 @@ from torch import Tensor
 from typing import Dict, Sequence
 
 # isort: split
-from poseidon.network.convolution import ConvNd, UNetBlock
+from poseidon.network.convolution import ConvNd, ConvResidualBlock
+from poseidon.network.encoding import SineEncoding
 from poseidon.network.transformer import Transformer
 
 
@@ -25,10 +26,10 @@ class UDiT(nn.Module):
         ffn_scaling: Scaling factor for the feed-forward network.
         hid_channels: Numbers of channels at each depth.
         hid_blocks: Numbers of hidden blocks at each depth.
-        attention_heads: The number of attention heads at each depth.
-        config_siren: Configuration of embedding mesh.
+        attention_heads: Number of attention heads at each depth.
+        config_siren: Configuration of the siren architecture.
         config_region: Configuration of spatial region.
-        config_transformer: Configuration for the Transformer.
+        config_transformer: Configuration of the transformer.
     """
 
     def __init__(
@@ -36,7 +37,6 @@ class UDiT(nn.Module):
         in_channels: int,
         out_channels: int,
         kernel_size: int,
-        blanket_size: int,
         mod_features: int,
         ffn_scaling: int,
         hid_blocks: Sequence[int],
@@ -55,9 +55,12 @@ class UDiT(nn.Module):
         assert kernel_size % 2 == 1, \
             "ERROR (UDit) - Kernel size must be odd."
 
+        # Diffusion timestep encoding
+        self.timestep_encoding = SineEncoding(mod_features)
+
         # Transformer bottleneck
         self.transformer = Transformer(
-            in_channels=hid_channels[-1] * config_transformer["patch_size"] ** 2 * blanket_size,
+            in_channels=hid_channels[-1] * config_transformer["patch_size"] ** 2,
             mod_features=mod_features,
             **config_transformer,
         )
@@ -87,25 +90,25 @@ class UDiT(nn.Module):
 
             for _ in range(blocks):
                 do.append(
-                    UNetBlock(
+                    ConvResidualBlock(
                         hid_channels[i],
                         mod_features,
                         ffn_scaling,
                         i,
-                        config_region,
                         config_siren,
+                        config_region,
                         attention_heads.get(str(i), None),
                         **kwargs,
                     )
                 )
                 up.append(
-                    UNetBlock(
+                    ConvResidualBlock(
                         hid_channels[i],
                         mod_features,
                         ffn_scaling,
                         i,
-                        config_region,
                         config_siren,
+                        config_region,
                         attention_heads.get(str(i), None),
                         **kwargs,
                     )
@@ -170,13 +173,16 @@ class UDiT(nn.Module):
     def forward(self, x: Tensor, mod: Tensor) -> Tensor:
         r"""Forward pass through the UDiT."""
 
+        # Encoding modulation vector
+        mod = self.timestep_encoding(mod).squeeze(1)
+
         # Stores output of each ascent stage
         memory = []
 
         # Ascent
         for blocks in self.descent:
             for block in blocks:
-                if isinstance(block, (UNetBlock)):
+                if isinstance(block, (ConvResidualBlock)):
                     x = block(x, mod)
                 else:
                     x = block(x)
@@ -194,7 +200,7 @@ class UDiT(nn.Module):
                         x = torch.narrow(x, i, 0, y.shape[i])
                 x = torch.cat((x, y), dim=1)
             for block in blocks:
-                if isinstance(block, (UNetBlock)):
+                if isinstance(block, (ConvResidualBlock)):
                     x = block(x, mod)
                 else:
                     x = block(x)
