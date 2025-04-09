@@ -57,11 +57,11 @@ def training(
         config_training: Configuration for the training.
         config_optimizer: Configuration for the optimizer.
         config_scheduler: Configuration for the scheduler.
-        config_unet: Configuration for the UNet.
+        config_unet: Configuration of the unet.
         config_transformer: Configuration of the transformer.
-        config_siren: Configuration for the Siren network.
+        config_siren: Configuration of the siren network.
         config_wandb: Configuration for Weights & Biases.
-        config_cluster: Configuration of the Cluster.
+        config_cluster: Configuration of the cluster.
     """
 
     # Avoid deadlocks between training and validation

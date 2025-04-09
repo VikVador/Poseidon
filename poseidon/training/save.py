@@ -22,9 +22,9 @@ class PoseidonSave:
         path: Path to root folder.
         name_model: Name of the model.
         dimensions: Input tensor dimensions (B, C, K, X, Y).
-        config_unet: Configuration of UNet architecture.
-        config_transformer: Configuration of Transformer architecture.
-        config_siren: Configuration of Siren architecture.
+        config_unet: Configuration of the unet.
+        config_transformer: Configuration of the transformer.
+        config_siren: Configuration of the siren architecture.
         config_problem: Configuration of problem.
         saving: Whether to save or not.
     """

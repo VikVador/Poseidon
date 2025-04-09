@@ -22,10 +22,10 @@ class PoseidonBackbone(nn.Module):
     Arguments:
         variables: Variable names to retain from the dataset.
         dimensions: Input tensor dimensions (B, C, K, X, Y).
-        config_unet: Configuration for the UNet.
-        config_transformer: Configuration for the Transformer.
-        config_siren: Configuration for the Siren architecture.
-        config_region: Configuration for the spatial region.
+        config_unet: Configuration of the unet.
+        config_siren: Configuration of the siren architecture.
+        config_region: Configuration of the spatial region.
+        config_transformer: Configuration of the transformer.
     """
 
     def __init__(
@@ -33,9 +33,9 @@ class PoseidonBackbone(nn.Module):
         variables: Sequence[str],
         dimensions: Tuple[int, int, int, int, int],
         config_unet: Dict,
-        config_transformer: Dict,
         config_siren: Dict,
         config_region: Dict,
+        config_transformer: Dict,
     ):
         super().__init__()
 
@@ -54,7 +54,6 @@ class PoseidonBackbone(nn.Module):
         self.unet = UDiT(
             in_channels=self.C,
             out_channels=self.C,
-            blanket_size=self.K,
             config_siren=config_siren,
             config_region=config_region,
             config_transformer=config_transformer,
