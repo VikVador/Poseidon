@@ -118,7 +118,7 @@ class UNetBlock(nn.Module):
             mod: Modulation vector (B, D).
 
         Returns:
-            Tensor: Output tensor (B, C_o, K, X, Y).
+            Tensor (B, C_o, K, X, Y).
         """
         # Encoding modulation vector
         mod = self.encoder(mod).squeeze(1)
