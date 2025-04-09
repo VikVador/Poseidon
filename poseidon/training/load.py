@@ -40,12 +40,13 @@ def load_backbone(
     model_ckpt = torch.load(model_path, weights_only="True", map_location="cpu")
 
     # Loading configuration files
-    path_cfg            = path / name_model / "configurations"
-    path_cfg_variables  = path_cfg / "variables.yml"
-    path_cfg_dimensions = path_cfg / "dimensions.yml"
-    path_cfg_problem    = path_cfg / "problem.yml"
-    path_cfg_unet       = path_cfg / "unet.yml"
-    path_cfg_siren      = path_cfg / "siren.yml"
+    path_cfg             = path / name_model / "configurations"
+    path_cfg_variables   = path_cfg / "variables.yml"
+    path_cfg_dimensions  = path_cfg / "dimensions.yml"
+    path_cfg_problem     = path_cfg / "problem.yml"
+    path_cfg_unet        = path_cfg / "unet.yml"
+    path_cfg_transformer = path_cfg / "transformer.yml"
+    path_cfg_siren       = path_cfg / "siren.yml"
 
     with open(path_cfg_variables, "r") as file:
         variables = yaml.safe_load(file)
@@ -59,6 +60,9 @@ def load_backbone(
     with open(path_cfg_unet, "r") as file:
         unet = yaml.safe_load(file)
 
+    with open(path_cfg_transformer, "r") as file:
+        transformer = yaml.safe_load(file)
+
     with open(path_cfg_siren, "r") as file:
         siren = yaml.safe_load(file)
 
@@ -66,6 +70,7 @@ def load_backbone(
         variables=variables["variables"],
         dimensions=dimensions["dimensions"],
         config_unet=unet,
+        config_transformer=transformer,
         config_siren=siren,
         config_region=TOY_DATASET_REGION if problem["toy_problem"] else DATASET_REGION,
     )

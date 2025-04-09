@@ -186,6 +186,7 @@ def training(
         dimensions=(B, C, blanket_size, X, Y),
         variables=black_sea_variables,
         config_unet=config_unet,
+        config_transformer=config_transformer,
         config_siren=config_siren,
         config_problem=config_problem,
         saving=model_saving,
