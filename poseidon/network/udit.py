@@ -20,6 +20,7 @@ class UDiT(nn.Module):
         in_channels: Number of input channels (C_i)
         out_channels: Number of output channels (C_o).
         kernel_size: Kernel size for spatial convolutions.
+        blanket_size: Total number of elements in a blanket (K).
         mod_features: Number of features (D) in modulating vector.
         ffn_scaling: Scaling factor for the feed-forward network.
         hid_channels: Numbers of channels at each depth.
@@ -35,6 +36,7 @@ class UDiT(nn.Module):
         in_channels: int,
         out_channels: int,
         kernel_size: int,
+        blanket_size: int,
         mod_features: int,
         ffn_scaling: int,
         hid_blocks: Sequence[int],
@@ -54,10 +56,14 @@ class UDiT(nn.Module):
             "ERROR (UDit) - Kernel size must be odd."
 
         # Transformer bottleneck
-        self.transformer = Transformer(**config_transformer)
+        self.transformer = Transformer(
+            in_channels=hid_channels[-1] * config_transformer["patch_size"] ** 2 * blanket_size,
+            mod_features=mod_features,
+            **config_transformer,
+        )
 
         # Updating to handle concatenated channels projection
-        hid_channels = hid_channels + [config_transformer["hid_channels"]]
+        hid_channels = hid_channels + [hid_channels[-1]]
 
         # Convolutional residual blocks
         kwargs = dict(
