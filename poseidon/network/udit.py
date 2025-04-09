@@ -26,9 +26,9 @@ class UDiT(nn.Module):
         hid_channels: Numbers of channels at each depth.
         hid_blocks: Numbers of hidden blocks at each depth.
         attention_heads: The number of attention heads at each depth.
-        config_mesh: Configuration of embedding mesh.
+        config_siren: Configuration of embedding mesh.
         config_region: Configuration of spatial region.
-        config_transformer: Configuration of the transformer.
+        config_transformer: Configuration for the Transformer.
     """
 
     def __init__(
@@ -42,7 +42,7 @@ class UDiT(nn.Module):
         hid_blocks: Sequence[int],
         hid_channels: Sequence[int],
         attention_heads: Dict[str, int],
-        config_mesh: Dict,
+        config_siren: Dict,
         config_region: Dict,
         config_transformer: Dict,
     ):
@@ -93,7 +93,7 @@ class UDiT(nn.Module):
                         ffn_scaling,
                         i,
                         config_region,
-                        config_mesh,
+                        config_siren,
                         attention_heads.get(str(i), None),
                         **kwargs,
                     )
@@ -105,7 +105,7 @@ class UDiT(nn.Module):
                         ffn_scaling,
                         i,
                         config_region,
-                        config_mesh,
+                        config_siren,
                         attention_heads.get(str(i), None),
                         **kwargs,
                     )

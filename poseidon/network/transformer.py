@@ -127,7 +127,7 @@ class Transformer(nn.Module):
         hid_channels: int,
         hid_blocks: int,
         patch_size: int,
-        heads: int,
+        attention_heads: int,
     ):
         super().__init__()
 
@@ -157,7 +157,7 @@ class Transformer(nn.Module):
                 channels=hid_channels,
                 mod_features=mod_features,
                 ffn_scaling=ffn_scaling,
-                heads=heads,
+                heads=attention_heads,
             )
             for _ in range(hid_blocks)
         ])

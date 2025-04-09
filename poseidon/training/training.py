@@ -44,6 +44,7 @@ def training(
     config_optimizer: Dict,
     config_scheduler: Dict,
     config_unet: Dict,
+    config_transformer: Dict,
     config_siren: Dict,
     config_wandb: Dict,
     config_cluster: Dict,
@@ -56,7 +57,8 @@ def training(
         config_training: Configuration for the training.
         config_optimizer: Configuration for the optimizer.
         config_scheduler: Configuration for the scheduler.
-        config_unet: Configuration for the UNet (denoiser).
+        config_unet: Configuration for the UNet.
+        config_transformer: Configuration for the Transformer.
         config_siren: Configuration for the Siren network.
         config_wandb: Configuration for Weights & Biases.
         config_cluster: Configuration of the Cluster.
@@ -148,6 +150,7 @@ def training(
             dimensions=(B, C, blanket_size, X, Y),
             variables=black_sea_variables,
             config_unet=config_unet,
+            config_transformer=config_transformer,
             config_siren=config_siren,
             config_region=black_sea_region,
         )
