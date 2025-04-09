@@ -44,7 +44,7 @@ class PoseidonNoiseScheduler(nn.Module):
         Tensor (B, 1).
     """
 
-    def __init__(self, sigma_min: float = 1e-5, sigma_max: float = 1e3, spread: float = 2.5):
+    def __init__(self, sigma_min: float = 1e-5, sigma_max: float = 1e3, spread: float = 2):
         super().__init__()
 
         self.spread = spread
