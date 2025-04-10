@@ -5,6 +5,7 @@ import gc
 import torch
 import wandb
 
+from torch.amp.grad_scaler import GradScaler
 from tqdm import tqdm
 from typing import Dict
 
@@ -24,7 +25,7 @@ from poseidon.diffusion.loss import PoseidonLoss
 from poseidon.diffusion.schedulers import PoseidonNoiseScheduler, PoseidonTimeScheduler
 from poseidon.tools import wandb_get_hyperparameter_score
 from poseidon.training.load import load_backbone
-from poseidon.training.optimizer import get_optimizer
+from poseidon.training.optimizer import get_optimizer, safe_gd_step
 from poseidon.training.save import PoseidonSave
 from poseidon.training.scheduler import get_scheduler
 from poseidon.training.tools import extract_random_blankets
@@ -43,6 +44,7 @@ def training(
     config_optimizer: Dict,
     config_scheduler: Dict,
     config_unet: Dict,
+    config_transformer: Dict,
     config_siren: Dict,
     config_wandb: Dict,
     config_cluster: Dict,
@@ -55,10 +57,11 @@ def training(
         config_training: Configuration for the training.
         config_optimizer: Configuration for the optimizer.
         config_scheduler: Configuration for the scheduler.
-        config_unet: Configuration for the UNet (denoiser).
-        config_siren: Configuration for the Siren network.
+        config_unet: Configuration of the unet.
+        config_transformer: Configuration of the transformer.
+        config_siren: Configuration of the siren network.
         config_wandb: Configuration for Weights & Biases.
-        config_cluster: Configuration of the Cluster.
+        config_cluster: Configuration of the cluster.
     """
 
     # Avoid deadlocks between training and validation
@@ -147,6 +150,7 @@ def training(
             dimensions=(B, C, blanket_size, X, Y),
             variables=black_sea_variables,
             config_unet=config_unet,
+            config_transformer=config_transformer,
             config_siren=config_siren,
             config_region=black_sea_region,
         )
@@ -182,6 +186,7 @@ def training(
         dimensions=(B, C, blanket_size, X, Y),
         variables=black_sea_variables,
         config_unet=config_unet,
+        config_transformer=config_transformer,
         config_siren=config_siren,
         config_problem=config_problem,
         saving=model_saving,
@@ -209,6 +214,9 @@ def training(
             use_mask=True,
         ),
     )
+
+    # initializing the gradient scaler
+    scaler = GradScaler(device=DEVICE)
 
     # Initializing tools to track the training
     loss_aoas, progress_bar = (
@@ -248,10 +256,10 @@ def training(
             sigma_t = sigma_t,
         )
 
-        # Gradient accumulation
+        # Gradients accumulation
         loss       = loss / steps_gradient_accumulation
         loss_aoas += loss.item()
-        loss.backward()
+        scaler.scale(loss).backward()
 
         # =========================================================================
         #                                 LOGGING
@@ -340,9 +348,8 @@ def training(
         if 0 < step:
             if (step % steps_gradient_accumulation == 0) or (step == steps_training - 2):
 
-                optimizer.step()
+                safe_gd_step(optimizer=optimizer, grad_clip=1, scaler=scaler)
                 scheduler_lr.step()
-                optimizer.zero_grad()
                 loss_aoas = 0.0
                 gc.collect()
 

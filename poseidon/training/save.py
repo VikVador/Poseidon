@@ -22,8 +22,9 @@ class PoseidonSave:
         path: Path to root folder.
         name_model: Name of the model.
         dimensions: Input tensor dimensions (B, C, K, X, Y).
-        config_unet: Configuration of UNet architecture.
-        config_siren: Configuration of Siren architecture.
+        config_unet: Configuration of the unet.
+        config_transformer: Configuration of the transformer.
+        config_siren: Configuration of the siren architecture.
         config_problem: Configuration of problem.
         saving: Whether to save or not.
     """
@@ -35,6 +36,7 @@ class PoseidonSave:
         variables: Sequence[str],
         dimensions: tuple,
         config_unet: dict,
+        config_transformer: dict,
         config_siren: dict,
         config_problem: dict,
         saving: bool = True,
@@ -58,10 +60,11 @@ class PoseidonSave:
                         "variables": variables,
                     },
                     config_unet,
+                    config_transformer,
                     config_siren,
                     config_problem,
                 ],
-                ["dimensions", "variables", "unet", "siren", "problem"],
+                ["dimensions", "variables", "unet", "transformer", "siren", "problem"],
             )
 
             for config, name in zip(list_configs, list_names):

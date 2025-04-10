@@ -51,13 +51,19 @@ Training Pipeline:
     "scheduler": ["constant"]
 
   config_unet:
-    "kernel_size":     [3]
-    "mod_features":    [2]
-    "ffn_scaling":     [1]
-    "hid_channels":    [[16, 32, 64]]
-    "hid_blocks":      [[1, 1, 1]]
-    "dropout":         [0.0]
-    "attention_heads": [{"-1": 1}]
+    "kernel_size":      [3]
+    "mod_features":     [32]
+    "ffn_scaling":      [2]
+    "hid_blocks":       [[1, 1]]
+    "hid_channels":     [[4, 8]]
+    "attention_heads" : [{"-1": 1}]
+
+  config_transformer:
+    "hid_channels":     [16]
+    "hid_blocks":       [4]
+    "patch_size":       [2]
+    "ffn_scaling":      [2]
+    "attention_heads" : [1]
 
   config_siren:
       "features": [2]

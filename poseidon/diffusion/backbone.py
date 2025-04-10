@@ -13,7 +13,7 @@ from typing import (
 # isort: split
 from poseidon.data.const import LAND_VALUE
 from poseidon.data.mask import generate_trajectory_mask
-from poseidon.network.unet import UNet
+from poseidon.network.udit import UDiT
 
 
 class PoseidonBackbone(nn.Module):
@@ -22,9 +22,10 @@ class PoseidonBackbone(nn.Module):
     Arguments:
         variables: Variable names to retain from the dataset.
         dimensions: Input tensor dimensions (B, C, K, X, Y).
-        config_unet: Configuration for UNet architecture.
-        config_siren: Configuration for the Siren architecture.
-        config_region: Configuration for the spatial region.
+        config_unet: Configuration of the unet.
+        config_siren: Configuration of the siren architecture.
+        config_region: Configuration of the spatial region.
+        config_transformer: Configuration of the transformer.
     """
 
     def __init__(
@@ -34,6 +35,7 @@ class PoseidonBackbone(nn.Module):
         config_unet: Dict,
         config_siren: Dict,
         config_region: Dict,
+        config_transformer: Dict,
     ):
         super().__init__()
 
@@ -49,11 +51,12 @@ class PoseidonBackbone(nn.Module):
             ),
         )
 
-        self.unet = UNet(
+        self.unet = UDiT(
             in_channels=self.C,
             out_channels=self.C,
-            config_region=config_region,
             config_siren=config_siren,
+            config_region=config_region,
+            config_transformer=config_transformer,
             **config_unet,
         )
 
