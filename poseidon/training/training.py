@@ -288,6 +288,25 @@ def training(
                 else poseidon_denoiser.backbone,
             )
 
+        # ===========================================================================
+        #                             OPTIMIZATION STEP
+        # ===========================================================================
+        if 0 < step:
+            if (step % steps_gradient_accumulation == 0) or (step == steps_training - 2):
+
+                safe_gd_step(optimizer=optimizer, grad_clip=1, scaler=scaler)
+                scheduler_lr.step()
+                loss_aoas = 0.0
+                gc.collect()
+
+        # Cleaning
+        del x_0, x_t, sigma_t, loss
+        torch.cuda.empty_cache()
+
+        # Emergency stop
+        if steps_training <= step:
+            break
+
         # =================================================================
         #                            VALIDATION
         # =================================================================
@@ -341,25 +360,6 @@ def training(
                         if torch.cuda.device_count() > 1
                         else poseidon_denoiser,
                     )
-
-        # ===========================================================================
-        #                             OPTIMIZATION STEP
-        # ===========================================================================
-        if 0 < step:
-            if (step % steps_gradient_accumulation == 0) or (step == steps_training - 2):
-
-                safe_gd_step(optimizer=optimizer, grad_clip=1, scaler=scaler)
-                scheduler_lr.step()
-                loss_aoas = 0.0
-                gc.collect()
-
-        # Cleaning
-        del x_0, x_t, sigma_t, loss
-        torch.cuda.empty_cache()
-
-        # Emergency stop
-        if steps_training <= step:
-            break
 
     # Finalizing the training
     progress_bar.update(1)
