@@ -8,6 +8,7 @@ from torch import Tensor
 
 # isort: split
 from poseidon.network.attention import SelfAttentionNd
+from poseidon.network.encoding import SineEncoding
 from poseidon.network.modulation import Modulator
 from poseidon.network.normalization import LayerNorm
 
@@ -185,6 +186,11 @@ class Transformer(nn.Module):
         x = self.project(
             rearrange(x, "B C K X Y -> B (X Y K) C"),
         )
+
+        # Adding token positional encoding
+        x = x + SineEncoding(X * Y * K).forward(torch.linspace(-1, 1, x.shape[-1])).transpose(
+            0, 1
+        ).to(x.device)
 
         # Going through transformer blocks
         for block in self.blocks:
