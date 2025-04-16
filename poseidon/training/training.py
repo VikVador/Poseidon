@@ -77,6 +77,7 @@ def training(
             "Optimizer": config_optimizer,
             "Scheduler": config_scheduler,
             "UNet": config_unet,
+            "Transformer": config_transformer,
             "Siren": config_siren,
             "Cluster": config_cluster,
             "Scores": wandb_get_hyperparameter_score([
