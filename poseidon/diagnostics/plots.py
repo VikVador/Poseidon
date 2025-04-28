@@ -39,7 +39,7 @@ def visualize(
     forecast_size, trajectory_size, steps = (
         3,
         7,
-        32,
+        64,
     )
 
     # Wrapping the denoiser into a full trajectory model
