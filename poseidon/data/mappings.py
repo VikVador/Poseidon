@@ -1,4 +1,4 @@
-r"""A collection of tools handling mapping between data representation."""
+r"""A collection of tools handling mapping between data representations."""
 
 import xarray as xr
 
