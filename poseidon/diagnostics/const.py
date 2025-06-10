@@ -1,4 +1,4 @@
-r"""Constants used in the diagnostics module for plotting."""
+r"""Constants for diagnostics."""
 
 import cmocean.cm as cmo
 
