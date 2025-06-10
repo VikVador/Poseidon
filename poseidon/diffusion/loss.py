@@ -15,6 +15,25 @@ from poseidon.data.mask import generate_trajectory_mask
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 
+def compute_level_weights(mask: Tensor) -> Tensor:
+    r"""Computes the weights of each layer based on the number of pixels in the Black Sea."""
+
+    pixels_total = mask.sum(dim=(1, 3, 4))[0, 0]
+    pixels_per_layer = mask.sum(dim=(3, 4))[0, :, 0] / pixels_total
+
+    norm = (pixels_per_layer - pixels_per_layer.min()) / (
+        pixels_per_layer.max() - pixels_per_layer.min()
+    )
+
+    weights_per_layer = 1 + (1 - norm)
+    if torch.isnan(weights_per_layer).any():
+        weights_per_layer = torch.ones_like(weights_per_layer)
+    weights_per_layer = weights_per_layer[None, :, None, None, None]
+
+    _, _, K, X, Y = mask.shape
+    return weights_per_layer.expand(-1, -1, K, X, Y)
+
+
 class PoseidonLoss(nn.Module):
     r"""Weighted loss (masked) emphasizing the error differently based on the noise level.
 
@@ -40,15 +59,23 @@ class PoseidonLoss(nn.Module):
 
         self.use_mask, self.mask = (
             use_mask,
-            rearrange(
-                generate_trajectory_mask(
-                    variables=variables,
-                    region=region,
-                    trajectory_size=blanket_size,
-                ),
-                "B C K X Y -> B (C K X Y)",
-            ).to(DEVICE),
+            generate_trajectory_mask(
+                variables=variables,
+                region=region,
+                trajectory_size=blanket_size,
+            ),
         )
+
+        self.mask, self.weight_levels = (
+            rearrange(self.mask, "B C K X Y -> B (C K X Y)"),
+            rearrange(compute_level_weights(self.mask), "B C K X Y -> B (C K X Y)"),
+        )
+
+        if self.use_mask:
+            self.weight_levels = self.weight_levels[:, self.mask[0] == 1]
+
+        self.mask = self.mask.to(DEVICE)
+        self.weight_levels = self.weight_levels.to(DEVICE)
 
     def forward(
         self,
@@ -69,7 +96,7 @@ class PoseidonLoss(nn.Module):
             )
 
         weight   = 1 + 1 / (sigma_t ** 2)
-        se       = (x_0_denoised - x_0) ** 2
+        se       = self.weight_levels * (x_0_denoised - x_0) ** 2
         mse      = torch.mean(se, dim=-1, keepdim=True)
         wmse     = weight * mse
         mwmse    = torch.mean(wmse)

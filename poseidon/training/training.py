@@ -77,6 +77,7 @@ def training(
             "Optimizer": config_optimizer,
             "Scheduler": config_scheduler,
             "UNet": config_unet,
+            "Transformer": config_transformer,
             "Siren": config_siren,
             "Cluster": config_cluster,
             "Scores": wandb_get_hyperparameter_score([
@@ -288,6 +289,26 @@ def training(
                 else poseidon_denoiser.backbone,
             )
 
+        # ===========================================================================
+        #                             OPTIMIZATION STEP
+        # ===========================================================================
+        if 0 < step:
+            if (step % steps_gradient_accumulation == 0) or (step == steps_training - 2):
+
+                # Optimization step
+                safe_gd_step(optimizer=optimizer, grad_clip=1, scaler=scaler)
+                scheduler_lr.step()
+                loss_aoas = 0.0
+
+                # Cleaning
+                del x_0, x_0_denoised, x_t, sigma_t, loss
+                torch.cuda.empty_cache()
+                gc.collect()
+
+        # Emergency stop
+        if steps_training <= step:
+            break
+
         # =================================================================
         #                            VALIDATION
         # =================================================================
@@ -299,7 +320,7 @@ def training(
                 #                    LOSS
                 # ===========================================
                 # Stores the error made on the validation set
-                v_loss = 0.0
+                v_loss, v_count = 0.0, 0
 
                 for _, (v_sample, _) in enumerate(dataloader_validation):
 
@@ -324,14 +345,19 @@ def training(
                         sigma_t = v_sigma_t,
                     ).item()
 
+                    # Counting the number of samples
+                    v_count += 1
+
                 # Weights & Biases
-                wandb.log({"Validation/Loss (Averaged)": v_loss / config_dataloader_additional["linspace_samples"][1]})
+                wandb.log({"Validation/Loss (Averaged)": v_loss / v_count})
+
+                # Cleaning
+                del v_x_0, v_x_t, v_sigma_t
 
                 # ===========================================
                 #                VISUALIZATION
                 # ===========================================
                 if wandb_mode == "online":
-
                     visualize(
                         wandb_mode=wandb_mode,
                         variables=black_sea_variables,
@@ -341,25 +367,6 @@ def training(
                         if torch.cuda.device_count() > 1
                         else poseidon_denoiser,
                     )
-
-        # ===========================================================================
-        #                             OPTIMIZATION STEP
-        # ===========================================================================
-        if 0 < step:
-            if (step % steps_gradient_accumulation == 0) or (step == steps_training - 2):
-
-                safe_gd_step(optimizer=optimizer, grad_clip=1, scaler=scaler)
-                scheduler_lr.step()
-                loss_aoas = 0.0
-                gc.collect()
-
-        # Cleaning
-        del x_0, x_t, sigma_t, loss
-        torch.cuda.empty_cache()
-
-        # Emergency stop
-        if steps_training <= step:
-            break
 
     # Finalizing the training
     progress_bar.update(1)

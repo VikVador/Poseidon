@@ -10,6 +10,7 @@ from typing import Dict, Optional, Sequence, Tuple
 
 # isort: split
 from poseidon.config import PATH_DATA, PATH_MASK, PATH_STAT
+from poseidon.data.const import DATASET_VARIABLES_SURFACE, TOY_DATASET_VARIABLES_SURFACE
 from poseidon.data.mappings import from_tensor_to_xarray
 from poseidon.diagnostics.const import CMAPS_SURF, TRANSLATION, UNITS
 from poseidon.diffusion.denoiser import PoseidonDenoiser
@@ -36,9 +37,9 @@ def visualize(
     """
 
     forecast_size, trajectory_size, steps = (
-        4,
-        10,
-        32,
+        3,
+        7,
+        64,
     )
 
     # Wrapping the denoiser into a full trajectory model
@@ -80,9 +81,7 @@ def visualize(
         xr.open_zarr(PATH_DATA)
         .sel(time=slice("2020-01-01", "2020-12-31"))
         .isel(**region, time=np.linspace(0, 365, trajectory_size, dtype=int)),
-        xr.open_zarr(PATH_MASK)["mask"].isel(
-            latitude=region["latitude"], longitude=region["longitude"]
-        ),
+        xr.open_zarr(PATH_MASK)["mask"].isel(**region),
     )
 
     # Rescaling the data
@@ -100,6 +99,11 @@ def visualize(
         )
 
         for l in range(levels):
+            #
+            # Security
+            if v in TOY_DATASET_VARIABLES_SURFACE + DATASET_VARIABLES_SURFACE and l > 0:
+                break
+
             # Surface variables do not have a level dimension
             x, x_gt, mask = (
                 data.isel(level=l).values if "level" in data.sizes else data.values,
@@ -134,12 +138,14 @@ def visualize(
                 ax.set_yticks([])
                 if t == 0:
                     ax.set_ylabel("Examples", fontsize=10, labelpad=10)
-                if t == 1:
-                    ax.set_title(f"{TRANSLATION[v]} ${UNITS[v]}$ | Level {l}", fontsize=12)
+                    ax.set_title(
+                        f"{TRANSLATION[v]} ${UNITS[v]}$ | Level {l} = {data_gt.level.values[l]:.3f} [m]",
+                        fontsize=12,
+                    )
 
             # --- Forecasts (Rows) ---
             for f in range(forecasts):
-                cbar_ax = fig.add_subplot(gs[f + 1, -1])  # Colorbar position
+                cbar_ax = fig.add_subplot(gs[f + 1, -1])
                 for t in range(trajectory_size):
                     q_min, q_max = np.nanquantile(x[f, t], [0.05, 0.95])
                     ax = fig.add_subplot(gs[f + 1, t])
@@ -168,7 +174,3 @@ def visualize(
             else:
                 plt.show()
             plt.close(fig)
-
-            # Security - If surface variable, break
-            if "level" not in data.dims:
-                break

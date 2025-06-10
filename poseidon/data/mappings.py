@@ -31,8 +31,12 @@ def from_tensor_to_indices(
     """
 
     dataset = xr.open_zarr(path)[variables]
+    idx_start, mapping = 0, {}
+    if isinstance(region["level"], list):
+        total_levels = len(region["level"])
+    else:
+        total_levels = region["level"].stop - region["level"].start
 
-    idx_start, mapping, total_levels = 0, {}, region["level"].stop
     for v in dataset:
         idx_end = idx_start + (total_levels if "level" in dataset[v].dims else 1)
         mapping[v] = (idx_start, idx_end)

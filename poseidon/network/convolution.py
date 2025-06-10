@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 
 from torch import Tensor
+from torch.utils.checkpoint import checkpoint
 from typing import Dict, Optional
 
 # isort: split
@@ -104,19 +105,12 @@ class ConvResidualBlock(nn.Module):
             ),
         )
 
-    def forward(
+    def _forward(
         self,
         x: Tensor,
         mod: Tensor,
     ) -> Tensor:
-        r"""
-        Arguments:
-            x: Input tensor (B, C, K, X, Y).
-            mod: Modulation vector (B, D).
-
-        Returns:
-            Tensor (B, C, K, X, Y).
-        """
+        r"""Checkpointed forward pass."""
 
         # Siren embedding of the mesh
         mesh = self.mesh_embedding()
@@ -130,3 +124,11 @@ class ConvResidualBlock(nn.Module):
         y = (x + c * y) * torch.rsqrt(1 + c * c)
 
         return y
+
+    def forward(
+        self,
+        x: Tensor,
+        mod: Tensor,
+    ) -> Tensor:
+        r"""Forward pass of the convolutional residual block."""
+        return checkpoint(self._forward, x, mod, use_reentrant=False)
