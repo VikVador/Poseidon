@@ -16,21 +16,39 @@ from poseidon.training.load import load_backbone, load_optimizer, load_scheduler
 from poseidon.training.save import PoseidonSave
 
 # Generating random dimensions for testing
-MESH_LEVELS, MESH_LAT, MESH_LON = (4, 128, 128)
-
-(INPUT_B, INPUT_C, INPUT_K), INPUT_H, INPUT_W = (
-    (random.randint(3, 5) for _ in range(3)),
-    10,
-    10,
+MESH_LEVELS, MESH_LAT, MESH_LON = (
+    1,
+    128,
+    256,
 )
 
-UNET_KERNEL, UNET_FEATURES, UNET_CHANNELS, UNET_BLOCKS, SIREN_FEATURES, SIREN_LAYERS = (
+INPUT_B, INPUT_C, INPUT_K, INPUT_H, INPUT_W = (
     random.choice([3, 5]),
-    random.choice([3, 4]),
-    list(random.randint(2, 5) for _ in range(3)),
-    list(random.choice([1, 2]) for _ in range(3)),
+    4,
+    random.choice([3, 5]),
+    16,
+    16,
+)
+
+UNET_KERNEL, UNET_FEATURES, UNET_SCALING, UNET_BLOCKS, UNET_CHANNELS = (
+    random.choice([3, 5]),
     random.choice([2, 4]),
-    random.choice([2, 3]),
+    random.choice([1, 2]),
+    list(random.choice([1, 2]) for _ in range(3)),
+    list(random.randint(2, 5) for _ in range(3)),
+)
+
+TRANSF_CHANNELS, TRANSF_BLOCKS, TRANSF_PATCH, TRANSF_SCALING, TRANSF_HEADS = (
+    random.choice([8, 32]),
+    random.choice([4, 8]),
+    random.choice([1, 2]),
+    random.choice([1, 2]),
+    random.choice([1, 2]),
+)
+
+SIREN_FEATURES, SIREN_LAYERS = (
+    random.choice([2, 4]),
+    random.choice([1, 2]),
 )
 
 
@@ -62,40 +80,45 @@ def fake_zarr_mesh(tmp_path):
 @pytest.fixture
 def fake_configurations():
     """Provides random configurations for UNet, Siren, and the spatial region."""
-
-    dimensions = [
-        INPUT_B,
-        INPUT_C,
-        INPUT_K,
-        INPUT_H,
-        INPUT_W,
-    ]
-
     config_unet = {
-        "hid_channels": UNET_CHANNELS,
-        "hid_blocks": UNET_BLOCKS,
         "kernel_size": UNET_KERNEL,
         "mod_features": UNET_FEATURES,
+        "ffn_scaling": UNET_SCALING,
+        "hid_blocks": UNET_BLOCKS,
+        "hid_channels": UNET_CHANNELS,
+        "attention_heads": {"-1": 1},
     }
-
+    config_transformer = {
+        "hid_channels": TRANSF_CHANNELS,
+        "hid_blocks": TRANSF_BLOCKS,
+        "patch_size": TRANSF_PATCH,
+        "ffn_scaling": TRANSF_SCALING,
+        "attention_heads": TRANSF_HEADS,
+    }
     config_siren = {
-        "features": 2,
-        "n_layers": 1,
+        "features": SIREN_FEATURES,
+        "n_layers": SIREN_LAYERS,
     }
-
-    return dimensions, config_unet, config_siren, TOY_DATASET_REGION
+    config_region = {
+        "latitude": slice(0, INPUT_H),
+        "longitude": slice(0, INPUT_W),
+        "level": slice(0, INPUT_C),
+    }
+    dimensions = (INPUT_B, INPUT_C, INPUT_K, INPUT_H, INPUT_W)
+    return dimensions, config_unet, config_siren, config_region, config_transformer
 
 
 @pytest.fixture
 def fake_backbone(fake_zarr_mesh, fake_configurations):
     """Initialize a PoseidonBackbone instance."""
-    dimensions, config_unet, config_siren, config_region = fake_configurations
+    dimensions, config_unet, config_siren, config_region, config_transformer = fake_configurations
     return PoseidonBackbone(
+        variables=["votemper"],
         dimensions=dimensions,
         config_unet=config_unet,
         config_siren=config_siren,
-        config_region=config_region,
-        path_mesh=fake_zarr_mesh,
+        config_region=TOY_DATASET_REGION,
+        config_transformer=config_transformer,
     )
 
 
@@ -160,14 +183,19 @@ def test_load_backbone(temp_dir, fake_backbone, fake_zarr_mesh, fake_configurati
     """Testing if a PoseidonBackbone is save and loaded correctly."""
 
     # Initialization
-    name_model, (dimensions, config_unet, config_siren, _) = ("test_model", fake_configurations)
+    name_model, (dimensions, config_unet, config_siren, _, config_transformer) = (
+        "test_model",
+        fake_configurations,
+    )
 
     # Saving the model with custom tool
     poseidon_save = PoseidonSave(
         path=temp_dir,
         name_model=name_model,
+        variables=["votemper"],
         dimensions=dimensions,
         config_unet=config_unet,
+        config_transformer=config_transformer,
         config_siren=config_siren,
         config_problem={"toy_problem": True},
     )
@@ -181,7 +209,6 @@ def test_load_backbone(temp_dir, fake_backbone, fake_zarr_mesh, fake_configurati
     loaded_model = load_backbone(
         name_model=name_model,
         path=temp_dir,
-        path_mesh=fake_zarr_mesh,
         best=True,
         backup=False,
     )

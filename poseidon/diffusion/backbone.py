@@ -1,5 +1,6 @@
 r"""Diffusion backbone."""
 
+import torch
 import torch.nn as nn
 
 from einops import rearrange
@@ -48,10 +49,10 @@ class PoseidonBackbone(nn.Module):
                 variables=variables,
                 region=config_region,
                 trajectory_size=self.K,
-            ),
+            ).bool(),
         )
 
-        self.unet = UDiT(
+        self.network = UDiT(
             in_channels=self.C,
             out_channels=self.C,
             config_siren=config_siren,
@@ -75,7 +76,7 @@ class PoseidonBackbone(nn.Module):
             Cleaned tensor (B, C * K * X * Y).
         """
 
-        # Reshaping for UNet
+        # Reshaping for network
         x_t = rearrange(
             x_t,
             "B (C K X Y) -> B C K X Y",
@@ -86,11 +87,11 @@ class PoseidonBackbone(nn.Module):
         )
 
         # Masking land
-        x_t[:, self.mask[0] == 0] = LAND_VALUE
+        x_t = torch.where(self.mask.expand_as(x_t), x_t, LAND_VALUE)
 
         # Estimating (unscaled) clean signal
         x_t = rearrange(
-            self.unet(x_t, sigma_t),
+            self.network(x_t, sigma_t),
             "B C K X Y -> B (C K X Y)",
             C=self.C,
             K=self.K,

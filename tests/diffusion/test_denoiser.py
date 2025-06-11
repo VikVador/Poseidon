@@ -13,24 +13,39 @@ from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 
 # Generating random dimensions for testing
-MESH_LEVELS, (MESH_LAT, MESH_LON) = (
-    random.randint(3, 5),
-    (random.randint(24, 32) for _ in range(2)),
+MESH_LEVELS, MESH_LAT, MESH_LON = (
+    8,
+    32,
+    32,
 )
 
-(INPUT_B, INPUT_C, INPUT_K), INPUT_H, INPUT_W = (
-    (random.choice([3, 5]) for _ in range(3)),
-    10,
-    10,
-)
-
-UNET_KERNEL, UNET_FEATURES, UNET_CHANNELS, UNET_BLOCKS, SIREN_FEATURES, SIREN_LAYERS = (
+INPUT_B, INPUT_C, INPUT_K, INPUT_H, INPUT_W = (
     random.choice([3, 5]),
-    random.choice([1]),
-    list(random.randint(2, 5) for _ in range(3)),
-    list(random.choice([1, 2]) for _ in range(3)),
+    4,
+    random.choice([3, 5]),
+    16,
+    16,
+)
+
+UNET_KERNEL, UNET_FEATURES, UNET_SCALING, UNET_BLOCKS, UNET_CHANNELS = (
+    random.choice([3, 5]),
     random.choice([2, 4]),
-    random.choice([2, 3]),
+    random.choice([1, 2]),
+    list(random.choice([1, 2]) for _ in range(3)),
+    list(random.randint(2, 5) for _ in range(3)),
+)
+
+TRANSF_CHANNELS, TRANSF_BLOCKS, TRANSF_PATCH, TRANSF_SCALING, TRANSF_HEADS = (
+    random.choice([8, 32]),
+    random.choice([4, 8]),
+    random.choice([1, 2]),
+    random.choice([1, 2]),
+    random.choice([1, 2]),
+)
+
+SIREN_FEATURES, SIREN_LAYERS = (
+    random.choice([2, 4]),
+    random.choice([1, 2]),
 )
 
 
@@ -46,7 +61,7 @@ def fake_input():
 @pytest.fixture
 def fake_noise():
     """Fixture to provide a noise level tensor for testing."""
-    sigma = torch.randn(INPUT_B, UNET_FEATURES)
+    sigma = torch.randn(INPUT_B, 1)
     sigma.requires_grad = True
     sigma = sigma.to(dtype=torch.float32)
     return sigma
@@ -75,34 +90,45 @@ def fake_zarr_mesh(tmp_path):
 def fake_configurations():
     """Provides random configurations for UNet, Siren, and the spatial region."""
     config_unet = {
-        "hid_channels": UNET_CHANNELS,
-        "hid_blocks": UNET_BLOCKS,
         "kernel_size": UNET_KERNEL,
         "mod_features": UNET_FEATURES,
+        "ffn_scaling": UNET_SCALING,
+        "hid_blocks": UNET_BLOCKS,
+        "hid_channels": UNET_CHANNELS,
+        "attention_heads": {"-1": 1},
+    }
+    config_transformer = {
+        "hid_channels": TRANSF_CHANNELS,
+        "hid_blocks": TRANSF_BLOCKS,
+        "patch_size": TRANSF_PATCH,
+        "ffn_scaling": TRANSF_SCALING,
+        "attention_heads": TRANSF_HEADS,
     }
     config_siren = {
         "features": SIREN_FEATURES,
         "n_layers": SIREN_LAYERS,
     }
     config_region = {
-        "latitude": slice(0, 10),
-        "longitude": slice(0, 10),
+        "latitude": slice(0, INPUT_H),
+        "longitude": slice(0, INPUT_W),
+        "level": slice(0, INPUT_C),
     }
     dimensions = (INPUT_B, INPUT_C, INPUT_K, INPUT_H, INPUT_W)
-    return dimensions, config_unet, config_siren, config_region
+    return dimensions, config_unet, config_siren, config_region, config_transformer
 
 
 @pytest.fixture
 def backbone(fake_zarr_mesh, fake_configurations):
     """Initialize a PoseidonBackbone instance."""
-    dimensions, config_unet, config_siren, config_region = fake_configurations
+    dimensions, config_unet, config_siren, config_region, config_transformer = fake_configurations
 
     return PoseidonBackbone(
+        variables=["votemper"],
         dimensions=dimensions,
         config_unet=config_unet,
         config_siren=config_siren,
         config_region=config_region,
-        path_mesh=fake_zarr_mesh,
+        config_transformer=config_transformer,
     )
 
 
