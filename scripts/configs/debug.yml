@@ -32,10 +32,9 @@ Training Pipeline:
     "num_workers":     [0]
     "prefetch_factor": [null]
     "shuffle":         [[True, False, False]]
-    "trajectory_size": [4]
 
   config_training:
-    "blanket_neighbors":           [1]
+    "blanket_size":                [1]
     "steps_training":              [32]
     "steps_gradient_accumulation": [1]
     "steps_logging":               [1]

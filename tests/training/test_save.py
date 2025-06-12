@@ -13,8 +13,7 @@ from torch.optim.lr_scheduler import StepLR
 # isort: split
 from poseidon.data.const import TOY_DATASET_REGION
 from poseidon.diffusion.backbone import PoseidonBackbone
-from poseidon.training.load import load_backbone, load_optimizer, load_scheduler
-from poseidon.training.save import PoseidonSave, save_backbone, save_configuration, save_tools
+from poseidon.training.save import save_backbone, save_configuration, save_tools
 
 # Generating random dimensions for testing
 MESH_LEVELS, MESH_LAT, MESH_LON = (
@@ -182,7 +181,7 @@ def test_save_configuration(temp_dir):
         saved_config = yaml.safe_load(file)
 
     assert config_folder.exists(), "ERROR - Configuration folder was not created."
-    assert config_path.exists(),   "ERROR - Configuration file was not saved."
+    assert config_path.exists(), "ERROR - Configuration file was not saved."
     assert saved_config == config, "ERROR - Saved configuration does not match the original."
 
 
@@ -205,7 +204,7 @@ def test_save_tools(temp_dir, fake_optimizer, fake_scheduler):
     optimizer_path = tools_folder / "optimizer.pth"
     scheduler_path = tools_folder / "scheduler.pth"
 
-    assert tools_folder.exists(),   "ERROR - Tools folder was not created."
+    assert tools_folder.exists(), "ERROR - Tools folder was not created."
     assert optimizer_path.exists(), "ERROR - Optimizer state file was not saved."
     assert scheduler_path.exists(), "ERROR - Scheduler state file was not saved."
 
