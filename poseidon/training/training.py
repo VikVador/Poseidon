@@ -5,6 +5,7 @@ import gc
 import torch
 import wandb
 
+from einops import rearrange
 from torch.amp.grad_scaler import GradScaler
 from tqdm import tqdm
 from typing import Dict
@@ -18,7 +19,6 @@ from poseidon.data.const import (
     TOY_DATASET_VARIABLES,
 )
 from poseidon.data.dataloaders import get_dataloaders, get_toy_dataloaders
-from poseidon.diagnostics.plots import visualize
 from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.loss import PoseidonLoss
@@ -28,7 +28,6 @@ from poseidon.training.load import load_backbone
 from poseidon.training.optimizer import get_optimizer, safe_gd_step
 from poseidon.training.save import PoseidonSave
 from poseidon.training.scheduler import get_scheduler
-from poseidon.training.tools import extract_random_blankets
 
 # fmt: off
 #
@@ -91,7 +90,6 @@ def training(
 
     # Unpacking configurations
     (
-        blanket_neighbors,
         blanket_size,
         steps_training,
         steps_validation,
@@ -100,12 +98,10 @@ def training(
         model_saving,
         model_checkpoint_name,
         model_checkpoint_version,
-        wandb_mode,
         black_sea_variables,
         black_sea_region,
     ) = (
-        config_training["blanket_neighbors"],
-        config_training["blanket_neighbors"] * 2 + 1,
+        config_training["blanket_size"],
         config_training["steps_training"],
         config_training["steps_validation"],
         config_training["steps_gradient_accumulation"],
@@ -113,7 +109,6 @@ def training(
         config_problem["model_saving"],
         config_problem["model_checkpoint_name"],
         config_problem["model_checkpoint_version"],
-        config_wandb["mode"],
         TOY_DATASET_VARIABLES if config_problem["toy_problem"] else DATASET_VARIABLES,
         TOY_DATASET_REGION    if config_problem["toy_problem"] else DATASET_REGION,
     )
@@ -132,11 +127,13 @@ def training(
     # Initializing dataloaders
     dataloader_training, dataloader_validation, _ = (
         get_toy_dataloaders(
+            trajectory_size = blanket_size,
             **config_dataloader,
             **config_dataloader_additional,
         )
         if config_problem["toy_problem"]
         else get_dataloaders(
+            trajectory_size = blanket_size,
             **config_dataloader,
             **config_dataloader_additional,
         )
@@ -230,12 +227,12 @@ def training(
     )
 
     # =========================================================
-    #                       TRAINING
+    #                        TRAINING
     # =========================================================
     for step, (sample, _) in enumerate(dataloader_training):
 
-        # From trajectories, extracting random blankets
-        x_0 = extract_random_blankets(x = sample, k = blanket_neighbors)
+        # Preprocessing
+        x_0 = rearrange(sample, "B ... -> B (...)")
 
         # Generating noise levels
         sigma_t = scheduler_noise(
@@ -312,20 +309,17 @@ def training(
         # =================================================================
         #                            VALIDATION
         # =================================================================
-        if (step  % steps_validation == 0) or (step == steps_training - 2):
+        if (step % steps_validation == 0) or (step == steps_training - 2):
 
             with torch.no_grad():
 
-                # ===========================================
-                #                    LOSS
-                # ===========================================
                 # Stores the error made on the validation set
                 v_loss, v_count = 0.0, 0
 
-                for _, (v_sample, _) in enumerate(dataloader_validation):
+                for _, (sample, _) in enumerate(dataloader_validation):
 
-                    # From trajectories, extracting random blankets
-                    v_x_0 = extract_random_blankets(x = v_sample, k = blanket_neighbors)
+                    # Preprocessing
+                    v_x_0 = rearrange(sample, "B ... -> B (...)")
 
                     # Generating noise levels
                     v_sigma_t = scheduler_noise(
@@ -353,20 +347,6 @@ def training(
 
                 # Cleaning
                 del v_x_0, v_x_t, v_sigma_t
-
-                # ===========================================
-                #                VISUALIZATION
-                # ===========================================
-                if wandb_mode == "online":
-                    visualize(
-                        wandb_mode=wandb_mode,
-                        variables=black_sea_variables,
-                        region=black_sea_region,
-                        dimensions=(C, X, Y),
-                        denoiser=poseidon_denoiser.module
-                        if torch.cuda.device_count() > 1
-                        else poseidon_denoiser,
-                    )
 
     # Finalizing the training
     progress_bar.update(1)
