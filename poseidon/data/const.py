@@ -11,7 +11,6 @@ VARIABLES_CLIPPING = {
     "DOX":      (0, None),
     "CHL":      (0, None),
     "vosaline": (0, None),
-    "rho":      (0, None),
 }
 
 

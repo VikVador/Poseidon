@@ -13,7 +13,7 @@ Cluster:
   "time"     : ["48:00:00"]
 
 
-# ===== Diffusion Training Configuration =====
+# ===== Training Configuration =====
 #
 Training Pipeline:
 

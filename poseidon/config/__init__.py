@@ -4,6 +4,10 @@ from pathlib import Path
 
 # fmt: off
 #
+# ----- Local
+#
+LOCAL = Path("/gpfs/home/acad/ulg-mast/vmangele/")
+
 # ----- Simulation
 #
 SIMULATION      = Path("/gpfs/projects/acad/bsmfc/nemo4.2.0/")
@@ -31,8 +35,10 @@ PATH_MESH  = POSEIDON / "mesh.zarr"
 PATH_MODEL = POSEIDON / "models"
 
 
-# ----- Observations
+# ----- Datasets & Observations
 #
+PATH_NOWCASTS = LOCAL / "poseidon/metrics/datasets/"
+
 PATH_OBSERVATIONS_FLOATS = {
     "shelf": {
         "oxygen":      PATH_OBS / "observations_1980_2025_floats_oxygen_shelf.zarr",
