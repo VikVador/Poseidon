@@ -9,7 +9,7 @@ import xarray as xr
 from typing import Dict, Optional, Sequence, Tuple
 
 # isort: split
-from poseidon.config import PATH_DATA, PATH_MASK, PATH_STAT
+from poseidon.config import PATH_DATA, PATH_MASK_B, PATH_STAT
 from poseidon.data.const import DATASET_VARIABLES_SURFACE, TOY_DATASET_VARIABLES_SURFACE
 from poseidon.data.mappings import from_tensor_to_xarray
 from poseidon.diagnostics.const import CMAPS_SURF, TRANSLATION, UNITS
@@ -81,7 +81,7 @@ def visualize(
         xr.open_zarr(PATH_DATA)
         .sel(time=slice("2020-01-01", "2020-12-31"))
         .isel(**region, time=np.linspace(0, 365, trajectory_size, dtype=int)),
-        xr.open_zarr(PATH_MASK)["mask"].isel(**region),
+        xr.open_zarr(PATH_MASK_B)["mask"].isel(**region),
     )
 
     # Rescaling the data

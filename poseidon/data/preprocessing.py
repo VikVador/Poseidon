@@ -12,7 +12,7 @@ from typing import (
 )
 
 # isort: split
-from poseidon.config import PATH_MASK
+from poseidon.config import PATH_MASK_B
 from poseidon.data.tools import generate_paths
 
 
@@ -127,7 +127,7 @@ def compute_preprocessing(
     wandb.init(project="Poseidon-Preprocessing", mode=wandb_mode)
 
     paths = generate_paths()
-    mask = xr.open_zarr(PATH_MASK)
+    mask = xr.open_zarr(PATH_MASK_B)
     stat = xr.open_zarr(path_statistics)
     mean, std = (
         stat.sel(statistic="mean").load(),

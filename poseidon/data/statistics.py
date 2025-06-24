@@ -13,7 +13,7 @@ from typing import (
 )
 
 # isort: split
-from poseidon.config import PATH_MASK
+from poseidon.config import PATH_MASK_B
 from poseidon.data.preprocessing import dataset_preprocessing
 from poseidon.data.tools import generate_paths
 
@@ -93,7 +93,7 @@ def compute_statistics(
 
     # Initialization
     paths = generate_paths()
-    mask = xr.open_zarr(PATH_MASK).load()
+    mask = xr.open_zarr(PATH_MASK_B).load()
     stats_calculator = PoseidonStatistics()
 
     for date, path in paths.items():

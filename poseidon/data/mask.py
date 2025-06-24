@@ -12,14 +12,14 @@ from typing import (
 )
 
 # isort: split
-from poseidon.config import PATH_MASKV
+from poseidon.config import PATH_MASK_V
 
 
 def generate_trajectory_mask(
     variables: Sequence[str],
     region: Dict[str, Tuple[int, int]],
     trajectory_size: int,
-    path: Path = PATH_MASKV,
+    path: Path = PATH_MASK_V,
 ) -> Tensor:
     r"""Creates a boolean mask whose dimensions match preprocessed trajectory sample.
 
