@@ -24,7 +24,7 @@ from poseidon.training.load import load_backbone
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def generate_unconditional_nowcast(index: int, config: Dict) -> None:
+def generate_unconditional(index: int, config: Dict) -> None:
     """Generates an unconditional nowcast and saves it.
 
     Information:

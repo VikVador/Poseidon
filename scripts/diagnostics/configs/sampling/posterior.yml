@@ -1,0 +1,10 @@
+# ======================================
+#  Poseidon | Diffusion Model Validation
+# ======================================
+#
+# ===== Sampling Posterior Configuration =====
+#
+"steps"        : [256]
+"nb_nowcasts"  : [32]
+"iterations"   : [1]
+"covariance_y" : [0.01]
