@@ -1,0 +1,9 @@
+# ======================================
+#  Poseidon | Diffusion Model Validation
+# ======================================
+#
+# ===== Model Configuration =====
+#
+"model"      : ["name"]
+"best"       : [False]
+"toy_problem": [True]

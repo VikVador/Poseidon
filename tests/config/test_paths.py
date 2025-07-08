@@ -6,7 +6,7 @@ from pathlib import Path
 from poseidon.config import (
     PATH_DATA,
     PATH_GRID,
-    PATH_MASK,
+    PATH_MASK_B,
     PATH_MASTDB,
     PATH_MESH,
     PATH_MODEL,
@@ -26,8 +26,8 @@ from poseidon.config import (
 def test_mask_and_mesh():
     """Testing mask and mesh paths extension for consistency."""
     assert (
-        PATH_MASK.suffix == ".zarr"
-    ), f"ERROR - PATH_MASK should be a .zarr file but got {PATH_MASK.suffix}."
+        PATH_MASK_B.suffix == ".zarr"
+    ), f"ERROR - PATH_MASK_B should be a .zarr file but got {PATH_MASK_B.suffix}."
     assert (
         PATH_MESH.suffix == ".zarr"
     ), f"ERROR - PATH_MESH should be a .zarr file but got {PATH_MESH.suffix}."
@@ -47,7 +47,7 @@ def test_paths_are_strings_or_paths():
         PATH_STAT,
         PATH_PTRC,
         PATH_GRID,
-        PATH_MASK,
+        PATH_MASK_B,
         PATH_MESH,
         PATH_MODEL,
     ]

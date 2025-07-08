@@ -9,7 +9,7 @@ from functools import partial
 from pathlib import Path
 
 # isort: split
-from poseidon.config import PATH_MASK
+from poseidon.config import PATH_MASK_B
 
 YEARS = {
     "sst": (1982, 2023),
@@ -46,7 +46,7 @@ DATASET_IDS = {
 }
 
 # Coordinates for spatial filtering
-mask = xr.open_zarr(PATH_MASK).load()
+mask = xr.open_zarr(PATH_MASK_B).load()
 
 BS_LAT_MIN, BS_LAT_MAX, BS_SHELF_LAT_MIN, BS_SHELF_LAT_MAX = (
     mask.latitude.values[0],

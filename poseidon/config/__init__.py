@@ -4,6 +4,10 @@ from pathlib import Path
 
 # fmt: off
 #
+# ----- Local
+#
+LOCAL = Path("/gpfs/home/acad/ulg-mast/vmangele/")
+
 # ----- Simulation
 #
 SIMULATION      = Path("/gpfs/projects/acad/bsmfc/nemo4.2.0/")
@@ -16,23 +20,27 @@ PATH_MASTDB = Path("/gpfs/scratch/acad/bsmfc/mastdb/")
 
 # ----- Poseidon
 #
-SCRATCH    = Path("/gpfs/scratch/acad/bsmfc/victor/")
-POSEIDON   = SCRATCH  / "poseidon"
+SCRATCH     = Path("/gpfs/scratch/acad/bsmfc/victor/")
+POSEIDON    = SCRATCH  / "poseidon"
 
 PATH_DATA  = SCRATCH  / "data"       / "deep_learning_black_sea_3D_1995_2022.zarr"
 PATH_OBS   = SCRATCH  / "data"       / "observations"
 PATH_STAT  = POSEIDON / "statistics" / "statistics.zarr"
 PATH_PTRC  = POSEIDON / "paths"      / "ptrc_T.txt"
 PATH_GRID  = POSEIDON / "paths"      / "grid_T.txt"
-
-PATH_MASKV = POSEIDON / "mask_variables.zarr"
-PATH_MASK  = POSEIDON / "mask.zarr"
 PATH_MESH  = POSEIDON / "mesh.zarr"
 PATH_MODEL = POSEIDON / "models"
 
+PATH_MASKS = POSEIDON / "masks"
 
-# ----- Observations
+PATH_MASK_B = PATH_MASKS  / "mask_black_sea.zarr"
+PATH_MASK_V = PATH_MASKS  / "mask_variables.zarr"
+PATH_MASK_O = [PATH_MASKS / "observators" / f"mask_shelf_{i}.pt" for i in range(1, 5)]
+
+# ----- Datasets & Observations
 #
+PATH_NOWCASTS = LOCAL / "poseidon/metrics/datasets/"
+
 PATH_OBSERVATIONS_FLOATS = {
     "shelf": {
         "oxygen":      PATH_OBS / "observations_1980_2025_floats_oxygen_shelf.zarr",
