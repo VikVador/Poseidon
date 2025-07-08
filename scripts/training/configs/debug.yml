@@ -35,6 +35,8 @@ Training Pipeline:
 
   config_training:
     "blanket_size":                [1]
+    "sigma_min":                   [0.00001]
+    "sigma_max":                   [1000]
     "steps_training":              [32]
     "steps_gradient_accumulation": [1]
     "steps_logging":               [1]

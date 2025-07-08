@@ -91,6 +91,8 @@ def training(
     # Unpacking configurations
     (
         blanket_size,
+        sigma_min,
+        sigma_max,
         steps_training,
         steps_validation,
         steps_gradient_accumulation,
@@ -102,6 +104,8 @@ def training(
         black_sea_region,
     ) = (
         config_training["blanket_size"],
+        config_training["sigma_min"],
+        config_training["sigma_max"],
         config_training["steps_training"],
         config_training["steps_validation"],
         config_training["steps_gradient_accumulation"],
@@ -204,7 +208,10 @@ def training(
             config_scheduler=config_scheduler,
         ),
         PoseidonTimeScheduler(),
-        PoseidonNoiseScheduler(),
+        PoseidonNoiseScheduler(
+            sigma_min=sigma_min,
+            sigma_max=sigma_max
+        ),
         PoseidonLoss(
             variables=black_sea_variables,
             region=black_sea_region,
