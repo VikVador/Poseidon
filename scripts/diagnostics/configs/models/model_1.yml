@@ -1,9 +1,0 @@
-# ======================================
-#  Poseidon | Diffusion Model Validation
-# ======================================
-#
-# ===== Model Configuration =====
-#
-"model"      : ["ethereal-planet-14"]
-"best"       : [False]
-"toy_problem": ["True"]

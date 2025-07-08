@@ -4,6 +4,6 @@
 #
 # ===== Model Configuration =====
 #
-"model"      : ["ethereal-planet-14"]
+"model"      : ["name"]
 "best"       : [False]
-"toy_problem": ["True"]
+"toy_problem": [True]
