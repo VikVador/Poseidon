@@ -31,6 +31,7 @@ from poseidon.data.const import (
 )
 from poseidon.data.tools import (
     assert_date_format,
+    convert_to_progressive_time,
     get_date_features,
 )
 
@@ -117,6 +118,7 @@ class PoseidonDataset(Dataset):
             sample = sample.fillna(LAND_VALUE)
             time = [get_date_features(sample.time[i].values) for i in range(sample.time.size)]
             time = torch.stack(time, dim=0)
+            time = convert_to_progressive_time(time)
             sample = sample.to_stacked_array(
                 new_dim="z_total", sample_dims=("time", "longitude", "latitude")
             ).transpose("z_total", "time", ...)
