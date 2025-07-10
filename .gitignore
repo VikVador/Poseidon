@@ -11,6 +11,7 @@ scripts/configs/*.yml
 
 # Macbook
 scripts/.dawgz/
+scripts/training/.dawgz/
 scripts/wandb
 wandb/
 *.ipynb
