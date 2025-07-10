@@ -6,6 +6,6 @@
 #
 "account"  : ["bsmfc"]
 "cpus"     : [4]
-"partition": ["batch"]
+"partition": ["debug"]
 "ram"      : ["60GB"]
 "time"     : ["01:00:00"]
