@@ -85,7 +85,7 @@ def convert_to_progressive_time(t: Tensor) -> Tensor:
     t_days = t[:, 1:3].clone()
 
     # Converting month to days
-    for traj in range(t_days.shape[1]):
+    for traj in range(t_days.shape[0]):
         t_days[traj, 0] = sum(days_in_month[: int(t_days[traj, 0].item() - 1)])
 
     # Adding current day

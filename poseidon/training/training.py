@@ -236,7 +236,7 @@ def training(
     # =========================================================
     #                        TRAINING
     # =========================================================
-    for step, (sample, _) in enumerate(dataloader_training):
+    for step, (sample, time) in enumerate(dataloader_training):
 
         # Preprocessing
         x_0 = rearrange(sample, "B ... -> B (...)")
@@ -250,10 +250,10 @@ def training(
         x_t = x_0 + sigma_t * torch.randn_like(x_0)
 
         # Pushing to device
-        x_0, x_t, sigma_t = x_0.to(DEVICE), x_t.to(DEVICE), sigma_t.to(DEVICE)
+        x_0, x_t, sigma_t, time = x_0.to(DEVICE), x_t.to(DEVICE), sigma_t.to(DEVICE), time.to(DEVICE)
 
         # Estimating clean trajectories and measuring error
-        x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t)
+        x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t, conditioning = time)
 
         loss = loss_function(
             x_0 = x_0,
@@ -266,95 +266,90 @@ def training(
         loss_aoas += loss.item()
         scaler.scale(loss).backward()
 
-        # =========================================================================
-        #                                 LOGGING
-        # =========================================================================
-        if (step % steps_logging == 0) or (step == steps_training - 2):
-
-            # Weights & Biases
-            wandb.log({
-                "Training/Loss (AoAS)": loss_aoas * steps_gradient_accumulation if step == 0 else loss_aoas,
-                "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
-                "Training/Step [-]": (step + 1),
-                "Training/Samples Seen [-]": B * (step + 1),
-                "Training/Completed [%]": (step / (steps_training - 2)) * 100,
-            })
-
-            # Terminal Progression Bar
-            progress_bar.set_postfix({"Loss (AoAS) ": f"{(loss_aoas):.4f}"})
-            progress_bar.update(1)
-
-            # Saving Model
-            poseidon_save.save(
-                loss = loss_aoas,
-                optimizer = optimizer,
-                scheduler = scheduler_lr,
-                model = poseidon_denoiser.module.backbone if torch.cuda.device_count() > 1
-                else poseidon_denoiser.backbone,
-            )
-
         # ===========================================================================
-        #                             OPTIMIZATION STEP
+        #                      LOGGING & OPTIMIZATION & VALIDATION
         # ===========================================================================
         if 0 < step:
-            if (step % steps_gradient_accumulation == 0) or (step == steps_training - 2):
 
-                # Optimization step
+            # Logging details
+            if (step % steps_logging == 0):
+
+                # Weights & Biases
+                wandb.log({
+                    "Training/Loss (AoAS)": loss_aoas * steps_gradient_accumulation if step == 0 else loss_aoas,
+                    "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
+                    "Training/Step [-]": (step + 1),
+                    "Training/Samples Seen [-]": B * (step + 1),
+                    "Training/Completed [%]": (step / (steps_training - 2)) * 100,
+                })
+
+                # Terminal Progression Bar
+                progress_bar.set_postfix({"Loss (AoAS) ": f"{(loss_aoas):.4f}"})
+                progress_bar.update(1)
+
+                # Saving Model
+                poseidon_save.save(
+                    loss = loss_aoas,
+                    optimizer = optimizer,
+                    scheduler = scheduler_lr,
+                    model = poseidon_denoiser.module.backbone if torch.cuda.device_count() > 1
+                    else poseidon_denoiser.backbone,
+                )
+
+            # Optimization
+            if (step % steps_gradient_accumulation == 0):
+
                 safe_gd_step(optimizer=optimizer, grad_clip=1, scaler=scaler)
                 scheduler_lr.step()
                 loss_aoas = 0.0
 
-                # Cleaning
-                del x_0, x_0_denoised, x_t, sigma_t, loss
+                del x_0, x_0_denoised, x_t, sigma_t, time, loss
                 torch.cuda.empty_cache()
                 gc.collect()
 
-        # Emergency stop
-        if steps_training <= step:
-            break
+            # Validation
+            if (step % steps_validation == 0):
+                with torch.no_grad():
 
-        # =================================================================
-        #                            VALIDATION
-        # =================================================================
-        if (step % steps_validation == 0) or (step == steps_training - 2):
+                    v_loss, v_count = 0.0, 0
 
-            with torch.no_grad():
+                    for _, (sample, time) in enumerate(dataloader_validation):
 
-                # Stores the error made on the validation set
-                v_loss, v_count = 0.0, 0
+                        # Preprocessing
+                        x_0 = rearrange(sample, "B ... -> B (...)")
 
-                for _, (sample, _) in enumerate(dataloader_validation):
+                        # Generating noise levels
+                        sigma_t = scheduler_noise(
+                            t = scheduler_time(batch_size = x_0.shape[0])
+                        )
 
-                    # Preprocessing
-                    v_x_0 = rearrange(sample, "B ... -> B (...)")
+                        # Generating noisy states
+                        x_t = x_0 + sigma_t * torch.randn_like(x_0)
 
-                    # Generating noise levels
-                    v_sigma_t = scheduler_noise(
-                        t = scheduler_time(batch_size = v_x_0.shape[0])
-                    )
+                        # Pushing to device
+                        x_0, x_t, sigma_t, time = x_0.to(DEVICE), x_t.to(DEVICE), sigma_t.to(DEVICE), time.to(DEVICE)
 
-                    # Generating noisy states
-                    v_x_t = v_x_0 + v_sigma_t * torch.randn_like(v_x_0)
+                        # Estimating clean trajectories and measuring error
+                        v_loss += loss_function(
+                            x_0 = x_0,
+                            x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t, conditioning = time),
+                            sigma_t = sigma_t,
+                        ).item()
 
-                    # Pushing to device
-                    v_x_0, v_x_t, v_sigma_t = v_x_0.to(DEVICE), v_x_t.to(DEVICE), v_sigma_t.to(DEVICE)
+                        # Counting the number of samples
+                        v_count += 1
 
-                    # Estimating clean trajectories and measuring error
-                    v_loss += loss_function(
-                        x_0 = v_x_0,
-                        x_0_denoised = poseidon_denoiser(x_t = v_x_t, sigma_t = v_sigma_t),
-                        sigma_t = v_sigma_t,
-                    ).item()
+                    # Weights & Biases
+                    wandb.log({"Validation/Loss (Averaged)": v_loss / v_count})
 
-                    # Counting the number of samples
-                    v_count += 1
+                    # Cleaning
+                    del x_0, x_t, sigma_t, time
+                    torch.cuda.empty_cache()
+                    gc.collect()
 
-                # Weights & Biases
-                wandb.log({"Validation/Loss (Averaged)": v_loss / v_count})
+            # Emergency break
+            if steps_training <= step:
+                break
 
-                # Cleaning
-                del v_x_0, v_x_t, v_sigma_t
-
-    # Finalizing the training
     progress_bar.update(1)
     wandb.finish()

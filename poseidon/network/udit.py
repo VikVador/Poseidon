@@ -61,7 +61,7 @@ class UDiT(nn.Module):
         # Transformer bottleneck
         self.transformer = Transformer(
             in_channels=hid_channels[-1] * config_transformer["patch_size"] ** 2,
-            mod_features=mod_features,
+            mod_features=mod_features * (1 + 1), # TO BE FIXED LATER IF NOT NOWCASTING (K + 1)
             **config_transformer,
         )
 
@@ -92,7 +92,7 @@ class UDiT(nn.Module):
                 do.append(
                     ConvResidualBlock(
                         hid_channels[i],
-                        mod_features,
+                        mod_features * (1 + 1),
                         ffn_scaling,
                         i,
                         config_siren,
@@ -104,7 +104,7 @@ class UDiT(nn.Module):
                 up.append(
                     ConvResidualBlock(
                         hid_channels[i],
-                        mod_features,
+                        mod_features * (1 + 1),
                         ffn_scaling,
                         i,
                         config_siren,
@@ -173,8 +173,8 @@ class UDiT(nn.Module):
     def forward(self, x: Tensor, mod: Tensor) -> Tensor:
         r"""Forward pass through the UDiT."""
 
-        # Encoding modulation vector
-        mod = self.timestep_encoding(mod).squeeze(1)
+        # Encoding modulation vector (noise and time (B, K + 1) )
+        mod = self.timestep_encoding(mod).flatten(start_dim=1)
 
         # Stores output of each ascent stage
         memory = []

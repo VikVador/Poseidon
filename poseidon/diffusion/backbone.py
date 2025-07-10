@@ -65,13 +65,14 @@ class PoseidonBackbone(nn.Module):
         self,
         x_t: Tensor,
         sigma_t: Tensor,
+        conditioning: Tensor,
     ) -> Tensor:
         r"""Denoising conditionned sample.
 
         Arguments:
             x_t: Noisy input tensor (B, C * K * X * Y).
             sigma_t: Associated noise levels (B, 1).
-
+            conditioning: Associated conditioning tensor (B, K).
         Returns:
             Cleaned tensor (B, C * K * X * Y).
         """
@@ -89,9 +90,12 @@ class PoseidonBackbone(nn.Module):
         # Masking land
         x_t = torch.where(self.mask.expand_as(x_t), x_t, LAND_VALUE)
 
+        # Creating modulating vector
+        modulation = torch.concatenate([sigma_t, conditioning], dim=-1)
+
         # Estimating (unscaled) clean signal
         x_t = rearrange(
-            self.network(x_t, sigma_t),
+            self.network(x=x_t, mod=modulation),
             "B C K X Y -> B (C K X Y)",
             C=self.C,
             K=self.K,

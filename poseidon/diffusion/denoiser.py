@@ -35,12 +35,14 @@ class PoseidonDenoiser(nn.Module):
         self,
         x_t: Tensor,
         sigma_t: Tensor,
+        conditioning: Tensor,
     ) -> Tensor:
         r"""Denoising using EDM-style preconditioning.
 
         Arguments:
             x_t: Noisy input tensor (B, C * K * X * Y).
             sigma_t: Associated noise levels (B, 1).
+            conditioning: Associated conditioning tensor (B, K).
 
         Returns:
             Cleaned tensor (B, C * K * X * Y).
@@ -52,7 +54,7 @@ class PoseidonDenoiser(nn.Module):
         c_noise = 1e1     * torch.log(sigma_t)          # Rescaling noise levels
 
         # Estimating (scaled) denoised state
-        return c_skip * x_t + c_out * self.backbone(x_t = c_in * x_t, sigma_t = c_noise)
+        return c_skip * x_t + c_out * self.backbone(x_t = c_in * x_t, sigma_t = c_noise, conditioning = conditioning)
 
 
 class PoseidonMMPSDenoiser(nn.Module):
