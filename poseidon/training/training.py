@@ -271,10 +271,8 @@ def training(
         # ===========================================================================
         if 0 < step:
 
-            # Logging details
             if (step % steps_logging == 0):
 
-                # Weights & Biases
                 wandb.log({
                     "Training/Loss (AoAS)": loss_aoas * steps_gradient_accumulation if step == 0 else loss_aoas,
                     "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
@@ -283,11 +281,9 @@ def training(
                     "Training/Completed [%]": (step / (steps_training - 2)) * 100,
                 })
 
-                # Terminal Progression Bar
                 progress_bar.set_postfix({"Loss (AoAS) ": f"{(loss_aoas):.4f}"})
                 progress_bar.update(1)
 
-                # Saving Model
                 poseidon_save.save(
                     loss = loss_aoas,
                     optimizer = optimizer,
@@ -296,7 +292,6 @@ def training(
                     else poseidon_denoiser.backbone,
                 )
 
-            # Optimization
             if (step % steps_gradient_accumulation == 0):
 
                 safe_gd_step(optimizer=optimizer, grad_clip=1, scaler=scaler)
@@ -339,10 +334,7 @@ def training(
                         # Counting the number of samples
                         v_count += 1
 
-                    # Weights & Biases
                     wandb.log({"Validation/Loss (Averaged)": v_loss / v_count})
-
-                    # Cleaning
                     del x_0, x_t, sigma_t, time
                     torch.cuda.empty_cache()
                     gc.collect()
