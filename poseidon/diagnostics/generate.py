@@ -84,11 +84,15 @@ def generate_unconditional(index: int, config: Dict) -> None:
         order=3,
     )
 
+    # Generating a random conditioning (i.e. year progression for a nowcasting)
+    conditioning = torch.randint(1, 365, (1, 1)).to(DEVICE) / 365
+
     # Generating a nowcast
     nowcast = sampler.forward(
         trajectory_size=1,
         forecast_size=1,
         steps=config["steps"],
+        conditioning=conditioning,
     ).cpu()
 
     # Masking the nowcast

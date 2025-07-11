@@ -72,10 +72,10 @@ def convert_to_progressive_time(t: Tensor) -> Tensor:
     r"""Extracts month and day from the time tensor and converts it to a progressive time format.
 
     Arguments:
-        t: Time tensor (T, 4)
+        t: Time tensor (K, 4).
 
     Returns:
-        Tensor: Progressive time tensor (T) where each value represents the cumulative number of days
+        Tensor: Progressive time tensor (K).
     """
 
     # Number of days in each month
