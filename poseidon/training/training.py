@@ -269,28 +269,28 @@ def training(
         # ===========================================================================
         #                      LOGGING & OPTIMIZATION & VALIDATION
         # ===========================================================================
+        if (step % steps_logging == 0):
+
+            wandb.log({
+                "Training/Loss (AoAS)": loss_aoas * steps_gradient_accumulation if step == 0 else loss_aoas,
+                "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
+                "Training/Step [-]": (step + 1),
+                "Training/Samples Seen [-]": B * (step + 1),
+                "Training/Completed [%]": (step / (steps_training - 2)) * 100,
+            })
+
+            progress_bar.set_postfix({"Loss (AoAS) ": f"{(loss_aoas):.4f}"})
+            progress_bar.update(1)
+
+            poseidon_save.save(
+                loss = loss_aoas,
+                optimizer = optimizer,
+                scheduler = scheduler_lr,
+                model = poseidon_denoiser.module.backbone if torch.cuda.device_count() > 1
+                else poseidon_denoiser.backbone,
+            )
+
         if 0 < step:
-
-            if (step % steps_logging == 0):
-
-                wandb.log({
-                    "Training/Loss (AoAS)": loss_aoas * steps_gradient_accumulation if step == 0 else loss_aoas,
-                    "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
-                    "Training/Step [-]": (step + 1),
-                    "Training/Samples Seen [-]": B * (step + 1),
-                    "Training/Completed [%]": (step / (steps_training - 2)) * 100,
-                })
-
-                progress_bar.set_postfix({"Loss (AoAS) ": f"{(loss_aoas):.4f}"})
-                progress_bar.update(1)
-
-                poseidon_save.save(
-                    loss = loss_aoas,
-                    optimizer = optimizer,
-                    scheduler = scheduler_lr,
-                    model = poseidon_denoiser.module.backbone if torch.cuda.device_count() > 1
-                    else poseidon_denoiser.backbone,
-                )
 
             if (step % steps_gradient_accumulation == 0):
 
@@ -302,10 +302,8 @@ def training(
                 torch.cuda.empty_cache()
                 gc.collect()
 
-            # Validation
             if (step % steps_validation == 0):
                 with torch.no_grad():
-
                     v_loss, v_count = 0.0, 0
 
                     for _, (sample, time) in enumerate(dataloader_validation):
@@ -336,8 +334,6 @@ def training(
 
                     wandb.log({"Validation/Loss (Averaged)": v_loss / v_count})
                     del x_0, x_t, sigma_t, time
-                    torch.cuda.empty_cache()
-                    gc.collect()
 
             # Emergency break
             if steps_training <= step:
