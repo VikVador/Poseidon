@@ -90,12 +90,9 @@ class PoseidonBackbone(nn.Module):
         # Masking land
         x_t = torch.where(self.mask.expand_as(x_t), x_t, LAND_VALUE)
 
-        # Creating modulating vector
-        modulation = torch.concatenate([sigma_t, conditioning], dim=-1)
-
         # Estimating (unscaled) clean signal
         x_t = rearrange(
-            self.network(x=x_t, mod=modulation),
+            self.network(x=x_t, sigma=sigma_t, conditioning=conditioning),
             "B C K X Y -> B (C K X Y)",
             C=self.C,
             K=self.K,

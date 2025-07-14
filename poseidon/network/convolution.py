@@ -3,13 +3,14 @@ r"""Convolutional blocks."""
 import torch
 import torch.nn as nn
 
+from einops import rearrange
 from torch import Tensor
 from torch.utils.checkpoint import checkpoint
 from typing import Dict, Optional
 
 # isort: split
 from poseidon.network.attention import SelfAttentionNd
-from poseidon.network.embedding import MeshEmbedding
+from poseidon.network.embedding import MeshEmbedding, SirenEmbedding
 from poseidon.network.modulation import Modulator
 from poseidon.network.normalization import LayerNorm
 
@@ -95,6 +96,13 @@ class ConvResidualBlock(nn.Module):
             **config_siren,
         )
 
+        # Conditioning embedding
+        self.conditioning_embedding = SirenEmbedding(
+            in_features=1,  # TO BE CHANGED: We assume nowcasting
+            out_features=channels,
+            n_layers=config_siren["n_layers"],
+        )
+
         # Modulator
         self.norm, self.modulator = (
             LayerNorm(dim=1),
@@ -108,17 +116,27 @@ class ConvResidualBlock(nn.Module):
     def _forward(
         self,
         x: Tensor,
-        mod: Tensor,
+        sigma: Tensor,
+        conditioning: Tensor,
     ) -> Tensor:
         r"""Checkpointed forward pass."""
 
         # Siren embedding of the mesh
         mesh = self.mesh_embedding()
 
-        # Modulation
-        a, b, c = self.modulator(mod)
+        # Conditioning expansion and embedding
+        conditioning = rearrange(
+            self.conditioning_embedding(
+                conditioning[:, None, None, :].expand(-1, x.shape[-2], x.shape[-1], -1)
+            ),
+            "B X Y (K C)  -> B C K X Y",
+            K=1,
+        )
 
-        y = (a + 1) * self.norm(x + mesh) + b
+        # Modulation
+        a, b, c = self.modulator(sigma)
+
+        y = (a + 1) * self.norm(x + mesh + conditioning) + b
         y = y if self.attn is None else y + self.attn(y)
         y = self.ffn(y)
         y = (x + c * y) * torch.rsqrt(1 + c * c)
@@ -128,7 +146,8 @@ class ConvResidualBlock(nn.Module):
     def forward(
         self,
         x: Tensor,
-        mod: Tensor,
+        sigma: Tensor,
+        conditioning: Tensor,
     ) -> Tensor:
         r"""Forward pass of the convolutional residual block."""
-        return checkpoint(self._forward, x, mod, use_reentrant=False)
+        return checkpoint(self._forward, x, sigma, conditioning, use_reentrant=False)

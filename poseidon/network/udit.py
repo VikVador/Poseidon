@@ -61,7 +61,7 @@ class UDiT(nn.Module):
         # Transformer bottleneck
         self.transformer = Transformer(
             in_channels=hid_channels[-1] * config_transformer["patch_size"] ** 2,
-            mod_features=mod_features * (1 + 1), # TO BE FIXED LATER IF NOT NOWCASTING (K + 1)
+            mod_features=mod_features,
             **config_transformer,
         )
 
@@ -92,7 +92,7 @@ class UDiT(nn.Module):
                 do.append(
                     ConvResidualBlock(
                         hid_channels[i],
-                        mod_features * (1 + 1),
+                        mod_features,
                         ffn_scaling,
                         i,
                         config_siren,
@@ -104,7 +104,7 @@ class UDiT(nn.Module):
                 up.append(
                     ConvResidualBlock(
                         hid_channels[i],
-                        mod_features * (1 + 1),
+                        mod_features,
                         ffn_scaling,
                         i,
                         config_siren,
@@ -170,11 +170,11 @@ class UDiT(nn.Module):
             self.descent.append(do)
             self.ascent.insert(0, up)
 
-    def forward(self, x: Tensor, mod: Tensor) -> Tensor:
+    def forward(self, x: Tensor, sigma: Tensor, conditioning: Tensor) -> Tensor:
         r"""Forward pass through the UDiT."""
 
         # Encoding modulation vector (noise and time (B, K + 1) )
-        mod = self.timestep_encoding(mod).flatten(start_dim=1)
+        sigma = self.timestep_encoding(sigma).flatten(start_dim=1)
 
         # Stores output of each ascent stage
         memory = []
@@ -183,13 +183,13 @@ class UDiT(nn.Module):
         for blocks in self.descent:
             for block in blocks:
                 if isinstance(block, (ConvResidualBlock)):
-                    x = block(x, mod)
+                    x = block(x, sigma, conditioning)
                 else:
                     x = block(x)
             memory.append(x)
 
         # Transformer bottleneck
-        x = self.transformer(x, mod)
+        x = self.transformer(x, sigma)
 
         # Descent
         for blocks in self.ascent:
@@ -201,7 +201,7 @@ class UDiT(nn.Module):
                 x = torch.cat((x, y), dim=1)
             for block in blocks:
                 if isinstance(block, (ConvResidualBlock)):
-                    x = block(x, mod)
+                    x = block(x, sigma, conditioning)
                 else:
                     x = block(x)
 
