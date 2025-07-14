@@ -6,7 +6,11 @@ from dawgz import after, job, schedule
 
 # isort: split
 from poseidon.diagnostics.generate import generate_unconditional
-from poseidon.diagnostics.vizualize import plot_unconditional, plot_unconditional_distributions
+from poseidon.diagnostics.vizualize import (
+    plot_reconstructions,
+    plot_unconditional,
+    plot_unconditional_distributions,
+)
 from poseidon.training.parser import load_configuration
 
 if __name__ == "__main__":
@@ -57,23 +61,32 @@ if __name__ == "__main__":
     # Vizualizations of unconditionnal nowcasts
     @after(generate)
     @job(**config_cluster_cpu)
-    def prior_vizualization():
+    def prior_v():
         plot_unconditional(
             config=config_model,
             config_setup=config_setup,
         )
 
     # Distribution comparison of unconditionnal nowcasts
-    @after(prior_vizualization)
+    @after(prior_v)
     @job(**config_cluster_cpu)
-    def prior_distributions():
+    def prior_d():
         plot_unconditional_distributions(
             config=config_model,
             config_setup=config_setup,
         )
 
+    # Reconstruction visualization of unconditionnal nowcasts
+    @after(prior_d)
+    @job(**config_cluster_cpu)
+    def prior_r():
+        plot_reconstructions(
+            config=config_model,
+            config_setup=config_setup,
+        )
+
     schedule(
-        prior_distributions,
+        prior_r,
         name="POSEIDON-DIAGNOSTICS",
         backend="slurm",
         export="ALL",

@@ -8,20 +8,29 @@ import wandb
 import xarray as xr
 
 from einops import rearrange
-from poseidon.data.const import DATASET_REGION, DATASET_VARIABLES, DATASET_VARIABLES_OCEAN
 from typing import Dict, Optional
 
 # isort: split
 from poseidon.config import LOCAL, PATH_DATA, PATH_MODEL, PATH_STAT
 from poseidon.data.const import (
+    DATASET_REGION,
+    DATASET_VARIABLES,
+    DATASET_VARIABLES_OCEAN,
     DATASET_VARIABLES_SURFACE,
     TOY_DATASET_REGION,
     TOY_DATASET_VARIABLES,
     TOY_DATASET_VARIABLES_OCEAN,
     TOY_DATASET_VARIABLES_SURFACE,
 )
+from poseidon.data.dataloaders import get_dataloaders, get_toy_dataloaders
 from poseidon.data.mappings import from_tensor_to_xarray
+from poseidon.data.mask import generate_trajectory_mask
 from poseidon.diagnostics.const import CMAPS_LINE, CMAPS_SURF, INTERVALS, TRANSLATION, UNITS
+from poseidon.diffusion.denoiser import PoseidonDenoiser
+from poseidon.diffusion.schedulers import PoseidonNoiseScheduler
+from poseidon.training.load import load_backbone
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def plot_unconditional(config: Dict, config_setup: Dict) -> None:
@@ -115,7 +124,7 @@ def plot_unconditional(config: Dict, config_setup: Dict) -> None:
         # Plot data
         data = np.concatenate([x_gt_v, x_v], axis=0)
         for i, ax in enumerate(axs.flat):
-            q_min, q_max = np.nanquantile(data[i], [0.1, 0.99])
+            q_min, q_max = np.nanquantile(data[i], [0.05, 0.95])
             ax.imshow(np.flipud(data[i]), cmap=CMAPS_SURF[v], vmin=q_min, vmax=q_max)
             ax.axis("off")
             if i == 0:
@@ -316,3 +325,196 @@ def plot_unconditional_distributions(config: Dict, config_setup: Dict) -> None:
         levels = stats.level.values
         bins = np.linspace(INTERVALS[v][0], INTERVALS[v][1], 128)
         plot_variable(v, x_gt_values, x_values, bins, levels, is_surface=True)
+
+
+def plot_reconstructions(config: Dict, config_setup: Dict) -> None:
+    r"""Visualizes reconstructions of the denoiser.
+
+    Arguments:
+        config: Model configuration dictionary.
+        config_setup: Configuration setup dictionary.
+    """
+
+    # Weights and Biases
+    wandb.init(
+        project=config_setup["wandb_project"],
+        mode=config_setup["wandb_mode"],
+        name=config["model"],
+        resume="allow",
+    )
+
+    # Initialization
+    toy_problem = config["toy_problem"]
+    region = TOY_DATASET_REGION if toy_problem else DATASET_REGION
+    variables = TOY_DATASET_VARIABLES if toy_problem else DATASET_VARIABLES
+
+    # Total number of states analyzed
+    n_states = 4
+
+    # Configuration of the data
+    config_data = {
+        "batch_size": n_states,
+        "shuffle": [False, False, False],
+        "linspace": [True, True, True],
+        "linspace_samples": [n_states, 1, 1],
+    }
+
+    # Loading dataloaders
+    dl_train, _, _ = (
+        get_toy_dataloaders(**config_data) if toy_problem else get_dataloaders(**config_data)
+    )
+
+    # Loading data
+    x_train, cond_train = next(iter(dl_train))
+
+    # Loading mask of the Black Sea
+    mask_bs = generate_trajectory_mask(
+        variables=variables,
+        region=region,
+        trajectory_size=1,
+    )
+
+    # Loading the neural network denoiser
+    model = (
+        PoseidonDenoiser(
+            backbone=load_backbone(name_model=config["model"], best=config["best"]),
+        )
+        .eval()
+        .to(DEVICE)
+    )
+
+    # Dimensions of the problem
+    C, K, X, Y = (
+        model.backbone.C,
+        model.backbone.K,
+        model.backbone.X,
+        model.backbone.Y,
+    )
+
+    # Noise scheduler
+    scheduler = PoseidonNoiseScheduler(
+        sigma_min=config["sigma_min"],
+        sigma_max=config["sigma_max"],
+    )
+
+    # Exploring time steps
+    time_steps = torch.cat((
+        torch.linspace(0, 0.19, 5),
+        torch.linspace(0.2, 0.79, 5),
+        torch.linspace(0.8, 1, 5),
+    ))[:, None]
+
+    # Generating noise levels
+    noise_levels = scheduler(time_steps)
+
+    # Testing the denoiser
+    with torch.no_grad():
+        for sigma in noise_levels:
+            # Creating batch of noise
+            sigma_t = torch.stack([sigma for _ in range(x_train.shape[0])], dim=0)
+
+            # Initial state (random Gaussian noise)
+            xt_train = x_train + (
+                sigma_t[:, :, None, None, None] * torch.randn(x_train.shape[0], C, 1, X, Y)
+            )
+
+            # Pushing to GPU
+            xt_train, cond_train, sigma_t = (
+                xt_train.to(DEVICE),
+                cond_train.to(DEVICE),
+                sigma_t.to(DEVICE),
+            )
+
+            # Denoising the state
+            x_hat_train = rearrange(
+                model(
+                    x_t=rearrange(xt_train, "B ... -> B (...)"),
+                    sigma_t=sigma_t,
+                    conditioning=cond_train,
+                ),
+                "B (C K X Y) -> B C K X Y",
+                C=C,
+                K=K,
+                X=X,
+                Y=Y,
+            )
+
+            # Converting to xarrays
+            ds_x_hat_train, ds_xt_train, ds_x_train = (
+                from_tensor_to_xarray(
+                    x=x_hat_train.detach().cpu().clone(), variables=variables, region=region
+                ),
+                from_tensor_to_xarray(
+                    x=xt_train.detach().cpu().clone(), variables=variables, region=region
+                ),
+                from_tensor_to_xarray(
+                    x=x_train.detach().cpu().clone(), variables=variables, region=region
+                ),
+            )
+
+            # Observing only the surface
+            ds_x_hat_train, ds_xt_train, ds_x_train = (
+                ds_x_hat_train.isel(level=0, trajectory=0),
+                ds_xt_train.isel(level=0, trajectory=0),
+                ds_x_train.isel(level=0, trajectory=0),
+            )
+
+            for b in range(ds_x_hat_train.sizes["batch"]):
+                fig, axs = plt.subplots(3, 5, figsize=(24, 8))
+                axs = axs.flatten()
+
+                for i, (ds, label) in enumerate(
+                    zip(
+                        [ds_x_train, ds_xt_train, ds_x_hat_train],
+                        ["Ground Truth", "Noisy", "Reconstructed"],
+                    )
+                ):
+                    for j, v in enumerate(variables):
+                        # Computing current index
+                        index = i * 5 + j
+
+                        # Extracting the variable
+                        data = ds[v].values[b]
+
+                        # Masking the Black Sea
+                        data[mask_bs[0, 0, 0] == 0] = np.nan
+
+                        # Computing quantiles
+                        qmin, qmax = np.nanquantile(data, [0.05, 0.95])
+
+                        axs[index].imshow(
+                            np.flipud(data), cmap=CMAPS_SURF[v], vmin=qmin, vmax=qmax
+                        )
+                        axs[index].set_xticks([])
+                        axs[index].set_yticks([])
+                        if j == 0:
+                            axs[index].set_ylabel(label, fontsize=14)
+                        if i == 2:
+                            axs[index].set_xlabel(f"{TRANSLATION[v]}", fontsize=14)
+
+                fig.text(
+                    0.13,
+                    0.9,
+                    rf"$\sigma$ = {sigma.item():.6f}",
+                    va="center",
+                    ha="left",
+                    fontsize=24,
+                )
+
+                # Sending to Weights and Biases
+                wandb.log({f"PRIOR | Denoiser / Sample {b}": wandb.Image(fig)})
+
+                # Save figure
+                if config_setup["saving"]:
+                    # Path to save the figure
+                    save_path = f"{LOCAL}/poseidon/metrics/visualizations/{config['model']}/denoiser/sample_{b}"
+                    if not os.path.exists(save_path):
+                        os.makedirs(save_path, exist_ok=True)
+
+                    fig.savefig(
+                        f"{save_path}/{sigma.item():.6f}.png",
+                        bbox_inches="tight",
+                        dpi=350,
+                    )
+
+                plt.close(fig)
