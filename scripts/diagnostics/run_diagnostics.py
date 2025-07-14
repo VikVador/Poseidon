@@ -6,7 +6,7 @@ from dawgz import after, job, schedule
 
 # isort: split
 from poseidon.diagnostics.generate import generate_unconditional
-from poseidon.diagnostics.vizualize import plot_unconditional
+from poseidon.diagnostics.vizualize import plot_unconditional, plot_unconditional_distributions
 from poseidon.training.parser import load_configuration
 
 if __name__ == "__main__":
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     )
 
     # Security
-    assert config_sampling_prior["nb_nowcasts"] >= 24, "ERROR - The number of nowcasts to generate must be at least 24."
+    assert config_sampling_prior["nb_nowcasts"] >= 32, "ERROR - The number of nowcasts to generate must be at least 32."
 
     # Unconditionnal nowcast generation configuration
     @job(array=config_sampling_prior["nb_nowcasts"], **config_cluster_gpu)
@@ -54,18 +54,26 @@ if __name__ == "__main__":
             }
         )
 
-    # Diagnostics of unconditionnal nowcasts
+    # Vizualizations of unconditionnal nowcasts
     @after(generate)
     @job(**config_cluster_cpu)
-    def prior():
+    def prior_vizualization():
         plot_unconditional(
             config=config_model,
             config_setup=config_setup,
         )
 
+    # Distribution comparison of unconditionnal nowcasts
+    @after(prior_vizualization)
+    @job(**config_cluster_cpu)
+    def prior_distributions():
+        plot_unconditional_distributions(
+            config=config_model,
+            config_setup=config_setup,
+        )
 
     schedule(
-        prior,
+        prior_distributions,
         name="POSEIDON-DIAGNOSTICS",
         backend="slurm",
         export="ALL",

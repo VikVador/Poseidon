@@ -194,7 +194,7 @@ def plot_unconditional_distributions(config: Dict, config_setup: Dict) -> None:
             torch.load(
                 folder / f"nowcast_unconditional_{i}.pt", map_location="cpu", weights_only=True
             )
-            for i in range(24)
+            for i in range(32)
             if (folder / f"nowcast_unconditional_{i}.pt").exists()
         ],
         dim=0,
