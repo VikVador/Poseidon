@@ -1,7 +1,6 @@
 r"""Tools to generate (un)conditionnal nowcasts."""
 
 import numpy as np
-import os
 import torch
 
 from typing import Dict
@@ -37,10 +36,6 @@ def generate_unconditional(index: int, config: Dict) -> None:
 
     # Path to the model
     path_folder = PATH_MODEL / config["model"] / "nowcasts" / "unconditional"
-
-    # Creating path to saving folder
-    if not os.path.exists(path_folder):
-        os.makedirs(path_folder)
 
     # Name of the nowcast to save
     fname = path_folder / f"nowcast_unconditional_{index}.pt"

@@ -1,10 +1,12 @@
 r"""Script to launch a diagnostics pipeline."""
 
 import argparse
+import os
 
 from dawgz import after, job, schedule
 
 # isort: split
+from poseidon.config import PATH_MODEL
 from poseidon.diagnostics.generate import generate_unconditional
 from poseidon.diagnostics.vizualize import (
     plot_reconstructions,
@@ -46,6 +48,11 @@ if __name__ == "__main__":
 
     # Security
     assert config_sampling_prior["nb_nowcasts"] >= 32, "ERROR - The number of nowcasts to generate must be at least 32."
+
+    # Creating path to saving folder
+    path_folder = PATH_MODEL / config_model["model"] / "nowcasts" / "unconditional"
+    if not os.path.exists(path_folder):
+        os.makedirs(path_folder)
 
     # Unconditionnal nowcast generation configuration
     @job(array=config_sampling_prior["nb_nowcasts"], **config_cluster_gpu)
