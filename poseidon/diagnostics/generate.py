@@ -79,7 +79,10 @@ def generate_unconditional(index: int, config: Dict) -> None:
     # Creating the sampler
     sampler = LMSSampler(
         denoiser=model,
-        schedule=PoseidonNoiseScheduler(),
+        schedule=PoseidonNoiseScheduler(
+            sigma_min=config["sigma_min"],
+            sigma_max=config["sigma_max"],
+        ),
         dimensions=(C, X, Y),
         order=3,
     )
