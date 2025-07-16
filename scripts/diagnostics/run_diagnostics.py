@@ -65,17 +65,7 @@ if __name__ == "__main__":
             }
         )
 
-    # Vizualizations of unconditionnal nowcasts
     @after(generate)
-    @job(**config_cluster_cpu)
-    def prior_v():
-        plot_unconditional(
-            config=config_model,
-            config_setup=config_setup,
-        )
-
-    # Distribution comparison of unconditionnal nowcasts
-    @after(prior_v)
     @job(**config_cluster_cpu)
     def prior_d():
         plot_unconditional_distributions(
@@ -83,8 +73,15 @@ if __name__ == "__main__":
             config_setup=config_setup,
         )
 
-    # Reconstruction visualization of unconditionnal nowcasts
     @after(prior_d)
+    @job(**config_cluster_cpu)
+    def prior_v():
+        plot_unconditional(
+            config=config_model,
+            config_setup=config_setup,
+        )
+
+    @after(prior_v)
     @job(**config_cluster_cpu)
     def prior_r():
         plot_reconstructions(
