@@ -23,9 +23,17 @@ from poseidon.data.const import (
     TOY_DATASET_VARIABLES_SURFACE,
 )
 from poseidon.data.dataloaders import get_dataloaders, get_toy_dataloaders
+from poseidon.data.datasets import PoseidonDataset
 from poseidon.data.mappings import from_tensor_to_xarray
 from poseidon.data.mask import generate_trajectory_mask
-from poseidon.diagnostics.const import CMAPS_LINE, CMAPS_SURF, INTERVALS, TRANSLATION, UNITS
+from poseidon.diagnostics.const import (
+    CMAPS_LINE,
+    CMAPS_SURF,
+    INTERVALS,
+    POSTERIOR_DATES,
+    TRANSLATION,
+    UNITS,
+)
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.schedulers import PoseidonNoiseScheduler
 from poseidon.training.load import load_backbone
@@ -47,6 +55,7 @@ def plot_unconditional(config: Dict, config_setup: Dict) -> None:
         mode=config_setup["wandb_mode"],
         name=config["model"],
         resume="allow",
+        id=config_setup["wandb_id"],
     )
 
     # Initialization
@@ -181,6 +190,7 @@ def plot_unconditional_distributions(config: Dict, config_setup: Dict) -> None:
         mode=config_setup["wandb_mode"],
         name=config["model"],
         resume="allow",
+        id=config_setup["wandb_id"],
     )
 
     # Initializations
@@ -211,14 +221,12 @@ def plot_unconditional_distributions(config: Dict, config_setup: Dict) -> None:
     x = from_tensor_to_xarray(x=x, variables=variables, region=region)
 
     # Unscaling the data
-    stats = xr.open_zarr(PATH_STAT).isel(level=TOY_DATASET_REGION["level"]).load()
+    stats = xr.open_zarr(PATH_STAT).isel(level=region["level"]).load()
     x = x * stats.sel(statistic="std") + stats.sel(statistic="mean")
     x_gt = x_gt * stats.sel(statistic="std") + stats.sel(statistic="mean")
 
     def smooth_hist(
-        data: np.ndarray,
-        bins: np.ndarray,
-        sigma: float = 1,
+        data: np.ndarray, bins: np.ndarray, sigma: float = 1
     ) -> tuple[np.ndarray, np.ndarray]:
         r"""Helper function to smooth histogram data."""
         counts, edges = np.histogram(data, bins=bins, density=True)
@@ -327,6 +335,184 @@ def plot_unconditional_distributions(config: Dict, config_setup: Dict) -> None:
         plot_variable(v, x_gt_values, x_values, bins, levels, is_surface=True)
 
 
+def plot_conditional_distributions(config: Dict, config_setup: Dict) -> None:
+    """Visualizes conditional nowcast and ground truth distributions for all variables.
+
+    Arguments:
+        config: Model configuration dictionary.
+        config_setup: Configuration setup dictionary.
+    """
+
+    # Weights & Biases
+    wandb.init(
+        project=config_setup["wandb_project"],
+        mode=config_setup["wandb_mode"],
+        name=config["model"],
+        resume="allow",
+        id=config_setup["wandb_id"],
+    )
+
+    # Initializations
+    toy_problem = config["toy_problem"]
+    region = TOY_DATASET_REGION if toy_problem else DATASET_REGION
+    variables = TOY_DATASET_VARIABLES if toy_problem else DATASET_VARIABLES
+    variables_surf = TOY_DATASET_VARIABLES_SURFACE if toy_problem else DATASET_VARIABLES_SURFACE
+    variables_ocean = TOY_DATASET_VARIABLES_OCEAN if toy_problem else DATASET_VARIABLES_OCEAN
+    folder = PATH_MODEL / config["model"] / "nowcasts" / "conditional"
+
+    # Loading statistics
+    stats = xr.open_zarr(PATH_STAT).isel(level=region["level"]).load()
+
+    # Loading mask of the Black Sea
+    mask_bs = generate_trajectory_mask(
+        variables=variables,
+        region=region,
+        trajectory_size=1,
+    )
+
+    for i, date in POSTERIOR_DATES.items():
+        # Loading corresponding sample
+        x, (x_gt, _) = (
+            torch.load(
+                folder / f"nowcast_conditional_{i}.pt", map_location="cpu", weights_only=True
+            ),
+            PoseidonDataset(
+                path=PATH_DATA, date_start=date, date_end=date, variables=variables, region=region
+            )[0],
+        )
+
+        # Masking the land
+        x_gt[mask_bs[0] == 0] = np.nan
+
+        # Converting to xarrays
+        x, x_gt = (
+            from_tensor_to_xarray(x=x, variables=variables, region=region),
+            from_tensor_to_xarray(x=x_gt, variables=variables, region=region),
+        )
+
+        # Unscaling the data
+        x = x * stats.sel(statistic="std") + stats.sel(statistic="mean")
+        x_gt = x_gt * stats.sel(statistic="std") + stats.sel(statistic="mean")
+
+        def smooth_hist(
+            data: np.ndarray, bins: np.ndarray, sigma: float = 1
+        ) -> tuple[np.ndarray, np.ndarray]:
+            r"""Helper function to smooth histogram data."""
+            counts, edges = np.histogram(data, bins=bins, density=True)
+            centers = (edges[:-1] + edges[1:]) / 2
+            kernel = np.exp(-0.5 * (np.linspace(-3, 3, 7) / sigma) ** 2)
+            kernel /= kernel.sum()
+            smooth = np.convolve(counts, kernel, mode="same")
+            return centers, smooth
+
+        def plot_variable(
+            v: str,
+            x_gt_values: np.ndarray,
+            x_values: np.ndarray,
+            bins: np.ndarray,
+            levels: np.ndarray,
+            date: str,
+            is_surface: bool = False,
+        ):
+            r"""Helper function to plot the distribution of a variable."""
+            if is_surface:
+                fig, ax = plt.subplots(figsize=(7, 1))
+                x1, y1 = smooth_hist(x_gt_values, bins)
+                x2, y2 = smooth_hist(x_values, bins)
+                ax.plot(x1, y1, color="black", linewidth=1.5, label="$P (X)$")
+                ax.fill_between(x2, y2, color=CMAPS_LINE[v], alpha=0.75, label="$P_{\\theta}(X)$")
+                ax.set_yticks([])
+                for spine in ["top", "right", "left"]:
+                    ax.spines[spine].set_visible(False)
+                ax.spines["bottom"].set_visible(True)
+                ax.text(
+                    bins[0],
+                    0.2,
+                    f"{levels[0]:.2f} [m]",
+                    fontsize=7,
+                    fontweight="bold",
+                    va="bottom",
+                    ha="left",
+                    transform=ax.get_xaxis_transform(),
+                )
+                ax.set_xlabel(f"{TRANSLATION[v]} {UNITS[v]}", fontsize=12)
+                ax.legend(
+                    loc="upper left", bbox_to_anchor=(0, 2.25), fontsize=12, frameon=False, ncol=2
+                )
+                plt.show()
+                wandb.log({
+                    f"POSTERIOR | {date} / Distributions / {TRANSLATION[v]} ": wandb.Image(fig)
+                })
+                if config_setup["saving"]:
+                    save_path = f"{LOCAL}/poseidon/metrics/visualizations/{config['model']}/posterior_distributions/{date}/"
+                    os.makedirs(save_path, exist_ok=True)
+                    fig.savefig(f"{save_path}/{v}.png", bbox_inches="tight", dpi=512)
+                plt.close(fig)
+            else:
+                L = x_gt_values.shape[0]
+                fig, axes = plt.subplots(L, 1, figsize=(7, 0.8 * L), sharex=True)
+                for i in range(L):
+                    ax = axes[i]
+                    x1, y1 = smooth_hist(x_gt_values[i], bins)
+                    x2, y2 = smooth_hist(x_values[i], bins)
+                    ax.plot(x1, y1, color="black", linewidth=1.5, label="$P (X)$")
+                    ax.fill_between(
+                        x2, y2, color=CMAPS_LINE[v], alpha=0.75, label="$P_{\\theta}(X|y)$"
+                    )
+                    ax.set_yticks([])
+                    for spine in ["top", "right", "left"]:
+                        ax.spines[spine].set_visible(False)
+                    ax.spines["bottom"].set_visible(True)
+                    ax.text(
+                        bins[0],
+                        0.2,
+                        f"{levels[i]:.2f} [m]",
+                        fontsize=7,
+                        fontweight="bold",
+                        va="bottom",
+                        ha="left",
+                        transform=ax.get_xaxis_transform(),
+                    )
+                    if i != L - 1:
+                        ax.xaxis.set_visible(False)
+                    else:
+                        ax.set_xlabel(f"{TRANSLATION[v]} {UNITS[v]}", fontsize=12)
+                    if i == 0:
+                        ax.legend(
+                            loc="upper left",
+                            bbox_to_anchor=(0, 2.25),
+                            fontsize=12,
+                            frameon=False,
+                            ncol=2,
+                        )
+                plt.tight_layout()
+                plt.show()
+                wandb.log({
+                    f"POSTERIOR | {date} / Distributions / {TRANSLATION[v]} ": wandb.Image(fig)
+                })
+                if config_setup["saving"]:
+                    save_path = f"{LOCAL}/poseidon/metrics/visualizations/{config['model']}/posterior_distributions/{date}/"
+                    os.makedirs(save_path, exist_ok=True)
+                    fig.savefig(f"{save_path}/{v}.png", bbox_inches="tight", dpi=512)
+                plt.close(fig)
+
+        # Ocean
+        for v in variables_ocean:
+            x_gt_values = rearrange(x_gt[v].values, "B Z K X Y -> Z (B K X Y)")
+            x_values = rearrange(x[v].values, "B Z K X Y -> Z (B K X Y)")
+            levels = stats.level.values
+            bins = np.linspace(INTERVALS[v][0], INTERVALS[v][1], 128)
+            plot_variable(v, x_gt_values, x_values, bins, levels, date, is_surface=False)
+
+        # Surface variables (single line)
+        for v in variables_surf:
+            x_gt_values = x_gt[v].values[:, :, :, :, 0].flatten()
+            x_values = x[v].values[:, :, :, :, 0].flatten()
+            levels = stats.level.values
+            bins = np.linspace(INTERVALS[v][0], INTERVALS[v][1], 128)
+            plot_variable(v, x_gt_values, x_values, bins, levels, date, is_surface=True)
+
+
 def plot_reconstructions(config: Dict, config_setup: Dict) -> None:
     r"""Visualizes reconstructions of the denoiser.
 
@@ -341,6 +527,7 @@ def plot_reconstructions(config: Dict, config_setup: Dict) -> None:
         mode=config_setup["wandb_mode"],
         name=config["model"],
         resume="allow",
+        id=config_setup["wandb_id"],
     )
 
     # Initialization

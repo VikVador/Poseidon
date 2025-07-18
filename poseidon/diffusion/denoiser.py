@@ -95,14 +95,14 @@ class PoseidonMMPSDenoiser(nn.Module):
 
         self.solve = partial(gmres, iterations=iterations)
 
-    def forward(self, x_t: Tensor, sigma_t: Tensor, **kwargs):
+    def forward(self, x_t: Tensor, sigma_t: Tensor, conditioning: Tensor, **kwargs):
         r"""Denoising with MMPS-style observation conditioning."""
 
         cov_t = sigma_t**2
 
         with torch.enable_grad():
             x_t = x_t.detach().requires_grad_()
-            x_hat = self.denoiser(x_t, sigma_t, **kwargs)
+            x_hat = self.denoiser(x_t, sigma_t, conditioning, **kwargs)
             y_hat = self.A(x_hat)
 
         def A_lin(v):

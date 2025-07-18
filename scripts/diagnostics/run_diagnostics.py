@@ -2,13 +2,15 @@ r"""Script to launch a diagnostics pipeline."""
 
 import argparse
 import os
+import wandb
 
 from dawgz import after, job, schedule
 
 # isort: split
 from poseidon.config import PATH_MODEL
-from poseidon.diagnostics.generate import generate_unconditional
+from poseidon.diagnostics.generate import generate_conditional, generate_unconditional
 from poseidon.diagnostics.vizualize import (
+    plot_conditional_distributions,
     plot_reconstructions,
     plot_unconditional,
     plot_unconditional_distributions,
@@ -46,17 +48,21 @@ if __name__ == "__main__":
         load_configuration("configs/sampling/posterior.yml")[0],
     )
 
+    # Creates an ID for the run
+    config_setup["wandb_id"] = wandb.util.generate_id()
+
+    # ==========
+    #   PRIOR
+    # ==========
     # Security
     assert config_sampling_prior["nb_nowcasts"] >= 32, "ERROR - The number of nowcasts to generate must be at least 32."
 
-    # Creating path to saving folder
-    path_folder = PATH_MODEL / config_model["model"] / "nowcasts" / "unconditional"
-    if not os.path.exists(path_folder):
-        os.makedirs(path_folder)
+    path_folder_prior = PATH_MODEL / config_model["model"] / "nowcasts" / "unconditional"
+    if not os.path.exists(path_folder_prior):
+        os.makedirs(path_folder_prior)
 
-    # Unconditionnal nowcast generation configuration
     @job(array=config_sampling_prior["nb_nowcasts"], **config_cluster_gpu)
-    def generate(i: int):
+    def prior_generate(i: int):
         generate_unconditional(
             index=i,
             config= {
@@ -65,7 +71,7 @@ if __name__ == "__main__":
             }
         )
 
-    @after(generate)
+    @after(prior_generate)
     @job(**config_cluster_cpu)
     def prior_d():
         plot_unconditional_distributions(
@@ -91,7 +97,39 @@ if __name__ == "__main__":
 
     schedule(
         prior_r,
-        name="POSEIDON-DIAGNOSTICS",
+        name="POSEIDON-DIAGNOSTICS-PRIOR",
+        backend="slurm",
+        export="ALL",
+    )
+
+    # ==============
+    #   POSTERIOR
+    # ==============
+    path_folder_posterior = PATH_MODEL / config_model["model"] / "nowcasts" / "conditional"
+    if not os.path.exists(path_folder_posterior):
+        os.makedirs(path_folder_posterior)
+
+    @job(array=12, **config_cluster_gpu)
+    def post_generate(i: int):
+        generate_conditional(
+            index=i,
+            config= {
+                **config_model,
+                **config_sampling_posterior,
+            }
+        )
+
+    @after(post_generate)
+    @job(**config_cluster_cpu)
+    def post_d():
+        plot_conditional_distributions(
+            config=config_model,
+            config_setup=config_setup,
+        )
+
+    schedule(
+        post_d,
+        name="POSEIDON-DIAGNOSTICS-POSTERIOR",
         backend="slurm",
         export="ALL",
     )
