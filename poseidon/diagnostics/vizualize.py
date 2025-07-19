@@ -148,7 +148,7 @@ def plot_unconditional(config: Dict, config_setup: Dict) -> None:
         wandb.log({
             f"PRIOR | {TRANSLATION[v]} / Level {level}"
             if level is not None
-            else f"PRIOR | {TRANSLATION[v]}": wandb.Image(fig)
+            else f"PRIOR | {TRANSLATION[v]} / -": wandb.Image(fig)
         })
 
         # Save figure
