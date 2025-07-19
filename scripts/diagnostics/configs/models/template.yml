@@ -11,4 +11,4 @@
 # ===== Sampling Specification =====
 #
 "sigma_min"   : [0.00001]
-"sigma_max"   : [10000]
+"sigma_max"   : [1000]
