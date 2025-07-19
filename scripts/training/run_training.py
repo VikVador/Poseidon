@@ -50,14 +50,14 @@ if __name__ == "__main__":
 
     else:
         @job(array=len(configs), **config_cluster)
-        def launch_training_pipeline(i: int):
+        def train(i: int):
             training(
                 **configs[i].get("Training Pipeline"),
                 config_cluster=config_cluster,
             )
 
         schedule(
-            launch_training_pipeline,
+            train,
             name="POSEIDON-TRAINING",
             backend="slurm",
             export="ALL",
