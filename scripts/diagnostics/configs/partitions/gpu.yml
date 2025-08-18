@@ -9,4 +9,4 @@
 "gpus"     : [1]
 "partition": ["gpu"]
 "ram"      : ["60GB"]
-"time"     : ["02:00:00"]
+"time"     : ["01:00:00"]

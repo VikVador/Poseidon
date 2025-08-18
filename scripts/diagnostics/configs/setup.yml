@@ -5,7 +5,7 @@
 # ===== Setup Configuration =====
 #
 # Weights and Biases:
-"wandb_project": ["Poseidon-Training-Black-Sea-Diagnostics-Prior-And-Posterior"]
+"wandb_project": ["Poseidon-Training-Black-Sea-Diagnostics"]
 "wandb_mode":    ["online"]
 
 # Define wether to save plots locally or not
