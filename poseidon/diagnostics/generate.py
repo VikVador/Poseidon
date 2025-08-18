@@ -15,7 +15,8 @@ from poseidon.data.const import (
 )
 from poseidon.data.datasets import PoseidonDataset
 from poseidon.data.mask import generate_trajectory_mask
-from poseidon.diagnostics.const import POSTERIOR_DATES
+from poseidon.diagnostics.const import DATES_POSTERIOR_MONTHLY
+from poseidon.diagnostics.tools import create_day_index_mapping
 from poseidon.diffusion.denoiser import PoseidonDenoiser, PoseidonMMPSDenoiser
 from poseidon.diffusion.observators import A_surface
 from poseidon.diffusion.sampler import LMSSampler
@@ -26,8 +27,8 @@ from poseidon.training.load import load_backbone
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def generate_unconditional(index: int, config: Dict) -> None:
-    """Generates an unconditional nowcast and saves it.
+def generate_unconditional(index: int, config: Dict, date: str = None) -> None:
+    r"""Generates an unconditional nowcast and saves it.
 
     Information:
         This function should be paired with a script that launches the generation on multiple GPUs.
@@ -35,10 +36,14 @@ def generate_unconditional(index: int, config: Dict) -> None:
     Arguments:
         index: ID of nowcast to generate.
         config: Configuration for generation.
+        date: Date for which to generate the nowcast (YYYY-MM-DD).
     """
 
     # Path to the model
     path_folder = PATH_MODEL / config["model"] / "nowcasts" / "unconditional"
+
+    # Additionnal folder
+    path_folder = path_folder / "random" if date is None else path_folder / date
 
     # Name of the nowcast to save
     fname = path_folder / f"nowcast_unconditional_{index}.pt"
@@ -85,13 +90,20 @@ def generate_unconditional(index: int, config: Dict) -> None:
         order=3,
     )
 
+    # Used to create the mapping between dates and indexes
+    map_d_i = create_day_index_mapping()
+
     # Generating a random conditioning (i.e. year progression for a nowcasting)
-    conditioning = torch.randint(1, 365, (1, 1)).to(DEVICE) / 365
+    conditioning = (
+        torch.randint(1, 365, (1, 1)).to(DEVICE) / 365
+        if date is None
+        else torch.ones((1, 1)) * map_d_i[date[5:]] / 365
+    )
 
     # Generating a nowcast
     nowcast = sampler.forward(
         trajectory_size=1,
-        forecast_size=1,
+        forecast_size=config["nb_nowcasts"],
         steps=config["steps"],
         conditioning=conditioning,
     ).cpu()
@@ -104,7 +116,7 @@ def generate_unconditional(index: int, config: Dict) -> None:
 
 
 def generate_conditional(index: int, config: Dict) -> None:
-    """Generates conditional nowcasts and save them.
+    r"""Generates conditional nowcasts and save them.
 
     Information:
         This function should be paired with a script that launches the generation on multiple GPUs.
@@ -136,8 +148,8 @@ def generate_conditional(index: int, config: Dict) -> None:
     # Loading sample
     x, time = PoseidonDataset(
         path=PATH_DATA,
-        date_start=POSTERIOR_DATES[index],
-        date_end=POSTERIOR_DATES[index],
+        date_start=DATES_POSTERIOR_MONTHLY[index],
+        date_end=DATES_POSTERIOR_MONTHLY[index],
         variables=variables,
         region=region,
     )[0]
