@@ -15,7 +15,7 @@ from poseidon.data.const import (
 )
 from poseidon.data.datasets import PoseidonDataset
 from poseidon.data.mask import generate_trajectory_mask
-from poseidon.diagnostics.const import DATES_POSTERIOR_MONTHLY
+from poseidon.diagnostics.const import DATES_POSTERIOR
 from poseidon.diagnostics.tools import create_day_index_mapping
 from poseidon.diffusion.denoiser import PoseidonDenoiser, PoseidonMMPSDenoiser
 from poseidon.diffusion.observators import A_surface
@@ -46,7 +46,11 @@ def generate_unconditional(index: int, config: Dict, date: str = None) -> None:
     path_folder = path_folder / "random" if date is None else path_folder / date
 
     # Name of the nowcast to save
-    fname = path_folder / f"nowcast_unconditional_{index}.pt"
+    fname = (
+        path_folder / f"nowcast_unconditional_{index}.pt"
+        if date is None
+        else path_folder / "nowcast_unconditional.pt"
+    )
 
     # Loading mask of the Black Sea
     mask_bs = generate_trajectory_mask(
@@ -133,10 +137,12 @@ def generate_conditional(index: int, config: Dict) -> None:
     toy_problem = config["toy_problem"]
     region = TOY_DATASET_REGION if toy_problem else DATASET_REGION
     variables = TOY_DATASET_VARIABLES if toy_problem else DATASET_VARIABLES
-    path_folder = PATH_MODEL / config["model"] / "nowcasts" / "conditional"
+    path_folder = (
+        PATH_MODEL / config["model"] / "nowcasts" / "conditional" / DATES_POSTERIOR[index]
+    )
 
     # Name of the nowcast to save
-    fname = path_folder / f"nowcast_conditional_{index}.pt"
+    fname = path_folder / "nowcast_conditional.pt"
 
     # Loading mask of the Black Sea
     mask_bs = generate_trajectory_mask(
@@ -148,8 +154,8 @@ def generate_conditional(index: int, config: Dict) -> None:
     # Loading sample
     x, time = PoseidonDataset(
         path=PATH_DATA,
-        date_start=DATES_POSTERIOR_MONTHLY[index],
-        date_end=DATES_POSTERIOR_MONTHLY[index],
+        date_start=DATES_POSTERIOR[index],
+        date_end=DATES_POSTERIOR[index],
         variables=variables,
         region=region,
     )[0]

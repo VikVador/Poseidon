@@ -1,0 +1,12 @@
+# ======================================
+#  Poseidon | Diffusion Model Validation
+# ======================================
+#
+# ===== Setup Configuration =====
+#
+# Weights and Biases:
+"wandb_project": ["Poseidon-Training-Black-Sea-Diagnostics-Papers"]
+"wandb_mode":    ["disabled"]
+
+# Define wether to save plots locally or not
+"saving": [False]

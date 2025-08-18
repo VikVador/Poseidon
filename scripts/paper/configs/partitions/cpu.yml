@@ -1,0 +1,11 @@
+# ======================================
+#  Poseidon | Diffusion Model Validation
+# ======================================
+#
+# ===== Cluster Configuration =====
+#
+"account"  : ["bsmfc"]
+"cpus"     : [4]
+"partition": ["debug"]
+"ram"      : ["240GB"]
+"time"     : ["02:00:00"]
