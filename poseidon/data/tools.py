@@ -6,6 +6,7 @@ import pandas as pd
 import re
 import torch
 
+from torch import Tensor
 from typing import Dict, Sequence
 
 # isort: split
@@ -65,3 +66,30 @@ def generate_paths() -> Dict[str, Sequence[str]]:
         paths[date_month] = [SIMULATION_DATA / p.lstrip("/") for p in paths_phys_and_bio]
 
     return paths
+
+
+def convert_to_progressive_time(t: Tensor) -> Tensor:
+    r"""Extracts month and day from the time tensor and converts it to a progressive time format.
+
+    Arguments:
+        t: Time tensor (K, 4).
+
+    Returns:
+        Tensor: Progressive time tensor (K).
+    """
+
+    # Number of days in each month
+    days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+
+    # Extracting month and day
+    t_days = t[:, 1:3].clone()
+
+    # Converting month to days
+    for traj in range(t_days.shape[0]):
+        t_days[traj, 0] = sum(days_in_month[: int(t_days[traj, 0].item() - 1)])
+
+    # Adding current day
+    t_days = t_days.sum(dim=-1)
+
+    # Converting to progressive time
+    return t_days / 365.0

@@ -4,5 +4,5 @@
 #
 # ===== Sampling Prior Configuration =====
 #
-"steps"       : [256]
-"nb_nowcasts" : [32]
+"steps"       : [128]
+"nb_nowcasts" : [64]

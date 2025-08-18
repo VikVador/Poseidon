@@ -91,6 +91,8 @@ def training(
     # Unpacking configurations
     (
         blanket_size,
+        sigma_min,
+        sigma_max,
         steps_training,
         steps_validation,
         steps_gradient_accumulation,
@@ -102,6 +104,8 @@ def training(
         black_sea_region,
     ) = (
         config_training["blanket_size"],
+        config_training["sigma_min"],
+        config_training["sigma_max"],
         config_training["steps_training"],
         config_training["steps_validation"],
         config_training["steps_gradient_accumulation"],
@@ -204,7 +208,10 @@ def training(
             config_scheduler=config_scheduler,
         ),
         PoseidonTimeScheduler(),
-        PoseidonNoiseScheduler(),
+        PoseidonNoiseScheduler(
+            sigma_min=sigma_min,
+            sigma_max=sigma_max
+        ),
         PoseidonLoss(
             variables=black_sea_variables,
             region=black_sea_region,
@@ -229,7 +236,7 @@ def training(
     # =========================================================
     #                        TRAINING
     # =========================================================
-    for step, (sample, _) in enumerate(dataloader_training):
+    for step, (sample, time) in enumerate(dataloader_training):
 
         # Preprocessing
         x_0 = rearrange(sample, "B ... -> B (...)")
@@ -243,10 +250,10 @@ def training(
         x_t = x_0 + sigma_t * torch.randn_like(x_0)
 
         # Pushing to device
-        x_0, x_t, sigma_t = x_0.to(DEVICE), x_t.to(DEVICE), sigma_t.to(DEVICE)
+        x_0, x_t, sigma_t, time = x_0.to(DEVICE), x_t.to(DEVICE), sigma_t.to(DEVICE), time.to(DEVICE)
 
         # Estimating clean trajectories and measuring error
-        x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t)
+        x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t, conditioning = time)
 
         loss = loss_function(
             x_0 = x_0,
@@ -259,12 +266,11 @@ def training(
         loss_aoas += loss.item()
         scaler.scale(loss).backward()
 
-        # =========================================================================
-        #                                 LOGGING
-        # =========================================================================
-        if (step % steps_logging == 0) or (step == steps_training - 2):
+        # ===========================================================================
+        #                      LOGGING & OPTIMIZATION & VALIDATION
+        # ===========================================================================
+        if (step % steps_logging == 0):
 
-            # Weights & Biases
             wandb.log({
                 "Training/Loss (AoAS)": loss_aoas * steps_gradient_accumulation if step == 0 else loss_aoas,
                 "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
@@ -273,11 +279,9 @@ def training(
                 "Training/Completed [%]": (step / (steps_training - 2)) * 100,
             })
 
-            # Terminal Progression Bar
             progress_bar.set_postfix({"Loss (AoAS) ": f"{(loss_aoas):.4f}"})
             progress_bar.update(1)
 
-            # Saving Model
             poseidon_save.save(
                 loss = loss_aoas,
                 optimizer = optimizer,
@@ -286,68 +290,54 @@ def training(
                 else poseidon_denoiser.backbone,
             )
 
-        # ===========================================================================
-        #                             OPTIMIZATION STEP
-        # ===========================================================================
         if 0 < step:
-            if (step % steps_gradient_accumulation == 0) or (step == steps_training - 2):
 
-                # Optimization step
+            if (step % steps_gradient_accumulation == 0):
+
                 safe_gd_step(optimizer=optimizer, grad_clip=1, scaler=scaler)
                 scheduler_lr.step()
                 loss_aoas = 0.0
 
-                # Cleaning
-                del x_0, x_0_denoised, x_t, sigma_t, loss
+                del x_0, x_0_denoised, x_t, sigma_t, time, loss
                 torch.cuda.empty_cache()
                 gc.collect()
 
-        # Emergency stop
-        if steps_training <= step:
-            break
+            if (step % steps_validation == 0):
+                with torch.no_grad():
+                    v_loss, v_count = 0.0, 0
 
-        # =================================================================
-        #                            VALIDATION
-        # =================================================================
-        if (step % steps_validation == 0) or (step == steps_training - 2):
+                    for _, (sample, time) in enumerate(dataloader_validation):
 
-            with torch.no_grad():
+                        # Preprocessing
+                        x_0 = rearrange(sample, "B ... -> B (...)")
 
-                # Stores the error made on the validation set
-                v_loss, v_count = 0.0, 0
+                        # Generating noise levels
+                        sigma_t = scheduler_noise(
+                            t = scheduler_time(batch_size = x_0.shape[0])
+                        )
 
-                for _, (sample, _) in enumerate(dataloader_validation):
+                        # Generating noisy states
+                        x_t = x_0 + sigma_t * torch.randn_like(x_0)
 
-                    # Preprocessing
-                    v_x_0 = rearrange(sample, "B ... -> B (...)")
+                        # Pushing to device
+                        x_0, x_t, sigma_t, time = x_0.to(DEVICE), x_t.to(DEVICE), sigma_t.to(DEVICE), time.to(DEVICE)
 
-                    # Generating noise levels
-                    v_sigma_t = scheduler_noise(
-                        t = scheduler_time(batch_size = v_x_0.shape[0])
-                    )
+                        # Estimating clean trajectories and measuring error
+                        v_loss += loss_function(
+                            x_0 = x_0,
+                            x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t, conditioning = time),
+                            sigma_t = sigma_t,
+                        ).item()
 
-                    # Generating noisy states
-                    v_x_t = v_x_0 + v_sigma_t * torch.randn_like(v_x_0)
+                        # Counting the number of samples
+                        v_count += 1
 
-                    # Pushing to device
-                    v_x_0, v_x_t, v_sigma_t = v_x_0.to(DEVICE), v_x_t.to(DEVICE), v_sigma_t.to(DEVICE)
+                    wandb.log({"Validation/Loss (Averaged)": v_loss / v_count})
+                    del x_0, x_t, sigma_t, time
 
-                    # Estimating clean trajectories and measuring error
-                    v_loss += loss_function(
-                        x_0 = v_x_0,
-                        x_0_denoised = poseidon_denoiser(x_t = v_x_t, sigma_t = v_sigma_t),
-                        sigma_t = v_sigma_t,
-                    ).item()
+            # Emergency break
+            if steps_training <= step:
+                break
 
-                    # Counting the number of samples
-                    v_count += 1
-
-                # Weights & Biases
-                wandb.log({"Validation/Loss (Averaged)": v_loss / v_count})
-
-                # Cleaning
-                del v_x_0, v_x_t, v_sigma_t
-
-    # Finalizing the training
     progress_bar.update(1)
     wandb.finish()

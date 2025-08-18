@@ -65,7 +65,6 @@ class Sampler(nn.Module):
         """
         pass
 
-
 class LMSSampler(Sampler):
     r"""Creates a linear multi-step (LMS) sampler.
 
@@ -125,6 +124,7 @@ class LMSSampler(Sampler):
         trajectory_size: int,
         forecast_size: int,
         steps: int = 32,
+        conditioning: Tensor = None,
     ) -> Tensor:
         r"""Generating forecasts."""
 
@@ -156,7 +156,7 @@ class LMSSampler(Sampler):
             for s, sigma_t in enumerate(sigmas[:-1]):
 
                 # Estimating reconstructed state
-                q_t = self.denoiser(xt, sigma_t)
+                q_t = self.denoiser(xt, sigma_t, conditioning)
 
                 # Computing noise to remove
                 z_t = (xt - q_t) / sigma_t

@@ -8,11 +8,16 @@ logs/*.log
 poseidon/wandb/
 poseidon/.dawgz/
 scripts/configs/*.yml
-
-# Macbook
 scripts/.dawgz/
+scripts/training/.dawgz/
+scripts/diagnostics/.dawgz/
+scripts/training/configs/*.yml
+scripts/diagnostics/configs/models/*.yml
 scripts/wandb
 wandb/
+notebooks/data
+notebooks/figures/pdf/
+*.png
 *.ipynb
 
 # Byte-compiled / optimized / DLL files

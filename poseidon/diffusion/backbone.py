@@ -14,7 +14,7 @@ from typing import (
 # isort: split
 from poseidon.data.const import LAND_VALUE
 from poseidon.data.mask import generate_trajectory_mask
-from poseidon.network.udit import UDiT
+from poseidon.network.unet import UNet
 
 
 class PoseidonBackbone(nn.Module):
@@ -52,12 +52,9 @@ class PoseidonBackbone(nn.Module):
             ).bool(),
         )
 
-        self.network = UDiT(
+        self.network = UNet(
             in_channels=self.C,
             out_channels=self.C,
-            config_siren=config_siren,
-            config_region=config_region,
-            config_transformer=config_transformer,
             **config_unet,
         )
 
@@ -65,13 +62,14 @@ class PoseidonBackbone(nn.Module):
         self,
         x_t: Tensor,
         sigma_t: Tensor,
+        conditioning: Tensor,
     ) -> Tensor:
         r"""Denoising conditionned sample.
 
         Arguments:
             x_t: Noisy input tensor (B, C * K * X * Y).
             sigma_t: Associated noise levels (B, 1).
-
+            conditioning: Associated conditioning tensor (B, K).
         Returns:
             Cleaned tensor (B, C * K * X * Y).
         """
@@ -91,7 +89,7 @@ class PoseidonBackbone(nn.Module):
 
         # Estimating (unscaled) clean signal
         x_t = rearrange(
-            self.network(x_t, sigma_t),
+            self.network(x=x_t, mod=sigma_t, cond=conditioning),
             "B C K X Y -> B (C K X Y)",
             C=self.C,
             K=self.K,

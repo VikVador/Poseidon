@@ -7,3 +7,8 @@
 "model"      : ["name"]
 "best"       : [False]
 "toy_problem": [True]
+
+# ===== Sampling Specification =====
+#
+"sigma_min"   : [0.00001]
+"sigma_max"   : [1000]

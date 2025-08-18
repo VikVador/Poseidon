@@ -4,7 +4,7 @@
 #
 # ===== Sampling Posterior Configuration =====
 #
-"steps"        : [256]
-"nb_nowcasts"  : [32]
+"steps"        : [128]
+"nb_nowcasts"  : [64]
 "iterations"   : [1]
-"covariance_y" : [0.01]
+"covariance_y" : [0.001]

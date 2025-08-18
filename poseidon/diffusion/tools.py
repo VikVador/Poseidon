@@ -69,7 +69,7 @@ class PoseidonTrajectoryWrapper(nn.Module):
             blanket_size,
         )
 
-    def forward(self, x_t: Tensor, sigma_t: Tensor) -> Tensor:
+    def forward(self, x_t: Tensor, sigma_t: Tensor, conditioning: Tensor) -> Tensor:
         r"""Denoises a trajectory using a denoiser.
 
         Arguments:
@@ -93,7 +93,7 @@ class PoseidonTrajectoryWrapper(nn.Module):
         sigma_t = sigma_t * torch.ones(x_t.shape[0], 1).to(x_t.device)
 
         # Denoising the blankets
-        x_t = self.denoiser(x_t, sigma_t)
+        x_t = self.denoiser(x_t, sigma_t, conditioning)
 
         # Extracting back original structure
         x_t = rearrange(
