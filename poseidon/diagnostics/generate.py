@@ -1,6 +1,7 @@
 r"""Tools to generate nowcasts."""
 
 import numpy as np
+import os
 import torch
 
 from typing import Dict
@@ -44,6 +45,8 @@ def generate_unconditional(index: int, config: Dict, date: str = None) -> None:
 
     # Additionnal folder
     path_folder = path_folder / "random" if date is None else path_folder / date
+    if not os.path.exists(path_folder):
+        os.makedirs(path_folder)
 
     # Name of the nowcast to save
     fname = (
@@ -99,10 +102,10 @@ def generate_unconditional(index: int, config: Dict, date: str = None) -> None:
 
     # Generating a random conditioning (i.e. year progression for a nowcasting)
     conditioning = (
-        torch.randint(1, 365, (1, 1)).to(DEVICE) / 365
+        torch.randint(1, 365, (1, 1)) / 365
         if date is None
         else torch.ones((1, 1)) * map_d_i[date[5:]] / 365
-    )
+    ).to(DEVICE)
 
     # Generating a nowcast
     nowcast = sampler.forward(
@@ -140,6 +143,8 @@ def generate_conditional(index: int, config: Dict) -> None:
     path_folder = (
         PATH_MODEL / config["model"] / "nowcasts" / "conditional" / DATES_POSTERIOR[index]
     )
+    if not os.path.exists(path_folder):
+        os.makedirs(path_folder)
 
     # Name of the nowcast to save
     fname = path_folder / "nowcast_conditional.pt"
