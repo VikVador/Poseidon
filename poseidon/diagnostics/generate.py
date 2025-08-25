@@ -133,9 +133,6 @@ def generate_conditional(index: int, config: Dict) -> None:
         config: Configuration for generation.
     """
 
-    # Security
-    assert 0 <= index <= 11, "ERROR - Index must be between 0 and 11 (inclusive)."
-
     # Initialization
     toy_problem = config["toy_problem"]
     region = TOY_DATASET_REGION if toy_problem else DATASET_REGION
