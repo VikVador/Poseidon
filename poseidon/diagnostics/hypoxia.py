@@ -1,6 +1,7 @@
-r"""Tools to determine correction hypoxia treshold."""
+r"""Tools to compute classification metrics on hypoxia detection problem."""
 
 import numpy as np
+import os
 import torch
 import xarray as xr
 
@@ -29,6 +30,9 @@ def from_tensor_to_xarray_modified(
     path: Path = PATH_DATA,
 ) -> xr.Dataset:
     r"""Transform a (batch of) stacked tensor into an :class:`Xarray dataset`.
+
+    Note:
+        This tool will be deleted later once all metrics have been computed
 
     Arguments:
         x: Input tensor (C, T, X, Y).
@@ -105,7 +109,7 @@ def compute_classification_metrics(truth: torch.Tensor, members: torch.Tensor):
                 if len(np.unique(y_true)) == 1:
                     e_acc.append(1.0 if np.array_equal(y_true, y_pred) else 0.0)
                 else:
-                    e_acc.append(balanced_accuracy_score(y_true, y_pred))
+                    e_acc.append(balanced_accuracy_score(y_true, y_pred, adjusted=True))
                 e_pre.append(precision_score(y_true, y_pred, zero_division=np.nan, labels=[0, 1]))
                 e_rec.append(recall_score(y_true, y_pred, zero_division=np.nan, labels=[0, 1]))
 
@@ -133,7 +137,14 @@ def compute_classification_metrics(truth: torch.Tensor, members: torch.Tensor):
     return torch.tensor(acc), torch.tensor(pre), torch.tensor(rec)
 
 
-def determine_threshold():
+def evaluate_hypoxia_threshold(hypoxia_bias: float, experiment_index: int = 0):
+    """For a given hypoxia threshold, computes classification metrics
+
+    Arguments:
+        hypoxia_bias: The bias to be added to the hypoxia threshold.
+        experiment_index: The index of the experiment to evaluate for saving.
+    """
+
     # ==================
     #    Loading Data
     # ==================
@@ -141,8 +152,8 @@ def determine_threshold():
     # Configuration
     config = {"model": "laced-puddle-18"}
 
-    # Hypoxia threshold [mmol/m³]
-    hypoxia_threshold = 63
+    # Hypoxia threshold corrected [mmol/m³]
+    hypoxia_threshold = 63 + hypoxia_bias
 
     # Stores multiples results
     x_posterior_ground_truth, x_posterior_d_theta = list(), list()
@@ -225,63 +236,23 @@ def determine_threshold():
     print("GT:", posterior_oxygen_ground_truth.shape)
     print("NN:", posterior_oxygen_with_obs_NN.shape)
 
-    # Stores the results
-    res_acc, res_pre, res_rec, tresh = [], [], [], []
+    # Detecting hypoxia
+    x_gt = (posterior_oxygen_ground_truth < hypoxia_threshold) * 1
+    x_nn = (posterior_oxygen_with_obs_NN < hypoxia_threshold) * 1
 
-    # Evaluating different threshold correction
-    for bias in np.linspace(0, 100, 16):
-        # Corrected threshold
-        hypoxia_threshold_corrected = hypoxia_threshold + bias
+    # Broadcasting for ease
+    x_gt = np.swapaxes(x_gt, 0, 1)
+    x_gt = np.repeat(x_gt, 64, axis=1)
 
-        # Treshold used
-        tresh.append(hypoxia_threshold_corrected)
+    # Computing metrics
+    acc, pre, rec = compute_classification_metrics(x_gt, x_nn)
 
-        # Detecting hypoxia
-        x_gt = (posterior_oxygen_ground_truth < hypoxia_threshold) * 1
-        x_nn = (posterior_oxygen_with_obs_NN < hypoxia_threshold) * 1
+    # Path to folder in which save the data
+    f_save = f"/gpfs/home/acad/ulg-mast/vmangele/poseidon/metrics/data/classification/{experiment_index}/"
+    if not os.path.exists(f_save):
+        os.makedirs(f_save)
 
-        # Broadcasting for ease
-        x_gt = np.swapaxes(x_gt, 0, 1)
-        x_gt = np.repeat(x_gt, 64, axis=1)
-
-        # Computing metrics
-        acc, pre, rec = compute_classification_metrics(x_gt, x_nn)
-
-        # Appending results
-        res_acc.append(acc)
-        res_pre.append(pre)
-        res_rec.append(rec)
-
-    # Stacking the results
-    res_acc, res_pre, res_rec = torch.stack(res_acc), torch.stack(res_pre), torch.stack(res_rec)
-
-    # Computing average accross members
-    acc, pre, rec = (
-        torch.nanmean(res_acc, dim=2),
-        torch.nanmean(res_pre, dim=2),
-        torch.nanmean(res_rec, dim=2),
-    )
-
-    # Computing average accross samples
-    acc, pre, rec = torch.nanmean(acc, dim=1), torch.nanmean(pre, dim=1), torch.nanmean(rec, dim=1)
-
-    # Final shapes
-    print("Final Accuracy shape:", acc.shape)
-    print("Final Precision shape:", pre.shape)
-    print("Final Recall shape:", rec.shape)
-    print("Tresholds:", tresh)
-
-    # Saving results
-    torch.save(
-        acc, "/gpfs/home/acad/ulg-mast/vmangele/poseidon/metrics/data/classification/acc.pt"
-    )
-    torch.save(
-        pre, "/gpfs/home/acad/ulg-mast/vmangele/poseidon/metrics/data/classification/pre.pt"
-    )
-    torch.save(
-        rec, "/gpfs/home/acad/ulg-mast/vmangele/poseidon/metrics/data/classification/rec.pt"
-    )
-    torch.save(
-        torch.from_numpy(np.stack(tresh)),
-        "/gpfs/home/acad/ulg-mast/vmangele/poseidon/metrics/data/classification/tresh.pt",
-    )
+    torch.save(acc, f"{f_save}acc.pt")
+    torch.save(pre, f"{f_save}pre.pt")
+    torch.save(rec, f"{f_save}rec.pt")
+    torch.save(torch.tensor([hypoxia_threshold]), f"{f_save}tresh.pt")

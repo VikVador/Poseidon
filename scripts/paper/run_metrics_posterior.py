@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
     config_setup, config_cluster_cpu, config_model = (
         load_configuration("configs/setup.yml")[0],
-        load_configuration("configs/partitions/cpu.yml")[0],
+        load_configuration("configs/partitions/cpu_posterior.yml")[0],
         load_configuration(args.model)[0],
     )
 

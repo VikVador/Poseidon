@@ -1,4 +1,4 @@
-r"""Tools to compute metrics for the paper."""
+r"""Tools to compute distribution metrics and save results."""
 
 import numpy as np
 import os
@@ -23,7 +23,7 @@ from poseidon.diagnostics.const import TRANSLATION
 
 
 def next_day(date: str):
-    r"""Helper tool to determine date of following day."""
+    r"""Helper tool to compute date of following day."""
     date_obj = datetime.strptime(date, "%Y-%m-%d")
     next_date_obj = date_obj + timedelta(days=1)
     return next_date_obj.strftime("%Y-%m-%d")
@@ -42,8 +42,8 @@ def computing_metrics_prior(date: str, config: dict):
 
     # P(X|d)
     dates_start, dates_end = (
-        [f"{year}-{date[5:]}" for year in range(1995, 1998)],
-        [next_day(f"{year}-{date[5:]}") for year in range(1995, 1998)],
+        [f"{year}-{date[5:]}" for year in range(1995, 2018)],
+        [next_day(f"{year}-{date[5:]}") for year in range(1995, 2018)],
     )
 
     x_prior_d = []
@@ -133,7 +133,7 @@ def computing_metrics_prior(date: str, config: dict):
         # Stores Wasserstein distances
         v_z_wd = []
 
-        for z in range(2):
+        for z in range(32):
             # Displaying information over terminal
             print(f" |- Analyzing level {z}...")
 

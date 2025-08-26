@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
     config_setup, config_cluster_cpu, config_model = (
         load_configuration("configs/setup.yml")[0],
-        load_configuration("configs/partitions/cpu.yml")[0],
+        load_configuration("configs/partitions/cpu_prior.yml")[0],
         load_configuration(args.model)[0],
     )
 
@@ -41,7 +41,7 @@ if __name__ == "__main__":
         computing_metrics_prior(
             date=DATES_PRIOR[i],
             config= {
-                "p(x)_samples": 2,
+                "p(x)_samples": 512,
                 **config_model,
             }
         )
