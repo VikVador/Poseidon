@@ -5,8 +5,7 @@
 # ===== Cluster Configuration =====
 #
 "account"  : ["bsmfc"]
-"cpus"     : [8]
-"gpus"     : [1]
-"partition": ["ia"]
-"ram"      : ["60GB"]
-"time"     : ["12:00:00"]
+"cpus"     : [4]
+"partition": ["batch"]
+"ram"      : ["128GB"]
+"time"     : ["02:00:00"]
