@@ -9,7 +9,7 @@ from dawgz import job, schedule
 # isort: split
 from poseidon.config import PATH_MODEL
 from poseidon.diagnostics.const import DATES_PRIOR
-from poseidon.diagnostics.generate import generate_conditional, generate_unconditional
+from poseidon.diagnostics.generate import generate_unconditional
 from poseidon.training.parser import load_configuration
 
 if __name__ == "__main__":
@@ -26,9 +26,8 @@ if __name__ == "__main__":
     # fmt: off
     args = parser.parse_args()
 
-    config_setup, config_cluster_cpu, config_cluster_gpu, config_cluster_ia, config_model, config_sampling_prior, config_sampling_posterior = (
+    config_setup, config_cluster_gpu, config_cluster_ia, config_model, config_sampling_prior, config_sampling_posterior = (
         load_configuration("configs/setup.yml")[0],
-        load_configuration("configs/partitions/cpu.yml")[0],
         load_configuration("configs/partitions/gpu.yml")[0],
         load_configuration("configs/partitions/ia.yml")[0],
         load_configuration(args.model)[0],
@@ -68,23 +67,23 @@ if __name__ == "__main__":
     # ==============
     #   POSTERIOR
     # ==============
-    path_folder_posterior = PATH_MODEL / config_model["model"] / "nowcasts" / "conditional"
-    if not os.path.exists(path_folder_posterior):
-        os.makedirs(path_folder_posterior)
+    # path_folder_posterior = PATH_MODEL / config_model["model"] / "nowcasts" / "conditional"
+    # if not os.path.exists(path_folder_posterior):
+    #     os.makedirs(path_folder_posterior)
 
-    @job(array=24, **config_cluster_ia)
-    def post_generate(i: int):
-        generate_conditional(
-            index=i,
-            config= {
-                **config_model,
-                **config_sampling_posterior,
-            }
-        )
+    # @job(array=24, **config_cluster_ia)
+    # def post_generate(i: int):
+    #     generate_conditional(
+    #         index=i,
+    #         config= {
+    #             **config_model,
+    #             **config_sampling_posterior,
+    #         }
+    #     )
 
-    schedule(
-        post_generate,
-        name="POSEIDON-DIAGNOSTICS-POSTERIOR",
-        backend="slurm",
-        export="ALL",
-    )
+    # schedule(
+    #     post_generate,
+    #     name="POSEIDON-DIAGNOSTICS-POSTERIOR",
+    #     backend="slurm",
+    #     export="ALL",
+    # )

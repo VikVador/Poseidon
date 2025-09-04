@@ -6,8 +6,8 @@ cd scripts/paper/
 
 # Computing metrics
 python -u run_metrics_prior.py -m configs/models/laced-puddle-18.yml
-python -u run_metrics_posterior.py -m configs/models/laced-puddle-18.yml
-python -u run_hypoxia.py -m configs/models/laced-puddle-18.yml
+# python -u run_metrics_posterior.py -m configs/models/laced-puddle-18.yml
+# python -u run_hypoxia.py -m configs/models/laced-puddle-18.yml
 
 # Moving back to the root directory
 cd ../../

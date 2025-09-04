@@ -41,7 +41,7 @@ if __name__ == "__main__":
         computing_metrics_prior(
             date=DATES_PRIOR[i],
             config= {
-                "p(x)_samples": 512,
+                "p(x)_samples": 256,
                 **config_model,
             }
         )
