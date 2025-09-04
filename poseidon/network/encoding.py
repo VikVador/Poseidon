@@ -1,4 +1,8 @@
-r"""Encoding blocks."""
+r"""Encoding blocks.
+
+Credits:
+    https://github.com/probabilists/azula
+"""
 
 import torch
 import torch.nn as nn
@@ -25,7 +29,7 @@ class SineEncoding(nn.Module):
     ):
         super().__init__()
 
-        assert features % 2 == 0, "ERROR (SineEncoding) - The number of features must be even."
+        assert features % 2 == 0, "ERROR (SineEncoding) - Number of features must be even."
         freqs = torch.linspace(0, 1, features // 2, dtype=torch.float64)
         freqs = omega ** (-freqs)
         self.register_buffer("freqs", freqs.to(dtype=torch.float32))
@@ -33,10 +37,10 @@ class SineEncoding(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         r"""
         Arguments:
-            x: Tensor to encode (*)
+            x: Tensor (*)
 
         Returns:
-            Tensor: Embedded tensor (*, F)
+            Tensor (*, F)
         """
         x = x[..., None]
         return torch.cat(
