@@ -3,7 +3,6 @@ r"""Diffusion samplers.
 From:
   | azula library (François Rozet)
   | https://github.com/francois-rozet/azula
-
 """
 
 import torch
@@ -19,14 +18,11 @@ from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.schedulers import PoseidonNoiseScheduler
 from poseidon.math import gauss_legendre
 
-# fmt: off
-#
-# Constants
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 
 class Sampler(nn.Module):
-    r"""Template to create a diffusion sampler
+    r"""A diffusion sampler template.
 
     Mathematics:
 
@@ -52,7 +48,7 @@ class Sampler(nn.Module):
 
         self.denoiser = denoiser
         self.schedule = schedule
-        self.steps    = 1
+        self.steps = 1
 
     @abstractmethod
     def forward(self, x1: Tensor) -> Tensor:
@@ -64,6 +60,7 @@ class Sampler(nn.Module):
             Data tensor from p(x₀ | x₁), with shape (*, D).
         """
         pass
+
 
 class LMSSampler(Sampler):
     r"""Creates a linear multi-step (LMS) sampler.
@@ -117,65 +114,56 @@ class LMSSampler(Sampler):
         # Adams-Bashforth coefficients
         return gauss_legendre(lj, tj[-1], ti, n=order // 2 + 1)
 
-
     @torch.no_grad()
     def forward(
         self,
         trajectory_size: int,
-        forecast_size: int,
+        ensemble_size: int,
         steps: int = 32,
         conditioning: Tensor = None,
     ) -> Tensor:
-        r"""Generating forecasts."""
+        r"""Sampling trajectories."""
 
-        forecasts, self.steps, progression = (
+        members, self.steps, progression = (
             [],
             steps,
             tqdm(
                 total=steps,
-                desc="| POSEIDON | Diffusion",
+                desc="| POSEIDON | Generating",
             ),
         )
 
-        for _ in range(forecast_size):
-
-            # Initial Noise
+        for _ in range(ensemble_size):
+            # Initial noise
             sigma_t = self.schedule(torch.tensor([1]))
 
-            # Initial state (random Gaussian noise)
+            # Initial state
             xt = (sigma_t * torch.randn(self.C, trajectory_size, self.X, self.Y)).to(DEVICE)
 
-            # Other initializations
-            time   = torch.linspace(1, 0, self.steps + 1).to(DEVICE)
+            # Others
+            time = torch.linspace(1, 0, self.steps + 1).to(DEVICE)
             sigmas = self.schedule(time).squeeze()
-            ratio  = sigmas.double()
+            ratio = sigmas.double()
 
             # Stores N past derivatives for Adams-Bashforth
             derivatives = []
 
             for s, sigma_t in enumerate(sigmas[:-1]):
-
-                # Estimating reconstructed state
                 q_t = self.denoiser(xt, sigma_t, conditioning)
-
-                # Computing noise to remove
                 z_t = (xt - q_t) / sigma_t
 
-                # Storing derivatives
                 derivatives.append(z_t)
                 if len(derivatives) > self.order:
                     derivatives.pop(0)
 
-                # Adams-Bashforth coefficients
                 coefficients = self.adams_bashforth(ratio, s + 1, order=len(derivatives))
                 coefficients = coefficients.to(xt)
-                delta        = sum(c * d for c, d in zip(coefficients, derivatives))
+                delta = sum(c * d for c, d in zip(coefficients, derivatives))
 
                 xt = xt + delta
-
-                if s % forecast_size == 0:
+                if s % ensemble_size == 0:
                     progression.update(1)
 
-            forecasts.append(xt)
+            members.append(xt)
 
-        return torch.stack(forecasts, dim=0)
+        return torch.stack(members, dim=0)
