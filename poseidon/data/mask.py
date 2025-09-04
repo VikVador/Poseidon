@@ -1,4 +1,4 @@
-r"""A collection of tools designed to handle masks."""
+r"""Tools for handling masks."""
 
 import torch
 import xarray as xr
@@ -8,39 +8,37 @@ from torch import Tensor
 from typing import (
     Dict,
     Sequence,
-    Tuple,
 )
 
 # isort: split
-from poseidon.config import PATH_MASK_V
+from poseidon.config import PATH_DATA
+from poseidon.data.const import DATASET_REGION, DATASET_VARIABLES
 
 
 def generate_trajectory_mask(
-    variables: Sequence[str],
-    region: Dict[str, Tuple[int, int]],
     trajectory_size: int,
-    path: Path = PATH_MASK_V,
+    path: Path = PATH_DATA,
+    region: Dict[str, slice] = DATASET_REGION,
+    variables: Sequence[str] = DATASET_VARIABLES,
 ) -> Tensor:
-    r"""Creates a boolean mask whose dimensions match preprocessed trajectory sample.
+    r"""Creates a boolean trajectory mask.
 
-    Information:
-        From dataloader, trajectory samples have shape (B, C, T, X, Y) where
-        along the C dimension, variables are stacked. This function creates a
-        mask tensor of shape (1, C, T, X, Y) where C dimension contains the
-        corresponding variables.
+    Notes
 
     Arguments:
-        variables: Variable names to retain from the dataset.
-        region: Region of interest to extract from the dataset.
-        trajectory_size: Total number of masks needed to cover the entire trajectory (T).
-        path: Path to custom mask dataset (each physical variable and its corresponding mask).
+        trajectory_size: Trajectory dimension (T).
+        path: Path to the original dataset.
+        region: Region on which the data is defined.
+        variables: Variable present in the stacked tensor.
 
     Returns:
-        Bool mask tensor (1, C, T, X, Y).
+        mask: (1, C, T, X, Y).
     """
-    mask = xr.open_zarr(path)[variables].isel(**region)
+
+    mask = xr.open_zarr(path)[variables].isel(time=0).isel(**region)
     mask = mask.to_stacked_array(
         new_dim="z_total", sample_dims=("longitude", "latitude")
     ).transpose("z_total", ...)
     mask = torch.as_tensor(mask.load().data.copy())
+    mask = ~torch.isnan(mask) * 1.0
     return mask.unsqueeze(1).repeat(1, trajectory_size, 1, 1).unsqueeze(0)

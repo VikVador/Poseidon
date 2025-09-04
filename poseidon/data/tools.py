@@ -1,4 +1,4 @@
-r"""A collection of tools designed for data module."""
+r"""General tools."""
 
 import ast
 import numpy as np
@@ -18,48 +18,29 @@ from poseidon.config import (
 
 
 def assert_date_format(date_string: str) -> None:
-    r"""Asserts that the date string is in the correct format (YYYY-MM-DD).
-
-    Arguments:
-        date_string (str): Date string to check.
-
-    Raises:
-        ValueError: If the date string does not match the pattern.
-    """
-
-    # YYYY-MM-DD
+    r"""Asserts that the date string is in the correct format (YYYY-MM-DD)."""
     pattern = r"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$"
-
     if not re.match(pattern, date_string):
-        raise ValueError("The format is incorrect. The date should be in YYYY-MM-DD format.")
+        raise ValueError("ERROR - The format is incorrect, it should be YYYY-MM-DD.")
 
 
 def get_date_features(date: np.datetime64) -> torch.Tensor:
-    r"""Extracts year, month, day, and hour from a numpy.datetime64 object.
-
-    Arguments:
-        date: Anobject representing a specific date and time.
+    r"""Extracts temporal information from datetime object.
 
     Returns:
-        A tensor containing the month, day, and hour extracted from the input date.
+        tensor[floats]: [year, month, day, hour]
     """
     timestamp = pd.to_datetime(date)
     return torch.as_tensor([timestamp.year, timestamp.month, timestamp.day, timestamp.hour])
 
 
 def generate_paths() -> Dict[str, Sequence[str]]:
-    r"""Generate paths to access Black Sea simulation monthly grouped results (1980 to 2022).
-
-    Returns:
-        A dictionary where each key is a "YEAR-MONTH" string, and the corresponding
-        value is a list of paths to access the simulation data in .netcdf format.
-    """
+    r"""Generate paths to access Black Sea simulation monthly grouped results (1980 to 2022)."""
 
     with open(PATH_GRID, "r") as file:
         physics_data = ast.literal_eval(file.read())
     with open(PATH_PTRC, "r") as file:
         biogeochemistry_data = ast.literal_eval(file.read())
-
     paths = {}
     for date_month in physics_data:
         paths_phys_and_bio = physics_data[date_month] + biogeochemistry_data[date_month]
@@ -69,7 +50,7 @@ def generate_paths() -> Dict[str, Sequence[str]]:
 
 
 def convert_to_progressive_time(t: Tensor) -> Tensor:
-    r"""Extracts month and day from the time tensor and converts it to a progressive time format.
+    r"""Converts a time tensor (K, 4) to progressive time (K).
 
     Arguments:
         t: Time tensor (K, 4).
@@ -77,19 +58,10 @@ def convert_to_progressive_time(t: Tensor) -> Tensor:
     Returns:
         Tensor: Progressive time tensor (K).
     """
-
-    # Number of days in each month
     days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-
-    # Extracting month and day
     t_days = t[:, 1:3].clone()
-
-    # Converting month to days
     for traj in range(t_days.shape[0]):
         t_days[traj, 0] = sum(days_in_month[: int(t_days[traj, 0].item() - 1)])
-
-    # Adding current day
     t_days = t_days.sum(dim=-1)
 
-    # Converting to progressive time
     return t_days / 365.0
