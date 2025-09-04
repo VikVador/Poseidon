@@ -11,8 +11,6 @@
 #SBATCH --mem=60G
 #SBATCH --partition=gpu
 #SBATCH --output=../logs/jupiter_notebook.log
-#SBATCH --mail-user=vmangeleer@uliege.be
-#SBATCH --mail-type=FAIL
 #
 # ----
 # Main
