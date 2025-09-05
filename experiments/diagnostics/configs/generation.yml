@@ -1,0 +1,40 @@
+# ====================================
+#          P O S E I D O N
+# ====================================
+#
+# ===== Sampling =====
+#
+Noise: 
+  "sigma_min"   : [0.00001]
+  "sigma_max"   : [1000]
+
+Prior: 
+  "steps"   : [64]
+  "members" : [32]
+
+Posterior: 
+  "steps"        : [64]
+  "members"      : [32]
+  "iterations"   : [1]
+  "covariance_y" : [0.001]
+
+# ===== Partitions =====
+#
+Cluster:
+
+  "account"  : ["bsmfc"]
+
+  sampling_prior:
+    "cpus"     : [8]
+    "gpus"     : [1]
+    "partition": ["gpu"]
+    "ram"      : ["60GB"]
+    "time"     : ["02:00:00"]
+
+  sampling_posterior:
+    "cpus"     : [8]
+    "gpus"     : [1]
+    "partition": ["gpu"]
+    "ram"      : ["60GB"]
+    "time"     : ["06:00:00"]
+

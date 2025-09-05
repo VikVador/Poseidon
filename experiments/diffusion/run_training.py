@@ -8,7 +8,10 @@ from dawgz import job, schedule
 from poseidon.training.tools import load_configuration
 from poseidon.training.training import training
 
+# fmt: off
+#
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser(description="Launch a training pipeline.")
     parser.add_argument(
         "--config",
@@ -17,6 +20,7 @@ if __name__ == "__main__":
         required=True,
         help="Path to the training .yml configuration file.",
     )
+
     parser.add_argument(
         "--backend",
         "-b",
@@ -25,39 +29,34 @@ if __name__ == "__main__":
         choices=["slurm", "async"],
         help="Computation backend, 'slurm' for cluster-based scheduling and 'async' for local execution.",
     )
-    #
-    # fmt: off
-    # Initialization
+
     args           = parser.parse_args()
     configs        = load_configuration(args.config)
     config_cluster = configs[0].get("Cluster")
+    nb_gpus        = config_cluster.get("gpus")
+    batch_size     = configs[0].get("Training").get("config_dataloader").get("batch_size")
 
     # Security
-    nb_gpus, batch_size = (
-        config_cluster.get("gpus"),
-        configs[0].get("Training Pipeline").get("config_dataloader").get("batch_size"),
-    )
-    assert (
-        nb_gpus <= batch_size
-    ), f"ERROR - To parallelize training, bach size ({batch_size}) must be greater than number of GPUs ({nb_gpus})."
+    assert (nb_gpus <= batch_size), f"ERROR - For // training, batch size ({batch_size}) > ({nb_gpus})."
 
-    # Launching training pipeline
+    # Local
     if args.backend == "async":
         training(
-            **configs[0].get("Training Pipeline"),
+            **configs[0].get("Training"),
             config_cluster=config_cluster,
         )
 
+    # Cluster
     else:
         @job(array=len(configs), **config_cluster)
-        def train(i: int):
+        def BS_train(i: int):
             training(
-                **configs[i].get("Training Pipeline"),
+                **configs[i].get("Training"),
                 config_cluster=config_cluster,
             )
 
         schedule(
-            train,
+            BS_train,
             name="POSEIDON-TRAINING",
             backend="slurm",
             export="ALL",

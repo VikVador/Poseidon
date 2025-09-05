@@ -1,8 +1,8 @@
 # Moving to the jobs directory
-cd scripts/diagnostics/
+cd experiments/diagnostics/
 
 # Launching a jupyter notebook
-python -u run_diagnostics.py -m configs/models/laced-puddle-18.yml
+python -u run_diagnostics.py -model laced-puddle-18 -version last -analysis partial -generate
 
 # Moving back to the root directory
 cd ../../
