@@ -1,0 +1,14 @@
+# ======================================
+#  Poseidon | Diffusion Model Validation
+# ======================================
+#
+# ===== Model Configuration =====
+#
+"model"      : ["laced-puddle-18"]
+"best"       : [False]
+"toy_problem": [True]
+
+# ===== Sampling Specification =====
+#
+"sigma_min"   : [0.00001]
+"sigma_max"   : [1000]

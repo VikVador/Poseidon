@@ -29,8 +29,8 @@ from poseidon.data.mask import generate_trajectory_mask
 from poseidon.diagnostics.const import (
     CMAPS_LINE,
     CMAPS_SURF,
+    DATES_POSTERIOR,
     INTERVALS,
-    POSTERIOR_DATES,
     TRANSLATION,
     UNITS,
 )
@@ -370,7 +370,7 @@ def plot_conditional_distributions(config: Dict, config_setup: Dict) -> None:
         trajectory_size=1,
     )
 
-    for i, date in POSTERIOR_DATES.items():
+    for i, date in DATES_POSTERIOR.items():
         # Loading corresponding sample
         x, (x_gt, _) = (
             torch.load(

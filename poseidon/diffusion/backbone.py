@@ -7,7 +7,6 @@ from einops import rearrange
 from torch import Tensor
 from typing import (
     Dict,
-    Sequence,
     Tuple,
 )
 
@@ -18,63 +17,46 @@ from poseidon.network.unet import UNet
 
 
 class PoseidonBackbone(nn.Module):
-    r"""Helper module to preprocess data before denoising.
+    r"""Helper module for denoising.
 
     Arguments:
-        variables: Variable names to retain from the dataset.
+        config_nn: Configuration of neural network.
         dimensions: Input tensor dimensions (B, C, K, X, Y).
-        config_unet: Configuration of the unet.
-        config_siren: Configuration of the siren architecture.
-        config_region: Configuration of the spatial region.
-        config_transformer: Configuration of the transformer.
     """
 
     def __init__(
         self,
-        variables: Sequence[str],
+        config_nn: Dict,
         dimensions: Tuple[int, int, int, int, int],
-        config_unet: Dict,
-        config_siren: Dict,
-        config_region: Dict,
-        config_transformer: Dict,
     ):
         super().__init__()
 
         self.B, self.C, self.K, self.X, self.Y = dimensions
 
-        # Land & Sea mask
-        self.register_buffer(
-            "mask",
-            generate_trajectory_mask(
-                variables=variables,
-                region=config_region,
-                trajectory_size=self.K,
-            ).bool(),
-        )
+        self.register_buffer("mask", generate_trajectory_mask(trajectory_size=self.K).bool())
 
         self.network = UNet(
             in_channels=self.C,
             out_channels=self.C,
-            **config_unet,
+            cond_channels=self.K,
+            **config_nn,
         )
 
     def forward(
         self,
         x_t: Tensor,
         sigma_t: Tensor,
-        conditioning: Tensor,
+        cond: Tensor,
     ) -> Tensor:
-        r"""Denoising conditionned sample.
-
+        r"""
         Arguments:
-            x_t: Noisy input tensor (B, C * K * X * Y).
+            x_t: Noisy tensor (B, C * K * X * Y).
             sigma_t: Associated noise levels (B, 1).
-            conditioning: Associated conditioning tensor (B, K).
-        Returns:
-            Cleaned tensor (B, C * K * X * Y).
-        """
+            cond: Associated conditioning tensor (B, K).
 
-        # Reshaping for network
+        Returns:
+            output: Cleaned tensor (B, C * K * X * Y).
+        """
         x_t = rearrange(
             x_t,
             "B (C K X Y) -> B C K X Y",
@@ -84,17 +66,15 @@ class PoseidonBackbone(nn.Module):
             Y=self.Y,
         )
 
-        # Masking land
         x_t = torch.where(self.mask.expand_as(x_t), x_t, LAND_VALUE)
 
-        # Estimating (unscaled) clean signal
-        x_t = rearrange(
-            self.network(x=x_t, mod=sigma_t, cond=conditioning),
+        x_t = self.network(x=x_t, mod=sigma_t, cond=cond)
+
+        return rearrange(
+            x_t,
             "B C K X Y -> B (C K X Y)",
             C=self.C,
             K=self.K,
             X=self.X,
             Y=self.Y,
         )
-
-        return x_t

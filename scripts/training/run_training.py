@@ -5,7 +5,7 @@ import argparse
 from dawgz import job, schedule
 
 # isort: split
-from poseidon.training.parser import load_configuration
+from poseidon.training.tools import load_configuration
 from poseidon.training.training import training
 
 if __name__ == "__main__":

@@ -20,6 +20,9 @@ notebooks/figures/pdf/
 *.png
 *.ipynb
 
+# Metrics
+metrics/*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

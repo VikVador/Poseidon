@@ -15,7 +15,7 @@ from poseidon.diagnostics.vizualize import (
     plot_unconditional,
     plot_unconditional_distributions,
 )
-from poseidon.training.parser import load_configuration
+from poseidon.training.tools import load_configuration
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Launch a validation pipeline.")

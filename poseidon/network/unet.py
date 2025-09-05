@@ -22,16 +22,16 @@ class UNetBlock(nn.Module):
     r"""Creates a modulated U-Net block module.
 
     Arguments:
-        channels: The number of channels :math:`C`.
-        mod_features: The number of modulating features :math:`D`.
-        norm: The kind of normalization.
-        groups: The number of groups in :class:`torch.nn.GroupNorm` layers.
-        attention_heads: The number of attention heads.
-        ffn_factor: The channel factor in the FFN.
-        spatial: The number of spatial dimensions :math:`N`.
-        dropout: The dropout rate in :math:`[0, 1]`.
+        channels: Number of channels (C).
+        mod_features: Number of modulating features (D).
+        norm: Kind of normalization.
+        groups: Number of groups in torch.nn.GroupNorm layers.
+        attention_heads: Number of attention heads.
+        ffn_factor: Channel factor in the FFN.
+        spatial: Number of spatial dimensions (N).
+        dropout: Dropout rate in [0, 1].
         checkpointing: Whether to use gradient checkpointing or not.
-        kwargs: Keyword arguments passed to :class:`torch.nn.Conv2d`.
+        kwargs: Keyword arguments passed to torch.nn.Conv2d.
     """
 
     def __init__(
@@ -95,11 +95,11 @@ class UNetBlock(nn.Module):
     def _forward(self, x: Tensor, mod: Optional[Tensor] = None) -> Tensor:
         r"""
         Arguments:
-            x: The input tensor, with shape :math:`(B, C, L_1, ..., L_N)`.
-            mod: The modulation vector, with shape :math:`(D)` or :math:`(B, D)`.
+            x: Input tensor (B, C, L_1, ..., L_N).
+            mod: Modulation vector (D) or (B, D).
 
         Returns:
-            The output tensor, with shape :math:`(B, C, L_1, ..., L_N)`.
+            output: Tensor (B, C, L_1, ..., L_N).
         """
 
         if torch.is_tensor(self.ada_zero):
@@ -128,20 +128,24 @@ class UNetBlock(nn.Module):
 class UNet(nn.Module):
     r"""Creates a modulated U-Net module.
 
+    Information:
+        Conditioning: Additional information concatenated to the input.
+        Modulation: Additional information used to modulate the blocks.
+
     Arguments:
-        in_channels: The number of input channels :math:`C_i`.
-        out_channels: The number of output channels :math:`C_o`.
-        cond_channels: The number of condition channels :math:`C_c`.
-        mod_features: The number of modulating features :math:`D`.
-        hid_channels: The numbers of channels at each depth.
-        hid_blocks: The numbers of hidden blocks at each depth.
-        kernel_size: The kernel size of all convolutions.
-        stride: The stride of the downsampling convolutions.
-        norm: The kind of normalization.
-        attention_heads: The number of attention heads at each depth.
-        spatial: The number of spatial dimensions :math:`N`.
+        in_channels: Number of input channels (C_i).
+        out_channels: Number of output channels (C_o).
+        cond_channels: Number of condition channels (C_c).
+        mod_features: Number of modulating features (D).
+        hid_channels: Numbers of channels at each depth.
+        hid_blocks: Numbers of hidden blocks at each depth.
+        kernel_size: Kernel size of all convolutions.
+        stride: Stride of the downsampling convolutions.
+        norm: Type of normalization.
+        attention_heads: Number of attention heads at each depth.
+        spatial: Number of spatial dimensions (N).
         periodic: Whether the spatial dimensions are periodic or not.
-        dropout: The dropout rate in :math:`[0, 1]`.
+        dropout: Dropout rate in [0, 1].
         checkpointing: Whether to use gradient checkpointing or not.
         identity_init: Initialize down/upsampling convolutions as identity.
     """
@@ -177,17 +181,18 @@ class UNet(nn.Module):
 
         self.modulation_encoding = SineEncoding(mod_features)
 
+        self.descent, self.ascent = nn.ModuleList(), nn.ModuleList()
+
         kwargs = dict(
             kernel_size=tuple(kernel_size),
             padding=tuple(k // 2 for k in kernel_size),
             padding_mode="circular" if periodic else "zeros",
         )
 
-        self.descent, self.ascent = nn.ModuleList(), nn.ModuleList()
-
         for i, num_blocks in enumerate(hid_blocks):
             do, up = nn.ModuleList(), nn.ModuleList()
 
+            # Stage blocks
             for _ in range(num_blocks):
                 do.append(
                     UNetBlock(
@@ -217,6 +222,7 @@ class UNet(nn.Module):
                     )
                 )
 
+            # Transitions
             if i > 0:
                 do.insert(
                     0,
@@ -230,7 +236,14 @@ class UNet(nn.Module):
                     ),
                 )
 
-                up.append(nn.Upsample(scale_factor=tuple(stride), mode="nearest"))
+                up.append(
+                    nn.Upsample(
+                        scale_factor=tuple(stride),
+                        mode="nearest",
+                    )
+                )
+
+            # Initial / Final
             else:
                 do.insert(
                     0,
@@ -241,8 +254,16 @@ class UNet(nn.Module):
                         **kwargs,
                     ),
                 )
-                up.append(ConvNd(hid_channels[i], out_channels, spatial=spatial, **kwargs))
+                up.append(
+                    ConvNd(
+                        hid_channels[i],
+                        out_channels,
+                        spatial=spatial,
+                        **kwargs,
+                    )
+                )
 
+            # Merging skip connections
             if i + 1 < len(hid_blocks):
                 up.insert(
                     0,
@@ -266,30 +287,43 @@ class UNet(nn.Module):
     ) -> Tensor:
         r"""
         Arguments:
-            x: The input tensor, with shape :math:`(B, C_i, L_1, ..., L_N)`.
-            mod: The modulation vector, with shape :math:`(D)` or :math:`(B, D)`.
-            cond: The condition tensor, with :math:`(B, C_c, L_1, ..., L_N)`.
+            x: Input tensor (B, C_i, L_1, ..., L_N).
+            mod: Modulation vector (D) or (B, D).
+            cond: Condition tensor (B, E).
 
         Returns:
-            The output tensor, with shape :math:`(B, C_o, L_1, ..., L_N)`.
+            tensor: (B, C_o, L_1, ..., L_N).
         """
 
         B, _, *shape = x.shape
 
+        # Creating spatial positional encodings
         p = (torch.linspace(-1, 1, steps=size, device=x.device) for size in shape)
         p = torch.cartesian_prod(*p)
         p = torch.reshape(p, shape=(*shape, -1))
         p = repeat(p, "... C -> B C ...", B=B)
 
-        cond = torch.ones(B, 1, *shape, device=x.device) * cond[:, :, None, None, None]
+        # Projecting conditioning to spatial dimensions
+        cond = (
+            torch.ones(
+                B,
+                1,
+                *shape,
+                device=x.device,
+            )
+            * cond[:, :, None, None, None]
+        )
 
+        # Encoding modulating vector
         mod = self.modulation_encoding(mod)[:, 0].to(x.device)
 
+        # Adding information to the input
         if cond is None:
             x = torch.cat((x, p), dim=1)
         else:
             x = torch.cat((x, p, cond), dim=1)
 
+        # Forward through the network
         memory = []
 
         for blocks in self.descent:

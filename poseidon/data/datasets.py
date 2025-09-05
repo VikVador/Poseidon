@@ -23,11 +23,6 @@ from poseidon.data.const import (
     DATASET_REGION,
     DATASET_VARIABLES,
     LAND_VALUE,
-    TOY_DATASET_DATES_TEST,
-    TOY_DATASET_DATES_TRAINING,
-    TOY_DATASET_DATES_VALIDATION,
-    TOY_DATASET_REGION,
-    TOY_DATASET_VARIABLES,
 )
 from poseidon.data.tools import (
     assert_date_format,
@@ -37,14 +32,14 @@ from poseidon.data.tools import (
 
 
 class PoseidonDataset(Dataset):
-    r"""Creates a :class:`PoseidonDataset`.
+    r"""Creates a PoseidonDataset.
 
     Arguments:
         path: Path to the Zarr dataset.
         date_start: Start date of the data split (format: 'YYYY-MM-DD').
         date_end: End date of the data split (format: 'YYYY-MM-DD').
         variables: Variable names to retain from the dataset.
-        trajectory_size: Number of time steps in trajectory
+        trajectory_size: Number of time steps in trajectory.
         linspace: Whether to extract samples at linearly spaced intervals.
         linspace_samples: Number of linearly spaced samples to extract, if `linspace` is True.
         region: Region of interest to extract from the dataset.
@@ -63,6 +58,7 @@ class PoseidonDataset(Dataset):
     ):
         super().__init__()
 
+        # Security
         assert_date_format(date_start)
         assert_date_format(date_end)
 
@@ -104,13 +100,9 @@ class PoseidonDataset(Dataset):
     ) -> Tuple[Tensor, Tensor]:
         r"""Extract and reshape a sample from the dataset.
 
-        Arguments:
-            step_start: Start index of the sample.
-            step_end: End index of the sample.
-
         Returns:
-            sample: Trajectory sample (C, T, X, Y).
-            time: Date features corresponding to each day of the trajectory.
+            sample: Trajectory (C, T, X, Y).
+            time: Year progression (T).
         """
 
         with dask.config.set(**{"array.slicing.split_large_chunks": True}):
@@ -127,78 +119,19 @@ class PoseidonDataset(Dataset):
         return sample.to(dtype=torch.float32), time.to(dtype=torch.float32)
 
 
-def get_toy_datasets(
-    variables: Optional[Sequence[str]] = None,
-    linspace: Optional[Sequence[bool]] = [False, False, False],
-    linspace_samples: Optional[Sequence[int]] = [None, None, None],
-    **kwargs,
-) -> Tuple[PoseidonDataset, PoseidonDataset, PoseidonDataset]:
-    r"""Returns the toy training, validation, and test :class:`PoseidonDataset`.
-
-    Region:
-        Black Sea Continental Shelf (Surface only).
-
-    Splits:
-        Training: 1995-01-01 to 2017-12-31.
-        Validation: 2020-01-01 to 2020-12-31.
-        Test: 2022-01-01 to 2022-12-31.
-
-    Arguments:
-        variables: Variable names to retain from the dataset.
-        linspace: Whether to extract samples at linearly spaced intervals.
-        linspace_samples: Number of linearly spaced samples to extract, if `linspace` is True.
-        kwargs: Keyword arguments passed to :class:`PoseidonDataset`.
-    """
-
-    if variables is None:
-        variables = TOY_DATASET_VARIABLES
-
-    datasets = [
-        PoseidonDataset(
-            path=PATH_DATA,
-            date_start=date_start,
-            date_end=date_end,
-            region=TOY_DATASET_REGION,
-            variables=variables,
-            linspace=l,
-            linspace_samples=s,
-            **kwargs,
-        )
-        for (date_start, date_end), l, s in zip(
-            [
-                TOY_DATASET_DATES_TRAINING,
-                TOY_DATASET_DATES_VALIDATION,
-                TOY_DATASET_DATES_TEST,
-            ],
-            linspace,
-            linspace_samples,
-        )
-    ]
-
-    return tuple(datasets)
-
-
 def get_datasets(
     variables: Optional[Sequence[str]] = None,
     linspace: Optional[Sequence[bool]] = [False, False, False],
     linspace_samples: Optional[Sequence[int]] = [None, None, None],
     **kwargs,
 ) -> Tuple[PoseidonDataset, PoseidonDataset, PoseidonDataset]:
-    r"""Returns the training, validation, and test :class:`PoseidonDataset`.
-
-    Region:
-        Black Sea Continental Shelf.
-
-    Splits:
-        Training: 1995-01-01 to 2017-12-31.
-        Validation: 2018-01-01 to 2020-12-31.
-        Test: 2021-01-01 to 2022-12-31.
+    r"""Returns the training, validation, and test PoseidonDataset.
 
     Arguments:
         variables: Variable names to retain from the dataset.
         linspace: Whether to extract samples at linearly spaced intervals.
         linspace_samples: Number of linearly spaced samples to extract, if `linspace` is True.
-        kwargs: Keyword arguments passed to :class:`PoseidonDataset`.
+        kwargs: Keyword arguments passed to PoseidonDataset.
     """
 
     if variables is None:

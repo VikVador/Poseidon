@@ -1,4 +1,8 @@
-r"""Common layers and modules."""
+r"""Common layers and modules.
+
+Credits:
+    https://github.com/probabilists/azula
+"""
 
 import torch
 import torch.nn as nn
@@ -19,11 +23,11 @@ def ConvNd(
     r"""Returns an N-dimensional convolutional layer.
 
     Arguments:
-        in_channels: The number of input channels :math:`C_i`.
-        out_channels: The number of output channels :math:`C_o`.
-        spatial: The number of spatial dimensions :math:`N`.
+        in_channels: Number of input channels (C_i).
+        out_channels: Number of output channels (C_o).
+        spatial: Number of spatial dimensions (N).
         identity_init: Initialize the convolution as a (pseudo-)identity.
-        kwargs: Keyword arguments passed to :class:`torch.nn.Conv2d`.
+        kwargs: Keyword arguments passed to torch.nn.Conv2d.
     """
 
     CONVS = {
@@ -57,8 +61,6 @@ def ConvNd(
 class LayerNorm(nn.Module):
     r"""Creates a layer that standardizes features along a dimension.
 
-    .. math:: y = \frac{x - \mathbb{E}[x]}{\sqrt{\mathbb{V}[x] + \epsilon}}
-
     References:
        | Layer Normalization (Lei Ba et al., 2016)
        | https://arxiv.org/abs/1607.06450
@@ -79,16 +81,8 @@ class LayerNorm(nn.Module):
         return f"dim={self.dim}"
 
     def forward(self, x: Tensor) -> Tensor:
-        r"""
-        Arguments:
-            x: The input tensor :math:`x`, with shape :math:(*).
-
-        Returns:
-            The standardized tensor :math:`y`, with shape :math:`(*)`.
-        """
-
+        r"""Apply standardization."""
         variance, mean = torch.var_mean(x, dim=self.dim, keepdim=True)
-
         return (x - mean) * torch.rsqrt(variance + self.eps)
 
 
@@ -96,9 +90,9 @@ class SelfAttentionNd(nn.MultiheadAttention):
     r"""Creates an N-dimensional self-attention layer.
 
     Arguments:
-        channels: The number of channels :math:`C`.
-        heads: The number of attention heads.
-        kwargs: Keyword arguments passed to :class:`torch.nn.MultiheadAttention`.
+        channels: Number of channels (C).
+        heads: Number of attention heads.
+        kwargs: Keyword arguments passed to torch.nn.MultiheadAttention.
     """
 
     def __init__(
@@ -108,17 +102,21 @@ class SelfAttentionNd(nn.MultiheadAttention):
         checkpointing: bool = False,
         **kwargs,
     ):
-        super().__init__(embed_dim=channels, num_heads=heads, batch_first=True, **kwargs)
-
+        super().__init__(
+            embed_dim=channels,
+            num_heads=heads,
+            batch_first=True,
+            **kwargs,
+        )
         self.checkpointing = checkpointing
 
     def _forward(self, x: Tensor) -> Tensor:
         r"""
         Arguments:
-            x: The input tensor :math:`x`, with shape :math:`(B, C, L_1, ..., L_N)`.
+            x: Input tensor (B, C, L_1, ..., L_N).
 
         Returns:
-            The ouput tensor :math:`y`, with shape :math:`(B, C, L_1, ..., L_N)`.
+            Output: Tensor (B, C, L_1, ..., L_N).
         """
 
         y = rearrange(x, "B C ...  -> B (...) C")

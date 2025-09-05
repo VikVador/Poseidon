@@ -8,7 +8,6 @@ from torch.optim import Optimizer, lr_scheduler
 
 # isort: split
 from poseidon.config import PATH_MODEL
-from poseidon.data.const import DATASET_REGION, TOY_DATASET_REGION
 from poseidon.diffusion.backbone import PoseidonBackbone
 
 
@@ -20,7 +19,7 @@ def load_backbone(
     best: bool = True,
     backup: bool = False,
 ) -> PoseidonBackbone:
-    r"""Loads a :class:`PoseidonBackbone` model.
+    r"""Loads a PoseidonBackbone model.
 
     Arguments:
         name_model: Name of Backbone model to load.
@@ -41,44 +40,22 @@ def load_backbone(
 
     # Loading configuration files
     path_cfg             = path / name_model / "configurations"
-    path_cfg_variables   = path_cfg / "variables.yml"
     path_cfg_dimensions  = path_cfg / "dimensions.yml"
-    path_cfg_problem     = path_cfg / "problem.yml"
-    path_cfg_unet        = path_cfg / "unet.yml"
-    path_cfg_transformer = path_cfg / "transformer.yml"
-    path_cfg_siren       = path_cfg / "siren.yml"
-
-    with open(path_cfg_variables, "r") as file:
-        variables = yaml.safe_load(file)
+    path_cfg_nn          = path_cfg / "nn.yml"
 
     with open(path_cfg_dimensions, "r") as file:
         dimensions = yaml.safe_load(file)
 
-    with open(path_cfg_problem, "r") as file:
-        problem = yaml.safe_load(file)
-
-    with open(path_cfg_unet, "r") as file:
-        unet = yaml.safe_load(file)
-
-    with open(path_cfg_transformer, "r") as file:
-        transformer = yaml.safe_load(file)
-
-    with open(path_cfg_siren, "r") as file:
-        siren = yaml.safe_load(file)
+    with open(path_cfg_nn, "r") as file:
+        nn = yaml.safe_load(file)
 
     backbone_loaded = PoseidonBackbone(
-        variables=variables["variables"],
+        config_nn=nn,
         dimensions=dimensions["dimensions"],
-        config_unet=unet,
-        config_transformer=transformer,
-        config_siren=siren,
-        config_region=TOY_DATASET_REGION if problem["toy_problem"] else DATASET_REGION,
     )
 
-    # Loading model state into the backbone
     backbone_loaded.load_state_dict(model_ckpt["model_state_dict"])
 
-    # By default, training mode
     return backbone_loaded.train()
 
 

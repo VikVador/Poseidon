@@ -1,4 +1,4 @@
-r"""A collection of tools handling mapping between data representations."""
+r"""Tools for mapping data representations."""
 
 import xarray as xr
 
@@ -12,22 +12,20 @@ from typing import (
 
 # isort: split
 from poseidon.config import PATH_DATA
+from poseidon.data.const import DATASET_REGION, DATASET_VARIABLES
 
 
 def from_tensor_to_indices(
-    variables: Sequence[str],
-    region: Dict[str, slice],
     path: Path = PATH_DATA,
+    region: Dict[str, slice] = DATASET_REGION,
+    variables: Sequence[str] = DATASET_VARIABLES,
 ) -> Dict[str, Tuple[int, int]]:
-    r"""Determine variables position in a stacked tensor.
+    r"""Creates a mapping between variable and indices in a stacked tensor.
 
     Arguments:
-        variables: Variable present in the stacked tensor.
-        region: Region used to extract the data from original dataset.
         path: Path to the original dataset.
-
-    Returns:
-        Mapping dictionary [variable, (pos_start, pos_end)]
+        region: Region on which the data is defined.
+        variables: Variable present in the stacked tensor.
     """
 
     dataset = xr.open_zarr(path)[variables]
@@ -47,23 +45,23 @@ def from_tensor_to_indices(
 
 def from_tensor_to_xarray(
     x: Tensor,
-    variables: Sequence[str],
-    region: Dict[str, slice],
     path: Path = PATH_DATA,
+    region: Dict[str, slice] = DATASET_REGION,
+    variables: Sequence[str] = DATASET_VARIABLES,
 ) -> xr.Dataset:
-    r"""Transform a (batch of) stacked tensor into an :class:`Xarray dataset`.
+    r"""Transform a trajectory into an Xarray dataset.
 
     Arguments:
-        x: Input tensor (C, T, X, Y).
-        variables: Variable present in the stacked tensor.
-        region: Region used to extract the data from original dataset.
+        x: Trajectory (C, T, X, Y).
         path: Path to the original dataset.
+        region: Region on which the data is defined.
+        variables: Variable present in the stacked tensor.
     """
-    assert 4 <= x.ndim < 6, "ERROR - Input tensor must have shape (C, T, X, Y)"
+    assert 4 <= x.ndim < 6, "ERROR - Trajectory must have shape (C, T, X, Y)"
     while x.ndim < 5:
         x = x.unsqueeze(dim=0)
 
-    # Extracting data associated to each variable
+    # Extracting variables
     data_slices = {
         v: x[:, idx_start:idx_end]
         for v, (idx_start, idx_end) in from_tensor_to_indices(
@@ -73,7 +71,7 @@ def from_tensor_to_xarray(
         ).items()
     }
 
-    # Creating Xarray dataset
+    # Creating dataset
     data_arrays = []
     for v, data in data_slices.items():
         data_array = xr.DataArray(

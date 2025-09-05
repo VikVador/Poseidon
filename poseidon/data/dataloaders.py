@@ -3,29 +3,24 @@ r"""Dataloaders."""
 from torch.utils.data import DataLoader
 from typing import (
     Any,
-    Callable,
     Optional,
     Sequence,
     Tuple,
 )
 
 # isort: split
-from poseidon.data.datasets import (
-    PoseidonDataset,
-    get_datasets,
-    get_toy_datasets,
-)
+from poseidon.data.datasets import get_datasets
 
 
 def infinite_dataloader(
     dataloader: DataLoader,
     steps: int,
 ) -> Any:
-    r"""Transforms a basic PyTorch :class:`dataloader` into an 'infinite' :class:`dataloader`.
+    r"""Makes a basic PyTorch dataloader 'infinite'.
 
     Arguments:
-        dataloader: A PyTorch :class:`dataloader`.
-        steps: Maximum number of steps to iterate before infinite loop stops.
+        dataloader: A PyTorch dataloader.
+        steps: Maximum number of iterations before loop stops.
     """
     for _ in range(steps):
         for batch in dataloader:
@@ -35,68 +30,7 @@ def infinite_dataloader(
                 return
 
 
-def get_toy_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    r"""Returns the toy training, validation, and test dataloaders.
-
-    Region:
-        Black Sea Continental Shelf (Surface only).
-
-    Shuffling:
-        Only the training dataset is shuffled (by default).
-
-    Splits:
-        Training: 1995-01-01 to 2017-12-31.
-        Validation: 2020-01-01 to 2020-12-31.
-        Test: 2022-01-01 to 2022-12-31.
-
-    Arguments:
-        trajectory_size: Number of time steps in trajectory
-        variables: Variable names to retain from the dataset.
-        shuffle: List of booleans defining which dataset to shuffle.
-        linspace: Whether to extract samples at linearly spaced intervals.
-        linspace_samples: Number of linearly spaced samples to extract, if `linspace` is True.
-        infinite: Whether to transform dataloaders as infinite iterators or not.
-        steps: If infinite, the maximum number of steps to iterate.
-        kwargs: Keyword arguments passed to the dataloader.
-    """
-    return _get_dataloaders_from_datasets(
-        get_datasets=get_toy_datasets,
-        **kwargs,
-    )
-
-
-def get_dataloaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    r"""Returns the training, validation, and test :class:`dataloader`.
-
-    Region:
-        Black Sea Continental Shelf.
-
-    Shuffling:
-        Only the training dataset is shuffled (by default).
-
-    Splits:
-        Training: 1995-01-01 to 2017-12-31.
-        Validation: 2018-01-01 to 2020-12-31.
-        Test: 2021-01-01 to 2022-12-31.
-
-    Arguments:
-        trajectory_size: Number of time steps in trajectory
-        variables: Variable names to retain from the dataset.
-        shuffle: List of booleans defining which dataset to shuffle.
-        linspace: Whether to extract samples at linearly spaced intervals.
-        linspace_samples: Number of linearly spaced samples to extract, if `linspace` is True.
-        infinite: Whether to transform dataloaders as infinite iterators or not.
-        steps: If infinite, the maximum number of steps to iterate.
-        kwargs: Keyword arguments passed to the dataloader.
-    """
-    return _get_dataloaders_from_datasets(
-        get_datasets=get_datasets,
-        **kwargs,
-    )
-
-
-def _get_dataloaders_from_datasets(
-    get_datasets: Callable[..., Tuple[PoseidonDataset, PoseidonDataset, PoseidonDataset]],
+def get_dataloaders(
     trajectory_size: int = 1,
     variables: Optional[Sequence[str]] = None,
     shuffle: Tuple[bool, bool, bool] = (True, False, False),
@@ -106,17 +40,27 @@ def _get_dataloaders_from_datasets(
     steps: Optional[Sequence[int]] = [None, None, None],
     **kwargs: Any,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    r"""Helper tool to generate dataloaders from datasets.
+    r"""Returns the training, validation, and test dataloaders.
+
+    Shuffling:
+        Only the training dataset is shuffled (by default).
 
     Arguments:
-        get_datasets: A function that returns datasets.
+        trajectory_size: Number of time steps in trajectory.
+        variables: Variable names to retain from the dataset.
+        shuffle: List of booleans defining which dataset to shuffle.
+        linspace: Whether to extract samples at linearly spaced intervals.
+        linspace_samples: Number of linearly spaced samples to extract, if `linspace` is True.
+        infinite: Whether to transform dataloaders as infinite iterators or not.
+        steps: If infinite, the maximum number of steps to iterate.
+        kwargs: Keyword arguments passed to the dataloader.
     """
 
     for inf, stp in zip(infinite, steps):
         if inf:
             assert (
                 stp is not None
-            ), "ERROR - Maximum number of steps needed to create an 'infinite' dataloader."
+            ), "ERROR - Maximum number of iterations needed to create an 'infinite' dataloader."
 
     for lin, lin_s in zip(linspace, linspace_samples):
         if lin:
