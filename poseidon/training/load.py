@@ -50,7 +50,7 @@ def load_backbone(
         nn = yaml.safe_load(file)
 
     backbone_loaded = PoseidonBackbone(
-        config_unet=nn,
+        config_nn=nn,
         dimensions=dimensions["dimensions"],
     )
 

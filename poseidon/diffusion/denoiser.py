@@ -54,7 +54,7 @@ class PoseidonDenoiser(nn.Module):
         c_noise = 1e1     * torch.log(sigma_t)          # Rescaling noise levels
 
         # Estimating (scaled) denoised state
-        return c_skip * x_t + c_out * self.backbone(x_t = c_in * x_t, sigma_t = c_noise, conditioning = cond)
+        return c_skip * x_t + c_out * self.backbone(x_t = c_in * x_t, sigma_t = c_noise, cond = cond)
 
 
 class PoseidonMMPSDenoiser(nn.Module):

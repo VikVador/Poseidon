@@ -12,6 +12,7 @@ from typing import Dict
 
 # isort: split
 from poseidon.config import PATH_MODEL
+from poseidon.data.const import DATASET_VARIABLES
 from poseidon.data.dataloaders import get_dataloaders
 from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.diffusion.denoiser import PoseidonDenoiser
@@ -153,6 +154,7 @@ def training(
     poseidon_save = PoseidonSave(
         path=PATH_MODEL,
         name_model=wandb.run.name,
+        variables=DATASET_VARIABLES,
         dimensions=(B, C, blanket_size, X, Y),
         config_nn=config_nn,
         config_problem=config_problem,
@@ -230,7 +232,7 @@ def training(
         if (step % steps_logging == 0):
 
             wandb.log({
-                "Training/Loss (AoAS)": loss_aoas * steps_gradient_accumulation if step == 0 else loss_aoas,
+                "Training/Loss": loss_aoas * steps_gradient_accumulation if step == 0 else loss_aoas,
                 "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
                 "Training/Step [-]": (step + 1),
                 "Training/Samples Seen [-]": B * (step + 1),
@@ -283,14 +285,14 @@ def training(
                         # Estimating clean trajectories and measuring error
                         v_loss += loss_function(
                             x_0 = x_0,
-                            x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t, conditioning = time),
+                            x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t, cond = time),
                             sigma_t = sigma_t,
                         ).item()
 
                         # Counting the number of samples
                         v_count += 1
 
-                    wandb.log({"Validation/Loss (Averaged)": v_loss / v_count})
+                    wandb.log({"Validation/Loss": v_loss / v_count})
                     del x_0, x_t, sigma_t, time
 
             # Emergency break

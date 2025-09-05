@@ -52,7 +52,8 @@ class PoseidonLoss(nn.Module):
         ).to(DEVICE)
 
         self.weight_levels = rearrange(
-            get_loss_level_weights(mask=self.mask), "B C K X Y -> B (C K X Y)"
+            get_loss_level_weights(mask=generate_trajectory_mask(trajectory_size=blanket_size)),
+            "B C K X Y -> B (C K X Y)",
         ).to(DEVICE)
 
         self.weight_levels = self.weight_levels[:, self.mask[0] == 1]

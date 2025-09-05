@@ -32,10 +32,13 @@ class PoseidonBackbone(nn.Module):
         super().__init__()
 
         self.B, self.C, self.K, self.X, self.Y = dimensions
+
         self.register_buffer("mask", generate_trajectory_mask(trajectory_size=self.K).bool())
+
         self.network = UNet(
             in_channels=self.C,
             out_channels=self.C,
+            cond_channels=self.K,
             **config_nn,
         )
 
@@ -54,7 +57,24 @@ class PoseidonBackbone(nn.Module):
         Returns:
             output: Cleaned tensor (B, C * K * X * Y).
         """
-        x_t = rearrange(x_t, "B (C K X Y) -> B C K X Y", C=self.C, K=self.K, X=self.X, Y=self.Y)
+        x_t = rearrange(
+            x_t,
+            "B (C K X Y) -> B C K X Y",
+            C=self.C,
+            K=self.K,
+            X=self.X,
+            Y=self.Y,
+        )
+
         x_t = torch.where(self.mask.expand_as(x_t), x_t, LAND_VALUE)  # TO BE CHECKED
+
         x_t = self.network(x=x_t, mod=sigma_t, cond=cond)
-        return rearrange(x_t, "B C K X Y -> B (C K X Y)", C=self.C, K=self.K, X=self.X, Y=self.Y)
+
+        return rearrange(
+            x_t,
+            "B C K X Y -> B (C K X Y)",
+            C=self.C,
+            K=self.K,
+            X=self.X,
+            Y=self.Y,
+        )
