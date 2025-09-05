@@ -120,7 +120,6 @@ def training(
             **config_dataloader_additional,
         )
 
-    # State dimensions
     (B, C, _, X, Y) = next(dataloader_training)[0].shape
 
     poseidon_backbone = (
