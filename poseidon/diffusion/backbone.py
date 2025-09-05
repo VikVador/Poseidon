@@ -66,7 +66,7 @@ class PoseidonBackbone(nn.Module):
             Y=self.Y,
         )
 
-        x_t = torch.where(self.mask.expand_as(x_t), x_t, LAND_VALUE)  # TO BE CHECKED
+        x_t = torch.where(self.mask.expand_as(x_t), x_t, LAND_VALUE)
 
         x_t = self.network(x=x_t, mod=sigma_t, cond=cond)
 
