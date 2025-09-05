@@ -10,7 +10,7 @@ from dawgz import job, schedule
 from poseidon.config import PATH_MODEL
 from poseidon.diagnostics.const import DATES_PRIOR
 from poseidon.diagnostics.generate import generate_unconditional
-from poseidon.training.parser import load_configuration
+from poseidon.training.tools import load_configuration
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Launch a validation pipeline.")

@@ -1,4 +1,4 @@
-r"""General tools."""
+r"""A collection of tools designed for data module."""
 
 import ast
 import numpy as np

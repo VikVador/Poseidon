@@ -1,9 +1,8 @@
-r"""A collection of mathematical tools.
+r"""Mathematical tools.
 
 Adapted from:
   | zuko library (François Rozet)
   | https://github.com/probabilists/zuko/
-
 """
 
 import torch

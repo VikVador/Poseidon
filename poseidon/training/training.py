@@ -12,13 +12,7 @@ from typing import Dict
 
 # isort: split
 from poseidon.config import PATH_MODEL
-from poseidon.data.const import (
-    DATASET_REGION,
-    DATASET_VARIABLES,
-    TOY_DATASET_REGION,
-    TOY_DATASET_VARIABLES,
-)
-from poseidon.data.dataloaders import get_dataloaders, get_toy_dataloaders
+from poseidon.data.dataloaders import get_dataloaders
 from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.loss import PoseidonLoss
@@ -42,9 +36,7 @@ def training(
     config_training: Dict,
     config_optimizer: Dict,
     config_scheduler: Dict,
-    config_unet: Dict,
-    config_transformer: Dict,
-    config_siren: Dict,
+    config_nn: Dict,
     config_wandb: Dict,
     config_cluster: Dict,
 ) -> None:
@@ -56,9 +48,7 @@ def training(
         config_training: Configuration for the training.
         config_optimizer: Configuration for the optimizer.
         config_scheduler: Configuration for the scheduler.
-        config_unet: Configuration of the unet.
-        config_transformer: Configuration of the transformer.
-        config_siren: Configuration of the siren network.
+        config_nn: Configuration of the neural network.
         config_wandb: Configuration for Weights & Biases.
         config_cluster: Configuration of the cluster.
     """
@@ -66,7 +56,6 @@ def training(
     # Avoid deadlocks between training and validation
     dask.config.set(scheduler="synchronous")
 
-    # Initialize Weights & Biases
     wandb.init(
         **config_wandb,
         config={
@@ -75,20 +64,17 @@ def training(
             "Training": config_training,
             "Optimizer": config_optimizer,
             "Scheduler": config_scheduler,
-            "UNet": config_unet,
-            "Transformer": config_transformer,
-            "Siren": config_siren,
+            "Neural Network": config_nn,
             "Cluster": config_cluster,
             "Scores": wandb_get_hyperparameter_score([
                 config_dataloader,
                 config_training,
                 config_optimizer,
-                config_unet,
+                config_nn,
             ]),
         },
     )
 
-    # Unpacking configurations
     (
         blanket_size,
         sigma_min,
@@ -100,8 +86,6 @@ def training(
         model_saving,
         model_checkpoint_name,
         model_checkpoint_version,
-        black_sea_variables,
-        black_sea_region,
     ) = (
         config_training["blanket_size"],
         config_training["sigma_min"],
@@ -113,8 +97,6 @@ def training(
         config_problem["model_saving"],
         config_problem["model_checkpoint_name"],
         config_problem["model_checkpoint_version"],
-        TOY_DATASET_VARIABLES if config_problem["toy_problem"] else DATASET_VARIABLES,
-        TOY_DATASET_REGION    if config_problem["toy_problem"] else DATASET_REGION,
     )
 
     config_dataloader_additional = {
@@ -128,33 +110,22 @@ def training(
         ],
     }
 
-    # Initializing dataloaders
-    dataloader_training, dataloader_validation, _ = (
-        get_toy_dataloaders(
+    # =========================================================
+    #                     INITIALIZATION
+    # =========================================================
+    dataloader_training, dataloader_validation, _ = get_dataloaders(
             trajectory_size = blanket_size,
             **config_dataloader,
             **config_dataloader_additional,
         )
-        if config_problem["toy_problem"]
-        else get_dataloaders(
-            trajectory_size = blanket_size,
-            **config_dataloader,
-            **config_dataloader_additional,
-        )
-    )
 
-    # Dimensions of the state
-    (B, C, T, X, Y) = next(dataloader_training)[0].shape
+    # State dimensions
+    (B, C, _, X, Y) = next(dataloader_training)[0].shape
 
-    # Initializing a Backbone
     poseidon_backbone = (
         PoseidonBackbone(
+            config_nn=config_nn,
             dimensions=(B, C, blanket_size, X, Y),
-            variables=black_sea_variables,
-            config_unet=config_unet,
-            config_transformer=config_transformer,
-            config_siren=config_siren,
-            config_region=black_sea_region,
         )
         if model_checkpoint_name is None
         else load_backbone(
@@ -163,7 +134,6 @@ def training(
         )
     )
 
-    # Initializing a Denoiser & Logging number of trainable parameters
     poseidon_denoiser = PoseidonDenoiser(
         backbone=poseidon_backbone.to(DEVICE),
     )
@@ -174,33 +144,26 @@ def training(
         ),
     })
 
-    # Initializing multi-GPU support
     if 1 < torch.cuda.device_count():
         poseidon_denoiser = torch.nn.DataParallel(
             poseidon_denoiser,
             device_ids=DEVICE_LIST,
         ).to(DEVICE)
 
-    # Initializing the saving tool
     poseidon_save = PoseidonSave(
         path=PATH_MODEL,
         name_model=wandb.run.name,
         dimensions=(B, C, blanket_size, X, Y),
-        variables=black_sea_variables,
-        config_unet=config_unet,
-        config_transformer=config_transformer,
-        config_siren=config_siren,
+        config_nn=config_nn,
         config_problem=config_problem,
         saving=model_saving,
     )
 
-    # Initializing the optimizer
     optimizer = get_optimizer(
         nn_parameters=poseidon_denoiser.parameters(),
         config_optimizer=config_optimizer,
     )
 
-    # Initializing the schedulers and loss function
     scheduler_lr, scheduler_time, scheduler_noise, loss_function = (
         get_scheduler(
             optimizer=optimizer,
@@ -213,17 +176,12 @@ def training(
             sigma_max=sigma_max
         ),
         PoseidonLoss(
-            variables=black_sea_variables,
-            region=black_sea_region,
             blanket_size=blanket_size,
-            use_mask=True,
         ),
     )
 
-    # initializing the gradient scaler
     scaler = GradScaler(device=DEVICE)
 
-    # Initializing tools to track the training
     loss_aoas, progress_bar = (
         0,
         tqdm(
@@ -253,7 +211,7 @@ def training(
         x_0, x_t, sigma_t, time = x_0.to(DEVICE), x_t.to(DEVICE), sigma_t.to(DEVICE), time.to(DEVICE)
 
         # Estimating clean trajectories and measuring error
-        x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t, conditioning = time)
+        x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t, cond = time)
 
         loss = loss_function(
             x_0 = x_0,

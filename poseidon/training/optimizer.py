@@ -52,17 +52,13 @@ def safe_gd_step(
 ) -> Tensor:
     r"""Applies a gradient descent (GD) optimization step.
 
-    To prevent invalid parameters, steps are skipped if not-a-number (NaN) or infinite
-    values are found in the gradient. This feature requires CPU-GPU synchronization,
-    which could be a bottleneck for some applications.
-
     Arguments:
         optimizer: An optimizer.
         grad_clip: The maximum gradient norm. If :py:`None`, gradients are not clipped.
         scaler: A gradient scaler for AMP training. It is considered already applied.
 
     Returns:
-        The unclipped gradient norm.
+        Unclipped gradient norm.
     """
 
     if scaler:
@@ -85,5 +81,4 @@ def safe_gd_step(
     elif norm.isfinite():
         optimizer.step()
 
-    # Reseting gradients
     optimizer.zero_grad()

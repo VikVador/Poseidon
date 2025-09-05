@@ -1,4 +1,4 @@
-r"""A collection of (random) tools designed to help throughout the project."""
+r"""A collection of tools designed to help throughout the project."""
 
 import psutil
 import torch
@@ -7,22 +7,9 @@ from typing import Dict, Sequence
 
 
 def wandb_get_hyperparameter_score(configs: Sequence[Dict]) -> Dict[str, float]:
-    r"""Computes an importance score for each hyperparameter.
-
-    Information:
-        By logging these scores on Weights & Biases, it is easily possible to
-        use the 'parameter importance' feature to identify the most important
-        hyperparameters that influence the model's performance.
-
-    Arguments:
-        configs: A sequence of configuration dictionaries containing hyperparameters.
-
-    Returns:
-        A dictionary mapping each hyperparameter to its importance score.
-    """
+    r"""Define an importance score for each hyperparameter."""
 
     scores = {}
-
     for cfg in configs:
         for k, v in cfg.items():
             if k == "batch_size":
