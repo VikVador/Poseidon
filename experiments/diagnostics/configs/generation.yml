@@ -13,10 +13,12 @@ Prior:
   "members" : [32]
 
 Posterior: 
-  "steps"        : [64]
-  "members"      : [32]
-  "iterations"   : [1]
-  "covariance_y" : [0.001]
+  "steps"             : [64]
+  "members"           : [32]
+  "trajectory_size"   : [1]
+  "iterations"        : [1]
+  "covariance_y"      : [0.001]
+  "tweedie_covariance": [True]
 
 # ===== Partitions =====
 #

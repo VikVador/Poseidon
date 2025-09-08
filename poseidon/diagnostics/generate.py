@@ -8,61 +8,36 @@ from typing import Dict
 
 # isort: split
 from poseidon.config import PATH_DATA, PATH_MODEL
-from poseidon.data.const import (
-    DATASET_REGION,
-    DATASET_VARIABLES,
-    TOY_DATASET_REGION,
-    TOY_DATASET_VARIABLES,
-)
 from poseidon.data.datasets import PoseidonDataset
+from poseidon.data.mappings import from_tensor_to_progressive_time
 from poseidon.data.mask import generate_trajectory_mask
-from poseidon.diagnostics.const import DATES_POSTERIOR
-from poseidon.diagnostics.tools import create_day_index_mapping
 from poseidon.diffusion.denoiser import PoseidonDenoiser, PoseidonMMPSDenoiser
 from poseidon.diffusion.observators import A_surface
 from poseidon.diffusion.sampler import LMSSampler
 from poseidon.diffusion.schedulers import PoseidonNoiseScheduler
-from poseidon.diffusion.tools import PoseidonTrajectoryWrapper
+from poseidon.diffusion.wrappers import PoseidonTrajectoryWrapper
 from poseidon.training.load import load_backbone
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def generate_unconditional(index: int, config: Dict, date: str = None) -> None:
-    r"""Generates an unconditional nowcast and saves it.
-
-    Information:
-        This function should be paired with a script that launches the generation on multiple GPUs.
+def generate_from_prior(date: str, config: Dict) -> None:
+    r"""Generates an unconditional ensemble.
 
     Arguments:
-        index: ID of nowcast to generate.
+        date: Ensemble date (MM-DD).
         config: Configuration for generation.
-        date: Date for which to generate the nowcast (YYYY-MM-DD).
     """
 
-    # Path to the model
-    path_folder = PATH_MODEL / config["model"] / "nowcasts" / "unconditional"
-
-    # Additionnal folder
-    path_folder = path_folder / "random" if date is None else path_folder / date
+    # Access to model folder
+    path_folder = PATH_MODEL / config["model"] / "generation" / "prior" / date
     if not os.path.exists(path_folder):
         os.makedirs(path_folder)
 
-    # Name of the nowcast to save
-    fname = (
-        path_folder / f"nowcast_unconditional_{index}.pt"
-        if date is None
-        else path_folder / "nowcast_unconditional.pt"
-    )
+    # Name of the file
+    fname = path_folder / "ensemble_prior.pt"
 
-    # Loading mask of the Black Sea
-    mask_bs = generate_trajectory_mask(
-        variables=TOY_DATASET_VARIABLES if config["toy_problem"] else DATASET_VARIABLES,
-        region=TOY_DATASET_REGION if config["toy_problem"] else DATASET_REGION,
-        trajectory_size=1,
-    )
-
-    # Loading the neural network denoiser
+    # Loading corresponding model
     model = (
         PoseidonDenoiser(
             backbone=load_backbone(name_model=config["model"], best=config["best"]),
@@ -97,84 +72,64 @@ def generate_unconditional(index: int, config: Dict, date: str = None) -> None:
         order=3,
     )
 
-    # Used to create the mapping between dates and indexes
-    map_d_i = create_day_index_mapping()
-
     # Generating a random conditioning (i.e. year progression for a nowcasting)
     conditioning = (
-        torch.randint(1, 365, (1, 1)) / 365
-        if date is None
-        else torch.ones((1, 1)) * map_d_i[date[5:]] / 365
-    ).to(DEVICE)
+        from_tensor_to_progressive_time(torch.tensor([[2000, int(date[:2]), int(date[3:]), 12]]))
+        .unsqueeze(0)
+        .to(DEVICE)
+    )
 
-    # Generating a nowcast
-    nowcast = sampler.forward(
-        trajectory_size=1,
-        forecast_size=config["nb_nowcasts"],
+    # Generating an ensemble
+    ensemble = sampler.forward(
+        trajectory_size=K,
+        ensemble_size=config["members"],
         steps=config["steps"],
         conditioning=conditioning,
     ).cpu()
 
+    # Loading Black Sea mask
+    mask_bs = generate_trajectory_mask(trajectory_size=K)
+
     # Masking the nowcast
-    nowcast[:, mask_bs[0] == 0] = np.nan
+    ensemble[:, mask_bs[0] == 0] = np.nan
 
     # Saving the nowcast
-    torch.save(nowcast, fname)
+    torch.save(ensemble, fname)
 
 
-def generate_conditional(index: int, config: Dict) -> None:
-    r"""Generates conditional nowcasts and save them.
-
-    Information:
-        This function should be paired with a script that launches the generation on multiple GPUs.
+def generate_from_posterior(date: str, config: Dict) -> None:
+    r"""Generates a conditional ensemble.
 
     Arguments:
-        index: Index of month from which sample a ground truth.
+        date: Ensemble date (YYYY-MM-DD).
         config: Configuration for generation.
     """
 
-    # Initialization
-    toy_problem = config["toy_problem"]
-    region = TOY_DATASET_REGION if toy_problem else DATASET_REGION
-    variables = TOY_DATASET_VARIABLES if toy_problem else DATASET_VARIABLES
-    path_folder = (
-        PATH_MODEL / config["model"] / "nowcasts" / "conditional" / DATES_POSTERIOR[index]
-    )
+    # Access to model folder
+    path_folder = PATH_MODEL / config["model"] / "generation" / "posterior" / date
     if not os.path.exists(path_folder):
         os.makedirs(path_folder)
 
-    # Name of the nowcast to save
-    fname = path_folder / "nowcast_conditional.pt"
+    # Name of the file
+    fname = path_folder / "ensemble_posterior.pt"
 
-    # Loading mask of the Black Sea
-    mask_bs = generate_trajectory_mask(
-        variables=variables,
-        region=region,
-        trajectory_size=1,
-    )
-
-    # Loading sample
+    # Loading ground truth sample
     x, time = PoseidonDataset(
         path=PATH_DATA,
-        date_start=DATES_POSTERIOR[index],
-        date_end=DATES_POSTERIOR[index],
-        variables=variables,
-        region=region,
+        date_start=date,
+        date_end=date,
     )[0]
 
     # Observation model used to generate the nowcast
-    observator = A_surface(
-        variables=variables,
-        region=region,
-    )
+    observator = A_surface()
 
     # Generating observation
     y = observator(x)
 
     # Pushing to GPU
-    y, time = y.cuda(), time.unsqueeze(0).cuda()
+    y, conditioning = y.cuda(), time.unsqueeze(0).cuda()
 
-    # Loading the neural network denoiser
+    # Loading corresponding model
     model = (
         PoseidonDenoiser(
             backbone=load_backbone(name_model=config["model"], best=config["best"]),
@@ -204,7 +159,7 @@ def generate_conditional(index: int, config: Dict) -> None:
         y=y,
         A=observator,
         cov_y=config["covariance_y"],
-        tweedie_covariance=True,
+        tweedie_covariance=["tweedie_covariance"],
         iterations=config["iterations"],
     )
 
@@ -219,16 +174,19 @@ def generate_conditional(index: int, config: Dict) -> None:
         order=3,
     )
 
-    # Generating a nowcast
-    nowcast = sampler.forward(
-        trajectory_size=1,
-        forecast_size=config["nb_nowcasts"],
+    # Generating an ensemble
+    ensemble = sampler.forward(
+        trajectory_size=config["trajectory_size"],
+        ensemble_size=config["members"],
         steps=config["steps"],
-        conditioning=time,
-    )
+        conditioning=conditioning,
+    ).cpu()
+
+    # Loading Black Sea mask
+    mask_bs = generate_trajectory_mask(trajectory_size=K)
 
     # Masking the nowcast
-    nowcast[:, mask_bs[0] == 0] = np.nan
+    ensemble[:, mask_bs[0] == 0] = np.nan
 
     # Saving the nowcast
-    torch.save(nowcast, fname)
+    torch.save(ensemble, fname)
