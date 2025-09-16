@@ -59,9 +59,15 @@ class PoseidonDataset(Dataset):
         assert_date_format(date_start)
         assert_date_format(date_end)
 
-        self.dataset = xr.open_zarr(path).sel(time=slice(date_start, date_end))
-        self.dataset = self.dataset[variables] if variables else self.dataset
-        self.dataset = self.dataset.isel(**region) if region else self.dataset
+        # Loading dataset (handles duplicates in time)
+        with dask.config.set(**{"array.slicing.split_large_chunks": True}):
+            self.dataset = (
+                xr.open_zarr(path)
+                .sortby("time")
+                .drop_duplicates(dim="time", keep="first")
+                .sel(time=slice(date_start, date_end))[variables]
+                .isel(**region)
+            )
 
         self.trajectory_size = trajectory_size
         self.linspace = linspace

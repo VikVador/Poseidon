@@ -101,7 +101,7 @@ if __name__ == "__main__":
                     "model": args.model,
                     "best": args.version,
                     **config_noise,
-                    **config_sampling_prior,
+                    **config_sampling_posterior,
                 }
             )
 
