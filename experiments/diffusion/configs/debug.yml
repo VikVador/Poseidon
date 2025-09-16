@@ -1,5 +1,5 @@
 # ====================================
-#          P O S E I D O N
+#           P O S E I D O N
 # ====================================
 #
 # ===== Cluster =====
@@ -22,8 +22,8 @@ Training:
     "mode":    ["disabled"]
 
   config_problem:
-    "model_checkpoint_name":    ["laced-puddle-18"]
-    "model_checkpoint_version": ["last"]
+    "model_checkpoint_name":    [null]
+    "model_checkpoint_version": [null]
     "model_saving":             [False]
 
   config_scheduler:
