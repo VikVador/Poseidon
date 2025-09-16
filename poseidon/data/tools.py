@@ -9,7 +9,6 @@ from typing import Dict, Sequence
 from poseidon.config import (
     PATH_GRID,
     PATH_PTRC,
-    SIMULATION_DATA,
 )
 
 
@@ -29,7 +28,6 @@ def generate_paths() -> Dict[str, Sequence[str]]:
         biogeochemistry_data = ast.literal_eval(file.read())
     paths = {}
     for date_month in physics_data:
-        paths_phys_and_bio = physics_data[date_month] + biogeochemistry_data[date_month]
-        paths[date_month] = [SIMULATION_DATA / p.lstrip("/") for p in paths_phys_and_bio]
+        paths[date_month] = physics_data[date_month] + biogeochemistry_data[date_month]
 
     return paths

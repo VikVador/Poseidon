@@ -96,7 +96,7 @@ if __name__ == "__main__":
         @job(array=len(DIAGNOSTICS_DATES_POSTERIOR), account = config_cluster["account"], **config_cluster["sampling_posterior"])
         def GEN_POS(i: int):
             generate_from_posterior(
-                date = DIAGNOSTICS_DATES_PRIOR[i],
+                date = DIAGNOSTICS_DATES_POSTERIOR[i],
                 config = {
                     "model": args.model,
                     "best": args.version,

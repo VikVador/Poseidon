@@ -4,43 +4,50 @@ from pathlib import Path
 
 # fmt: off
 #
-# ----- Local
-#
-LOCAL = Path("/gpfs/home/acad/ulg-mast/vmangele/")
-
 # ----- Simulation
 #
 SIMULATION      = Path("/gpfs/projects/acad/bsmfc/nemo4.2.0/")
 SIMULATION_DATA = SIMULATION / "BSFS_BIO" / "output_HR001"
 SIMULATION_MASK = SIMULATION / "BSFS"     / "mesh_mask.nc_new59_CMCC_noAzov"
 
-# ----- MAST (Database)
+# ----- Main Folders
 #
-PATH_MASTDB = Path("/gpfs/scratch/acad/bsmfc/mastdb/")
+# Personnal
+PATH_MAIN_LOCAL = Path("/gpfs/home/acad/ulg-mast/vmangele/")
 
-# ----- Poseidon
+# MAST-DB (non-wiping)
+PATH_MAIN_PROJECT = Path("/gpfs/projects/acad/bsmfc/Obs/mastdb/vmangele/")
+
+# Scratch (wiping)
+PATH_MAIN_SCRATCH = Path("/gpfs/scratch/acad/bsmfc/vmangele/")
+
+# ======================================
+#           P O S E I D O N
+# ======================================
 #
-SCRATCH     = Path("/gpfs/scratch/acad/bsmfc/victor/")
-POSEIDON    = SCRATCH  / "poseidon"
-
-PATH_DATA  = SCRATCH  / "data"       / "deep_learning_black_sea_3D_1995_2022.zarr"
-PATH_OBS   = SCRATCH  / "data"       / "observations"
-PATH_STAT  = POSEIDON / "statistics" / "statistics.zarr"
-PATH_PTRC  = POSEIDON / "paths"      / "ptrc_T.txt"
-PATH_GRID  = POSEIDON / "paths"      / "grid_T.txt"
-PATH_MESH  = POSEIDON / "mesh.zarr"
-PATH_MODEL = POSEIDON / "models"
-
-PATH_MASKS = POSEIDON / "masks"
-
-PATH_MASK_B = PATH_MASKS  / "mask_black_sea.zarr"
-PATH_MASK_V = PATH_MASKS  / "mask_variables.zarr"
-PATH_MASK_O = [PATH_MASKS / "observators" / f"mask_shelf_{i}.pt" for i in range(1, 5)]
-
-# ----- Datasets & Observations
+# ----- Main Folders
 #
-PATH_NOWCASTS = LOCAL / "poseidon/metrics/datasets/"
+PATH_POS_LOCAL   = PATH_MAIN_LOCAL   / "poseidon"
+PATH_POS_PROJECT = PATH_MAIN_PROJECT / "poseidon"
+PATH_POS_SCRATCH = PATH_MAIN_SCRATCH / "poseidon"
 
+# ----- Others
+#
+PATH_MODEL  = PATH_POS_SCRATCH / "models"
+PATH_PTRC   = PATH_POS_PROJECT / "paths"    / "ptrc_T.txt"
+PATH_GRID   = PATH_POS_PROJECT / "paths"    / "grid_T.txt"
+PATH_OBS    = PATH_POS_PROJECT / "datasets" / "observations"
+PATH_MESH   = PATH_POS_PROJECT / "datasets" / "structure" / "mesh_black_sea.zarr"
+PATH_MASK_B = PATH_POS_PROJECT / "datasets" / "structure" / "mask_black_sea.zarr"
+PATH_MASK_V = PATH_POS_PROJECT / "datasets" / "structure" / "mask_variables.zarr"
+PATH_STAT   = PATH_POS_PROJECT / "datasets" / "statistics" / "statistics_black_sea_HR001_1980_2017.zarr"
+
+# ----- Dataset | Deep Learning
+#
+PATH_DATA = PATH_POS_SCRATCH / "datasets" / "deep_learning_black_sea_HR001_1980_2023.zarr"
+
+# ----- Dataset | Real Observations
+#
 PATH_OBSERVATIONS_FLOATS = {
     "shelf": {
         "oxygen":      PATH_OBS / "observations_1980_2025_floats_oxygen_shelf.zarr",
