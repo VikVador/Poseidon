@@ -2,6 +2,10 @@ r"""Global constants for diagnostics."""
 
 # fmt: off
 #
+HYPOXIA_THRESHOLDS = [
+    63.0, 65.0, 70.0, 75.0, 80.0, 85.0
+]
+
 DIAGNOSTICS_DATES_PRIOR = [
     "01-01", "01-08", "01-15", "01-22",
     "02-01", "02-08", "02-15", "02-22",

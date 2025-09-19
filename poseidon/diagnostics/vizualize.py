@@ -1,4 +1,4 @@
-r"""Visualisation tools."""
+r"""Tools for visualizations."""
 
 import matplotlib.pyplot as plt
 import numpy as np

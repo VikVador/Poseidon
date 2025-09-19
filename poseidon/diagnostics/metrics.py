@@ -1,407 +1,276 @@
-r"""Tools to compute distribution metrics and save results."""
+r"""Tools to compute diagnostics."""
 
 import numpy as np
 import os
 import torch
 import xarray as xr
 
-from datetime import datetime, timedelta
-from scipy.stats import wasserstein_distance
-
-# isort: split
+from einops import rearrange
 from poseidon.config import PATH_DATA, PATH_MODEL, PATH_STAT
-from poseidon.data.const import (
-    TOY_DATASET_REGION,
-    TOY_DATASET_VARIABLES,
-    TOY_DATASET_VARIABLES_OCEAN,
-    TOY_DATASET_VARIABLES_SURFACE,
+from poseidon.data.const import DATASET_REGION
+from scipy.stats import wasserstein_distance
+from sklearn.metrics import (
+    balanced_accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
 )
-from poseidon.data.dataloaders import get_toy_dataloaders
+from typing import Dict
+
+# fmt: off
+#
+# isort: split
+from poseidon.data.const import DATASET_DATES_TRAINING
+from poseidon.data.dataloaders import get_dataloaders
 from poseidon.data.datasets import PoseidonDataset
-from poseidon.data.mappings import from_tensor_to_xarray
-from poseidon.diagnostics.const import TRANSLATION
+from poseidon.data.mask import generate_trajectory_mask
 
 
-def next_day(date: str):
-    r"""Helper tool to compute date of following day."""
-    date_obj = datetime.strptime(date, "%Y-%m-%d")
-    next_date_obj = date_obj + timedelta(days=1)
-    return next_date_obj.strftime("%Y-%m-%d")
+def compute_spread_skill(date: str, config: Dict) -> None:
+    r"""Computes the spread-skill ratio between an ensemble and the truth.
 
+    Arguments:
+        date: Ensemble date (YYYY-MM-DD).
+        config: Configuration for computing metric.
+    """
 
-def computing_metrics_prior(date: str, config: dict):
-    r"""Computes prior metrics for used in paper."""
+    # Access path to save results
+    path_spread_skill = PATH_MODEL / config["model"] / "diagnostics" / "spread_skill" / date
+    if not os.path.exists(path_spread_skill):
+            os.makedirs(path_spread_skill)
 
-    # ==================
-    #   Loading Data
-    # ==================
-    #
-    # P(X)
-    dl_train, _, _ = get_toy_dataloaders(batch_size=config["p(x)_samples"])
-    x_prior, _ = next(iter(dl_train))
+    # Access path to ensembles
+    path_ensemble_prior     = PATH_MODEL / config["model"] / "generation" / "prior"     / date[5:] / "ensemble_prior.pt"
+    path_ensemble_posterior = PATH_MODEL / config["model"] / "generation" / "posterior" / date     / "ensemble_posterior.pt"
 
-    # P(X|d)
-    dates_start, dates_end = (
-        [f"{year}-{date[5:]}" for year in range(1995, 2018)],
-        [next_day(f"{year}-{date[5:]}") for year in range(1995, 2018)],
-    )
+    # Generates a mask of the Black Sea
+    mask_bs = generate_trajectory_mask(trajectory_size=1)[0]
 
+    # Loading the data
+    x_ens_prior     = torch.load(path_ensemble_prior,     weights_only=True, map_location="cpu")
+    x_ens_posterior = torch.load(path_ensemble_posterior, weights_only=True, map_location="cpu")
+    x_truth, _      = next(iter(PoseidonDataset(
+                            path=PATH_DATA,
+                            date_start=date,
+                            date_end=date)))
+
+    # Masking the data
+    x_truth[mask_bs == 0]            = np.nan
+    x_ens_prior[:, mask_bs == 0]     = np.nan
+    x_ens_posterior[:, mask_bs == 0] = np.nan
+
+    # Computing spread
+    spread_prior     = torch.sqrt(torch.nanmean(torch.var(x_ens_prior,     dim=0, correction=1), dim=(1, 2, 3)))
+    spread_posterior = torch.sqrt(torch.nanmean(torch.var(x_ens_posterior, dim=0, correction=1), dim=(1, 2, 3)))
+
+    # Computing ensemble mean
+    x_ens_prior_mean = torch.nanmean(x_ens_prior, dim=0)
+    x_ens_post_mean  = torch.nanmean(x_ens_posterior, dim=0)
+
+    # Computing skill
+    skill_prior     = torch.sqrt(torch.nanmean((x_truth - x_ens_prior_mean).pow(2), dim=(1, 2, 3)))
+    skill_posterior = torch.sqrt(torch.nanmean((x_truth - x_ens_post_mean).pow(2),  dim=(1, 2, 3)))
+
+    # Number of ensemble members
+    M_prior, M_posterior = x_ens_prior.shape[0], x_ens_posterior.shape[0]
+
+    # Computing spread-skill ratio
+    ssr_prior     = torch.sqrt(torch.tensor(1 + 1 / M_prior))     * (spread_prior     / skill_prior)
+    ssr_posterior = torch.sqrt(torch.tensor(1 + 1 / M_posterior)) * (spread_posterior / skill_posterior)
+
+    # Saving the results
+    torch.save(ssr_prior,        path_spread_skill / "ssr_prior.pt")
+    torch.save(skill_prior,      path_spread_skill / "skill_prior.pt")
+    torch.save(spread_prior,     path_spread_skill / "spread_prior.pt")
+    torch.save(ssr_posterior,    path_spread_skill / "ssr_posterior.pt")
+    torch.save(skill_posterior,  path_spread_skill / "skill_posterior.pt")
+    torch.save(spread_posterior, path_spread_skill / "spread_posterior.pt")
+
+def compute_distance(date: str, config: Dict) -> None:
+    r"""Computes a distance metric between multiple distributions.
+
+    Distributions:
+        P(X|d), P_θ(X|d) and P(X).
+
+    Arguments:
+        date: Prior distribution date (MM-DD).
+        config: Configuration for computing distance metric.
+    """
+
+    # Access path to save results
+    path_distance = PATH_MODEL / config["model"] / "diagnostics" / "distance" / date
+    if not os.path.exists(path_distance):
+            os.makedirs(path_distance)
+
+    # Access path to ensembles
+    path_ensemble_prior = PATH_MODEL / config["model"] / "generation" / "prior" / date / "ensemble_prior.pt"
+
+    # Mask of the Black Sea
+    mask_bs = generate_trajectory_mask(trajectory_size=1)[0]
+
+    # Extracting training years bounds
+    year_start, year_end = int(DATASET_DATES_TRAINING[0][:4]), int(DATASET_DATES_TRAINING[1][:4])
+
+    # Stores P(X|d)
     x_prior_d = []
-    for ds, de in zip(dates_start, dates_end):
-        dataset = PoseidonDataset(
-            path=PATH_DATA,
-            date_start=ds,
-            date_end=de,
-            variables=TOY_DATASET_VARIABLES,
-            region=TOY_DATASET_REGION,
+
+    for y in range(year_start, year_end):
+
+        # Current date of sample
+        current_date = f"{y}-{date}"
+
+        # Adding sample
+        x_prior_d.append(next(iter(PoseidonDataset(path=PATH_DATA, date_start=current_date, date_end=current_date)))[0])
+
+    # Loading samples
+    x_prior_d       = torch.stack(x_prior_d, dim = 0)
+    x_prior         = next(iter(get_dataloaders(batch_size = 2)[0]))[0] # TO BE CHANGED
+    x_prior_d_theta = torch.load(path_ensemble_prior, weights_only=True, map_location="cpu")
+
+    # Sub-sampling distributions
+    x_prior_d_even, x_prior_d_odd = x_prior_d[::2], x_prior_d[1::2]
+
+    # Masking the land
+    x_prior[:, mask_bs == 0]         = np.nan
+    x_prior_d_even[:, mask_bs == 0]  = np.nan
+    x_prior_d_odd[:, mask_bs == 0]   = np.nan
+    x_prior_d_theta[:, mask_bs == 0] = np.nan
+
+    # Stores distance metric
+    distances = []
+
+    for l in range(x_prior.shape[1]):
+
+        # Extracting level features
+        x_prior_l, x_prior_d_l, x_prior_d_even_l, x_prior_d_odd_l, x_prior_d_theta_l = (
+            x_prior[:, l].flatten(),
+            x_prior_d[:, l].flatten(),
+            x_prior_d_even[:, l].flatten(),
+            x_prior_d_odd[:, l].flatten(),
+            x_prior_d_theta[:, l].flatten(),
         )
 
-        sample, _ = next(iter(dataset))
-        x_prior_d.append(sample)
-
-    x_prior_d = torch.stack(x_prior_d)
-
-    # P(X|d)_1 & P(X|d)_2
-    idx_even, idx_odd = (
-        [i for i in range(x_prior_d.shape[0]) if i % 2 == 0],
-        [i for i in range(x_prior_d.shape[0]) if i % 2 == 1],
-    )
-
-    x_prior_d_even, x_prior_d_odd = (x_prior_d[idx_even].clone(), x_prior_d[idx_odd].clone())
-
-    # P(X|d)_theta
-    x_prior_d_theta = torch.load(
-        PATH_MODEL
-        / config["model"]
-        / "nowcasts"
-        / "unconditional"
-        / date
-        / "nowcast_unconditional.pt",
-        weights_only=False,
-    )
-
-    # ==================
-    #    Wasserstein
-    # ==================
-    #
-    # Transforming the data to xarray
-    ds_x_prior = from_tensor_to_xarray(
-        x_prior,
-        variables=TOY_DATASET_VARIABLES,
-        region=TOY_DATASET_REGION,
-    )
-    ds_x_prior_d = from_tensor_to_xarray(
-        x_prior_d,
-        variables=TOY_DATASET_VARIABLES,
-        region=TOY_DATASET_REGION,
-    )
-    ds_x_prior_d_even = from_tensor_to_xarray(
-        x_prior_d_even,
-        variables=TOY_DATASET_VARIABLES,
-        region=TOY_DATASET_REGION,
-    )
-    ds_x_prior_d_odd = from_tensor_to_xarray(
-        x_prior_d_odd,
-        variables=TOY_DATASET_VARIABLES,
-        region=TOY_DATASET_REGION,
-    )
-    ds_x_prior_d_theta = from_tensor_to_xarray(
-        x_prior_d_theta,
-        variables=TOY_DATASET_VARIABLES,
-        region=TOY_DATASET_REGION,
-    )
-
-    for v in TOY_DATASET_VARIABLES_OCEAN:
-        # Displaying information over terminal
-        print(f"Processing variable: {v}")
-
-        # Extracting the associated data (removing time axis)
-        v_x_prior = ds_x_prior[v].values[:, :, 0]
-        v_x_prior_d = ds_x_prior_d[v].values[:, :, 0]
-        v_x_prior_d_even = ds_x_prior_d_even[v].values[:, :, 0]
-        v_x_prior_d_odd = ds_x_prior_d_odd[v].values[:, :, 0]
-        v_x_prior_d_theta = ds_x_prior_d_theta[v].values[:, :, 0]
-
-        # Displaying information over terminal
-        print(f"Analyzing Variable: {TRANSLATION[v]}")
-        print(f"  prior_v shape: {v_x_prior.shape}")
-        print(f"  prior_daily_v shape: {v_x_prior_d.shape}")
-        print(f"  prior_daily_v_even shape: {v_x_prior_d_even.shape}")
-        print(f"  prior_daily_v_odd shape: {v_x_prior_d_odd.shape}")
-        print(f"  prior_daily_NN_v shape: {v_x_prior_d_theta.shape}")
-
-        # Stores Wasserstein distances
-        v_z_wd = []
-
-        for z in range(32):
-            # Displaying information over terminal
-            print(f" |- Analyzing level {z}...")
-
-            # Extracting the associated data
-            v_z_x_prior = v_x_prior[:, z].flatten()
-            v_z_x_prior_d = v_x_prior_d[:, z].flatten()
-            v_z_x_prior_d_even = v_x_prior_d_even[:, z].flatten()
-            v_z_x_prior_d_odd = v_x_prior_d_odd[:, z].flatten()
-            v_z_x_prior_d_theta = v_x_prior_d_theta[:, z].flatten()
-
-            # Removing NaNs from the data
-            v_z_x_prior = v_z_x_prior[~np.isnan(v_z_x_prior)]
-            v_z_x_prior_d = v_z_x_prior_d[~np.isnan(v_z_x_prior_d)]
-            v_z_x_prior_d_odd = v_z_x_prior_d_odd[~np.isnan(v_z_x_prior_d_odd)]
-            v_z_x_prior_d_even = v_z_x_prior_d_even[~np.isnan(v_z_x_prior_d_even)]
-            v_z_x_prior_d_theta = v_z_x_prior_d_theta[~np.isnan(v_z_x_prior_d_theta)]
-
-            v_z_wd.append(
-                torch.tensor([
-                    wasserstein_distance(
-                        v_z_x_prior_d_even, v_z_x_prior_d_odd
-                    ),  # D( P(X|d) & P(X|d) )
-                    wasserstein_distance(
-                        v_z_x_prior_d, v_z_x_prior_d_theta
-                    ),  # D( P(X|d) & P(X|d)_theta )
-                    wasserstein_distance(v_z_x_prior_d, v_z_x_prior),  # D( P(X|d) & P(X) )
-                ]).unsqueeze(0)
-            )
-
-        # Path to folder in which save the data
-        f_save = f"/gpfs/home/acad/ulg-mast/vmangele/poseidon/metrics/data/unconditional/{date}/"
-        if not os.path.exists(f_save):
-            os.makedirs(f_save)
-
-        # Saving the data
-        torch.save(torch.cat(v_z_wd, dim=0), f_save + f"{v}.pt")
-
-    for v in TOY_DATASET_VARIABLES_SURFACE:
-        # Displaying information over terminal
-        print(f"Processing variable: {v}")
-
-        # Extracting the associated data (removing time axis)
-        v_x_prior = ds_x_prior[v].values[:, 0]
-        v_x_prior_d = ds_x_prior_d[v].values[:, 0]
-        v_x_prior_d_even = ds_x_prior_d_even[v].values[:, 0]
-        v_x_prior_d_odd = ds_x_prior_d_odd[v].values[:, 0]
-        v_x_prior_d_theta = ds_x_prior_d_theta[v].values[:, 0]
-
-        # Displaying information over terminal
-        print(f"Analyzing Variable: {TRANSLATION[v]}")
-        print(f"  prior_v shape: {v_x_prior.shape}")
-        print(f"  prior_daily_v shape: {v_x_prior_d.shape}")
-        print(f"  prior_daily_v_even shape: {v_x_prior_d_even.shape}")
-        print(f"  prior_daily_v_odd shape: {v_x_prior_d_odd.shape}")
-        print(f"  prior_daily_NN_v shape: {v_x_prior_d_theta.shape}")
-
-        # Stores Wasserstein distances
-        v_z_wd = []
-
-        # Extracting the associated data
-        v_z_x_prior = v_x_prior.flatten()
-        v_z_x_prior_d = v_x_prior_d.flatten()
-        v_z_x_prior_d_even = v_x_prior_d_even.flatten()
-        v_z_x_prior_d_odd = v_x_prior_d_odd.flatten()
-        v_z_x_prior_d_theta = v_x_prior_d_theta.flatten()
-
-        # Removing NaNs from the data
-        v_z_x_prior = v_z_x_prior[~np.isnan(v_z_x_prior)]
-        v_z_x_prior_d = v_z_x_prior_d[~np.isnan(v_z_x_prior_d)]
-        v_z_x_prior_d_odd = v_z_x_prior_d_odd[~np.isnan(v_z_x_prior_d_odd)]
-        v_z_x_prior_d_even = v_z_x_prior_d_even[~np.isnan(v_z_x_prior_d_even)]
-        v_z_x_prior_d_theta = v_z_x_prior_d_theta[~np.isnan(v_z_x_prior_d_theta)]
-
-        v_z_wd.append(
-            torch.tensor([
-                wasserstein_distance(
-                    v_z_x_prior_d_even, v_z_x_prior_d_odd
-                ),  # D( P(X|d) & P(X|d) )
-                wasserstein_distance(
-                    v_z_x_prior_d, v_z_x_prior_d_theta
-                ),  # D( P(X|d) & P(X|d)_theta )
-                wasserstein_distance(v_z_x_prior_d, v_z_x_prior),  # D( P(X|d) & P(X) )
-            ]).unsqueeze(0)
+        # Removing NaNs
+        x_prior_l, x_prior_d_l, x_prior_d_even_l, x_prior_d_odd_l, x_prior_d_theta_l = (
+            x_prior_l[~torch.isnan(x_prior_l)],
+            x_prior_d_l[~torch.isnan(x_prior_d_l)],
+            x_prior_d_even_l[~torch.isnan(x_prior_d_even_l)],
+            x_prior_d_odd_l[~torch.isnan(x_prior_d_odd_l)],
+            x_prior_d_theta_l[~torch.isnan(x_prior_d_theta_l)],
         )
 
-        # Path to folder in which save the data
-        f_save = f"/gpfs/home/acad/ulg-mast/vmangele/poseidon/metrics/data/unconditional/{date}/"
-        if not os.path.exists(f_save):
-            os.makedirs(f_save)
+        distances.append(torch.tensor([
+            wasserstein_distance(x_prior_d_even_l, x_prior_d_odd_l),   # D(P(X|d), P(X|d))
+            wasserstein_distance(x_prior_d_l,      x_prior_d_theta_l), # D(P(X|d), P_θ(X|d))
+            wasserstein_distance(x_prior_d_l,      x_prior_l),         # D(P(X|d), P(X))
+        ]))
 
-        # Saving the data
-        torch.save(torch.cat(v_z_wd, dim=0), f_save + f"{v}.pt")
+    # Saving distances
+    torch.save(torch.stack(distances, dim=0), path_distance / "wasserstein.pt")
 
+def compute_hypoxia_classification(date: str, threshold: float, config: Dict) -> None:
+    r"""Computes classification metrics on ensemble for hypoxia detection problem.
 
-def computing_metrics_posterior(date: str, config: dict):
-    r"""Computes prior metrics for used in paper."""
+    Arguments:
+        date: Ensemble date (YYYY-MM-DD).
+        threshold: Hypoxia detection threshold [mmol/m^3].
+        config: Configuration for computing metric.
+    """
 
-    # ==================
-    #   Loading Data
-    # ==================
-    #
-    # P(x_d)
-    x_posterior_ground_truth, _ = next(
-        iter(
-            PoseidonDataset(
-                path=PATH_DATA,
-                date_start=date,
-                date_end=next_day(date),
-                variables=TOY_DATASET_VARIABLES,
-                region=TOY_DATASET_REGION,
-            )
-        )
-    )
+    # Access path to save results
+    path_classification = PATH_MODEL / config["model"] / "diagnostics" / "classification" / date
+    if not os.path.exists(path_classification):
+            os.makedirs(path_classification)
 
-    # P(X|d)_theta
-    x_prior_d_theta = torch.load(
-        PATH_MODEL
-        / config["model"]
-        / "nowcasts"
-        / "unconditional"
-        / f"2017-{date[5:]}"
-        / "nowcast_unconditional.pt",
-        weights_only=False,
-        map_location=torch.device("cpu"),
-    )
-
-    # P(X|d, y)_theta
-    x_posterior_d_theta = torch.load(
-        PATH_MODEL
-        / config["model"]
-        / "nowcasts"
-        / "conditional"
-        / date
-        / "nowcast_conditional.pt",
-        weights_only=False,
-        map_location=torch.device("cpu"),
-    )
-
-    # =======================================================
-    # COMPUTING SPREAD/SKILL RATIO FOR INDIVIDUAL VARIABLES
-    # =======================================================
-    # Transforming the data to xarray
-    ds_posterior_ground_truth = from_tensor_to_xarray(
-        x_posterior_ground_truth, variables=TOY_DATASET_VARIABLES, region=TOY_DATASET_REGION
-    )
-    ds_posterior_with_obs_NN = from_tensor_to_xarray(
-        x_posterior_d_theta, variables=TOY_DATASET_VARIABLES, region=TOY_DATASET_REGION
-    )
-    ds_posterior_without_obs_NN = from_tensor_to_xarray(
-        x_prior_d_theta, variables=TOY_DATASET_VARIABLES, region=TOY_DATASET_REGION
-    )
+    # Access path to ensembles
+    path_ensemble_posterior = PATH_MODEL / config["model"] / "generation" / "posterior" / date / "ensemble_posterior.pt"
 
     # Loading statistics
-    stats = xr.open_zarr(PATH_STAT).isel(level=TOY_DATASET_REGION["level"]).load()
+    stats = xr.open_zarr(PATH_STAT).isel(level=DATASET_REGION["level"]).load()
 
-    # Unscaling the data to physical units
-    ds_posterior_ground_truth = ds_posterior_ground_truth * stats.sel(statistic="std") + stats.sel(
-        statistic="mean"
+    # Extracting DOX statistics
+    dox_mean, dox_std = (
+        stats["DOX"].sel(statistic = "mean").values,
+        stats["DOX"].sel(statistic = "std").values,
     )
-    ds_posterior_with_obs_NN = ds_posterior_with_obs_NN * stats.sel(statistic="std") + stats.sel(
-        statistic="mean"
-    )
-    ds_posterior_without_obs_NN = ds_posterior_without_obs_NN * stats.sel(
-        statistic="std"
-    ) + stats.sel(statistic="mean")
 
-    for v in TOY_DATASET_VARIABLES_OCEAN:
-        # Extracting the associated data (removing time axis)
-        posterior_ground_truth_v = ds_posterior_ground_truth[v].values[:, :, 0]
-        posterior_with_obs_NN_v = ds_posterior_with_obs_NN[v].values[:, :, 0]
-        posterior_without_obs_NN_v = ds_posterior_without_obs_NN[v].values[:, :, 0]
+    # Unscaling threshold
+    threshold_unscaled = torch.from_numpy((threshold - dox_mean) / dox_std)
 
-        # Displaying information over terminal
-        print(f"Analyzing Variable: {TRANSLATION[v]}")
-        print(f"  posterior_ground_truth_v shape: {posterior_ground_truth_v.shape}")
-        print(f"  posterior_with_obs_NN_v shape: {posterior_with_obs_NN_v.shape}")
-        print(f"  posterior_without_obs_NN_v shape: {posterior_without_obs_NN_v.shape}")
+    # Generates a mask of the Black Sea
+    mask_bs = generate_trajectory_mask(trajectory_size=1)[0]
 
-        metrics_SPREAD = np.concatenate(
-            [
-                np.nanmean(
-                    np.nanstd(posterior_with_obs_NN_v, axis=(0), keepdims=True, ddof=1),
-                    axis=(2, 3),
-                ).swapaxes(0, 1),
-                np.nanmean(
-                    np.nanstd(posterior_without_obs_NN_v, axis=(0), keepdims=True, ddof=1),
-                    axis=(2, 3),
-                ).swapaxes(0, 1),
-            ],
-            axis=1,
-        )
+    # Loading the data
+    x_ens_posterior = torch.load(path_ensemble_posterior, weights_only=True, map_location="cpu")
+    x_truth, _      = next(iter(PoseidonDataset(
+                            path=PATH_DATA,
+                            date_start=date,
+                            date_end=date)))
 
-        # Computing the mean nowcast
-        posterior_with_obs_NN_v = np.nanmean(posterior_with_obs_NN_v, axis=0, keepdims=True)
-        posterior_without_obs_NN_v = np.nanmean(posterior_without_obs_NN_v, axis=0, keepdims=True)
+    # Masking the data
+    x_truth[mask_bs == 0]            = np.nan
+    x_ens_posterior[:, mask_bs == 0] = np.nan
 
-        metrics_SKILL = np.sqrt(
-            np.nanmean(
-                np.concatenate(
-                    [
-                        (posterior_ground_truth_v - posterior_with_obs_NN_v) ** 2,
-                        (posterior_ground_truth_v - posterior_without_obs_NN_v) ** 2,
-                    ],
-                    axis=0,
-                ),
-                axis=(2, 3),
-            )
-        ).swapaxes(0, 1)
+    # Extracting oxygen feature
+    x_truth = x_truth[:32]
+    x_ens_posterior = x_ens_posterior[:, :32]
 
-        # Path to folder in which save the data
-        f_save = f"/gpfs/home/acad/ulg-mast/vmangele/poseidon/metrics/data/conditional/{date}/{v}/"
-        if not os.path.exists(f_save):
-            os.makedirs(f_save)
+    # Scaling truth to ensemble size
+    x_truth = torch.stack([x_truth for _ in range(x_ens_posterior.shape[0])], dim=0)
 
-        # Saving the data
-        torch.save(metrics_SKILL, f_save + "skill.pt")
-        torch.save(metrics_SPREAD, f_save + "spread.pt")
+    # Flattening the data
+    x_truth         = rearrange(x_truth,         "E Z ... -> E Z (...)")
+    x_ens_posterior = rearrange(x_ens_posterior, "E Z ... -> E Z (...)")
 
-    for v in TOY_DATASET_VARIABLES_SURFACE:
-        # Extracting the associated data (removing time axis)
-        posterior_ground_truth_v = ds_posterior_ground_truth[v].values[:, 0, :, :, 0]
-        posterior_with_obs_NN_v = ds_posterior_with_obs_NN[v].values[:, 0, :, :, 0]
-        posterior_without_obs_NN_v = ds_posterior_without_obs_NN[v].values[:, 0, :, :, 0]
+    # Stores global metrics
+    accuracy, precision, recall, roc_auc, f1 = [], [], [], [], []
 
-        # Displaying information over terminal
-        print(f"Analyzing Variable: {TRANSLATION[v]}")
-        print(f"  posterior_ground_truth_v shape: {posterior_ground_truth_v.shape}")
-        print(f"  posterior_with_obs_NN_v shape: {posterior_with_obs_NN_v.shape}")
-        print(f"  posterior_without_obs_NN_v shape: {posterior_without_obs_NN_v.shape}")
+    for l in range(x_truth.shape[1]):
 
-        metrics_SPREAD = np.concatenate(
-            [
-                np.nanmean(
-                    np.nanstd(posterior_with_obs_NN_v, axis=(0), keepdims=True, ddof=1),
-                    axis=(1, 2),
-                    keepdims=True,
-                )[0],
-                np.nanmean(
-                    np.nanstd(posterior_without_obs_NN_v, axis=(0), keepdims=True, ddof=1),
-                    axis=(1, 2),
-                    keepdims=True,
-                )[0],
-            ],
-            axis=0,
-        ).swapaxes(0, 1)
+        # Extracting level features
+        x_truth_l, x_ens_posterior_l = x_truth[:, l], x_ens_posterior[:, l]
 
-        # Computing the mean nowcast
-        posterior_with_obs_NN_v = np.nanmean(posterior_with_obs_NN_v, axis=0, keepdims=True)
-        posterior_without_obs_NN_v = np.nanmean(posterior_without_obs_NN_v, axis=0, keepdims=True)
+        # Stores metrics
+        accuracy_l, precision_l, recall_l, roc_auc_l, f1_l = [], [], [], [], []
 
-        metrics_SKILL = np.sqrt(
-            np.nanmean(
-                np.concatenate(
-                    [
-                        (posterior_ground_truth_v - posterior_with_obs_NN_v) ** 2,
-                        (posterior_ground_truth_v - posterior_without_obs_NN_v) ** 2,
-                    ],
-                    axis=0,
-                ),
-                axis=(1, 2),
-            )
-        )[:, None].swapaxes(0, 1)
+        for e in range(x_truth.shape[0]):
 
-        # Path to folder in which save the data
-        f_save = f"/gpfs/home/acad/ulg-mast/vmangele/poseidon/metrics/data/conditional/{date}/{v}/"
-        if not os.path.exists(f_save):
-            os.makedirs(f_save)
+            # Extracting ensemble member
+            x_truth_le, x_ens_posterior_le = x_truth_l[e], x_ens_posterior_l[e]
 
-        # Saving the data
-        torch.save(metrics_SKILL, f_save + "skill.pt")
-        torch.save(metrics_SPREAD, f_save + "spread.pt")
+            # Removing NaNs using common mask
+            common_mask = ~torch.isnan(x_truth_le) & ~torch.isnan(x_ens_posterior_le)
+            x_truth_le         = x_truth_le[common_mask]
+            x_ens_posterior_le = x_ens_posterior_le[common_mask]
+
+            # Applying threshold
+            x_truth_le         = (x_truth_le         < threshold_unscaled[l]).float().cpu()
+            x_ens_posterior_le = (x_ens_posterior_le < threshold_unscaled[l]).float().cpu()
+
+            # Computing metrics
+            precision_l.append(precision_score(x_truth_le, x_ens_posterior_le, zero_division=np.nan, labels=[0, 1]))
+            recall_l.append(recall_score(      x_truth_le, x_ens_posterior_le, zero_division=np.nan, labels=[0, 1]))
+            f1_l.append(f1_score(              x_truth_le, x_ens_posterior_le, zero_division=np.nan, labels=[0, 1]))
+
+            # Security for accuracy and ROC-AUC
+            if len(torch.unique(x_truth_le)) == 1:
+                accuracy_l.append(1.0 if torch.equal(x_truth_le, x_ens_posterior_le) else 0.0)
+                roc_auc_l.append(np.nan)
+            else:
+                accuracy_l.append(balanced_accuracy_score(x_truth_le, x_ens_posterior_le, adjusted=True))
+                roc_auc_l.append(roc_auc_score(x_truth_le, x_ens_posterior_le))
+
+        # Computing mean metrics
+        accuracy.append( torch.nanmean(torch.tensor(accuracy_l)))
+        precision.append(torch.nanmean(torch.tensor(precision_l)))
+        recall.append(   torch.nanmean(torch.tensor(recall_l)))
+        f1.append(       torch.nanmean(torch.tensor(f1_l)))
+        roc_auc.append(  torch.nanmean(torch.tensor(roc_auc_l)))
+
+    # Saving results
+    torch.save(torch.tensor(accuracy),  path_classification / f"accuracy_{int(threshold)}.pt")
+    torch.save(torch.tensor(precision), path_classification / f"precision_{int(threshold)}.pt")
+    torch.save(torch.tensor(recall),    path_classification / f"recall_{int(threshold)}.pt")
+    torch.save(torch.tensor(f1),        path_classification / f"f1_{int(threshold)}.pt")
+    torch.save(torch.tensor(roc_auc),   path_classification / f"roc_auc_{int(threshold)}.pt")

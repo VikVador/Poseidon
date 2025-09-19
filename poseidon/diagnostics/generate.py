@@ -1,4 +1,4 @@
-r"""Tools to generate nowcasts."""
+r"""Tools to generate ensembles."""
 
 import numpy as np
 import os
@@ -7,6 +7,7 @@ import torch
 from typing import Dict
 
 # isort: split
+from einops import rearrange
 from poseidon.config import PATH_DATA, PATH_MODEL
 from poseidon.data.datasets import PoseidonDataset
 from poseidon.data.mappings import from_tensor_to_progressive_time
@@ -19,6 +20,107 @@ from poseidon.diffusion.wrappers import PoseidonTrajectoryWrapper
 from poseidon.training.load import load_backbone
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def generate_reconstructions(config: Dict) -> None:
+    r"""Generates reconstructions of reverse diffusion process.
+
+    Arguments:
+        config: Configuration for generation.
+    """
+
+    # Loading corresponding model
+    model = (
+        PoseidonDenoiser(
+            backbone=load_backbone(name_model=config["model"], best=config["best"]),
+        )
+        .eval()
+        .to(DEVICE)
+    )
+
+    # Dimensions of the problem
+    C, K, X, Y = (
+        model.backbone.C,
+        model.backbone.K,
+        model.backbone.X,
+        model.backbone.Y,
+    )
+
+    # Generating noise levels
+    scheduler = PoseidonNoiseScheduler(config["sigma_min"], config["sigma_max"])
+    noise_levels = scheduler(torch.linspace(0, 1, 32))
+
+    # Loading mask of the Black Sea
+    mask_bs = generate_trajectory_mask(trajectory_size=1)
+
+    # Samples used for reconstruction estimation
+    dates_samples = [
+        ["2000-08-16", "2000-08-17"],
+        ["2019-12-27", "2019-12-28"],
+    ]
+
+    for dates, split in zip(dates_samples, ["training", "validation"]):
+        # Access to main folder
+        path_folder = PATH_MODEL / config["model"] / "denoising" / split
+        if not os.path.exists(path_folder):
+            os.makedirs(path_folder)
+
+        fname_x_truth = path_folder / "sample_truth.pt"
+        fname_x_noisy = path_folder / "sample_noisy.pt"
+        fname_x_recon = path_folder / "sample_reconstruction.pt"
+        fname_noise = path_folder / "noise_levels.pt"
+
+        # Getting the data
+        x, time = next(
+            iter(
+                PoseidonDataset(
+                    path=PATH_DATA,
+                    date_start=dates[0],
+                    date_end=dates[1],
+                )
+            )
+        )
+
+        # Saving the truth and noise levels
+        torch.save(x, fname_x_truth)
+        torch.save(noise_levels, fname_noise)
+
+        # Adding batch dimension
+        x, time = x.unsqueeze(0), time.unsqueeze(0)
+
+        # Stores noisy states and reconstructions
+        x_t_list, x_recon_list = [], []
+
+        with torch.no_grad():
+            for sigma_t in noise_levels:
+                # Creating noisy state with initial signal in it
+                x_t = sigma_t[None, None, None, None, None] * torch.randn_like(x) + x
+                x_t_list.append(x_t.cpu())
+
+                # Pushing to GPU
+                x_t, sigma_t, time = (
+                    x_t.to(DEVICE),
+                    sigma_t[None, None].to(DEVICE),
+                    time.to(DEVICE),
+                )
+
+                # State reconstruction estimation
+                x_recon = rearrange(
+                    model(x_t=rearrange(x_t, "B ... -> B (...)"), sigma_t=sigma_t, cond=time),
+                    "B (C K X Y) -> B C K X Y",
+                    C=C,
+                    K=K,
+                    X=X,
+                    Y=Y,
+                ).to("cpu")
+
+                # Hiding the land
+                x_recon[mask_bs == 0] = np.nan
+                x_recon_list.append(x_recon)
+
+            # Saving the results
+            torch.save(torch.concat(x_t_list, dim=0), fname_x_noisy)
+            torch.save(torch.concat(x_recon_list, dim=0), fname_x_recon)
 
 
 def generate_from_prior(date: str, config: Dict) -> None:

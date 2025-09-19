@@ -9,15 +9,15 @@ Noise:
   "sigma_max"   : [1000]
 
 Prior: 
-  "steps"   : [64]
+  "steps"   : [128]
   "members" : [32]
 
 Posterior: 
-  "steps"             : [64]
+  "steps"             : [128]
   "members"           : [32]
   "trajectory_size"   : [1]
   "iterations"        : [1]
-  "covariance_y"      : [0.001]
+  "covariance_y"      : [0.00001]
   "tweedie_covariance": [True]
 
 # ===== Partitions =====
@@ -31,12 +31,25 @@ Cluster:
     "gpus"     : [1]
     "partition": ["gpu"]
     "ram"      : ["60GB"]
-    "time"     : ["02:00:00"]
+    "time"     : ["01:00:00"]
 
   sampling_posterior:
     "cpus"     : [8]
     "gpus"     : [1]
     "partition": ["gpu"]
     "ram"      : ["60GB"]
-    "time"     : ["06:00:00"]
+    "time"     : ["04:00:00"]
+
+  sampling_reconstruction:
+    "cpus"     : [8]
+    "gpus"     : [1]
+    "partition": ["gpu"]
+    "ram"      : ["60GB"]
+    "time"     : ["00:15:00"]
+
+  computing_metrics:
+    "cpus"     : [1]
+    "partition": ["batch"]
+    "ram"      : ["60GB"]
+    "time"     : ["01:00:00"]
 

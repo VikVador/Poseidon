@@ -1,4 +1,4 @@
-r"""Constants for diagnostics."""
+r"""Constants for visualizations."""
 
 import cmocean.cm as cmo
 
@@ -50,19 +50,4 @@ CMAPS_LINE = {
     "vosaline": "#8aa5bc",
     "votemper": "#e34a33",
     "ssh": "#b35806",
-}
-
-DAYS_IN_MONTH = {
-    1: 31,
-    2: 28,
-    3: 31,
-    4: 30,
-    5: 31,
-    6: 30,
-    7: 31,
-    8: 31,
-    9: 30,
-    10: 31,
-    11: 30,
-    12: 31
 }
