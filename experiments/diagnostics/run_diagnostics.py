@@ -75,6 +75,12 @@ if __name__ == "__main__":
         action='store_true',
     )
 
+    parser.add_argument(
+        "--compute_metrics",
+        "-cm",
+        action='store_true',
+    )
+
     args              = parser.parse_args()
     config_generation = load_configuration("configs/diagnostics.yml")[0]
 
@@ -167,17 +173,19 @@ if __name__ == "__main__":
     # ===================
     if args.component == "denoiser" or args.component == "both":
 
+        array_size_distances = len(DIAGNOSTICS_DATES_PRIOR) if args.compute_metrics else 1
+
         path_folder_distance = path_model / "diagnostics" / "distance"
         if not os.path.exists(path_folder_distance):
             os.makedirs(path_folder_distance)
 
         @after(GEN_PRI)
-        @job(array=len(DIAGNOSTICS_DATES_PRIOR), account = config_cluster["account"], **config_cluster["computing_metrics"])
+        @job(array=array_size_distances, account = config_cluster["account"], **config_cluster["computing_metrics"])
         def COM_DIS(i: int) -> None:
             compute_distance(
                 date = DIAGNOSTICS_DATES_PRIOR[i],
                 config = {"model": args.model}
-            )
+            ) if args.compute_metrics else print("Done.")
 
         @after(GEN_PRI)
         @job(array=1, account = config_cluster["account"], **config_cluster["visualizations"])
@@ -213,6 +221,9 @@ if __name__ == "__main__":
     # ===================
     if args.component == "posterior" or args.component == "both":
 
+        array_size_spread_skill   = len(DIAGNOSTICS_DATES_POSTERIOR) if args.compute_metrics else 1
+        array_size_classification = len(DIAGNOSTICS_DATES_POSTERIOR) * len(HYPOXIA_THRESHOLDS) if args.compute_metrics else 1
+
         path_folder_spread_skill = path_model / "diagnostics" / "spread_skill"
         if not os.path.exists(path_folder_spread_skill):
             os.makedirs(path_folder_spread_skill)
@@ -227,21 +238,21 @@ if __name__ == "__main__":
                 for v in HYPOXIA_THRESHOLDS]
 
         @after(GEN_POS)
-        @job(array=len(DIAGNOSTICS_DATES_POSTERIOR), account = config_cluster["account"], **config_cluster["computing_metrics"])
+        @job(array=array_size_spread_skill, account = config_cluster["account"], **config_cluster["computing_metrics"])
         def COM_SSR(i: int) -> None:
             compute_spread_skill(
                 date = DIAGNOSTICS_DATES_POSTERIOR[i],
                 config = {"model": args.model}
-            )
+            ) if args.compute_metrics else print("Done.")
 
         @after(GEN_POS)
-        @job(array=len(pairs_date_threshold), account = config_cluster["account"], **config_cluster["computing_metrics"])
+        @job(array=array_size_classification, account = config_cluster["account"], **config_cluster["computing_metrics"])
         def COM_CLA(i: int) -> None:
             compute_hypoxia_classification(
                 date = pairs_date_threshold[i][0],
                 threshold = pairs_date_threshold[i][1],
                 config = {"model": args.model}
-            )
+            ) if args.compute_metrics else print("Done.")
 
         @after(COM_SSR)
         @job(array=1, account = config_cluster["account"], **config_cluster["visualizations"])
@@ -252,7 +263,7 @@ if __name__ == "__main__":
                 config_wandb=config_wandb
             )
 
-        # @after(COM_CLA)
+        @after(COM_CLA)
         @job(array=1, account = config_cluster["account"], **config_cluster["visualizations"])
         def VIS_HYP(i: int) -> None:
             visualize_hypoxia(
@@ -272,4 +283,4 @@ if __name__ == "__main__":
         exit()
 
     # Launching jobs
-    schedule(VIS_HYP, name="Poseidon-Diagnostics", backend="slurm", export="ALL")
+    schedule(*jobs_queue, name="Poseidon-Diagnostics", backend="slurm", export="ALL")

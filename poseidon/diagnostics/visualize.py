@@ -135,7 +135,6 @@ def visualize_ensemble_prior(date: str, config: Dict, config_wandb: Dict) -> Non
 
             # Closing
             plt.close(fig)
-            wandb.finish()
 
 
 def visualize_distance(dates: list, config: Dict, config_wandb: Dict) -> None:
@@ -246,7 +245,6 @@ def visualize_distance(dates: list, config: Dict, config_wandb: Dict) -> None:
 
     # Closing
     plt.close(fig)
-    wandb.finish()
 
 
 def visualize_denoiser(config: Dict, config_wandb: Dict) -> None:
@@ -443,8 +441,6 @@ def visualize_denoiser(config: Dict, config_wandb: Dict) -> None:
 
         plt.close(fig)
 
-    wandb.finish()
-
 
 def visualize_spread_skill_ratio(dates: list, config: Dict, config_wandb: Dict) -> None:
     r"""Visualizes evolution of the spread skill ratio with respect to depth.
@@ -577,7 +573,6 @@ def visualize_spread_skill_ratio(dates: list, config: Dict, config_wandb: Dict) 
     )
 
     plt.close(fig)
-    wandb.finish()
 
 
 def visualize_hypoxia(dates: list, config: Dict, config_wandb: Dict) -> None:
@@ -648,4 +643,3 @@ def visualize_hypoxia(dates: list, config: Dict, config_wandb: Dict) -> None:
     )
 
     plt.close(fig)
-    wandb.finish()
