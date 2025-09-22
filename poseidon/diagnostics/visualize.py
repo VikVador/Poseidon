@@ -247,3 +247,200 @@ def visualize_distance(dates: list, config: Dict, config_wandb: Dict) -> None:
 
     # Closing the figure
     plt.close(fig)
+
+
+def visualize_denoiser(config: Dict, config_wandb: Dict) -> None:
+    r"""Visualizes samples from E[x|xt] for different noise levels.
+
+    Arguments:
+        dates: List of ensemble dates (MM-DD).
+        config: Configuration for generation.
+        config_wandb: Configuration setup dictionary.
+    """
+
+    # Initialization of Weights and Biases
+    wandb.init(**config_wandb)
+
+    # Path to save the figure
+    save_path = (
+        PATH_POS_LOCAL
+        / "experiments"
+        / "diagnostics"
+        / "visualizations"
+        / config["model"]
+        / "denoiser"
+    )
+    if not os.path.exists(save_path):
+        os.makedirs(save_path, exist_ok=True)
+
+    save_path_training = save_path / "training"
+    if not os.path.exists(save_path_training):
+        os.makedirs(save_path_training, exist_ok=True)
+
+    save_path_validation = save_path / "validation"
+    if not os.path.exists(save_path_validation):
+        os.makedirs(save_path_validation, exist_ok=True)
+
+    # Access to main folder
+    path_folder = PATH_MODEL / config["model"] / "denoising"
+
+    # Loading data
+    x_train_truth = torch.load(
+        path_folder / "training" / "sample_truth.pt",
+        map_location="cpu",
+        weights_only=True,
+    )
+    x_train_noisy = torch.load(
+        path_folder / "training" / "sample_noisy.pt",
+        map_location="cpu",
+        weights_only=True,
+    )
+    x_train_recon = torch.load(
+        path_folder / "training" / "sample_reconstruction.pt",
+        map_location="cpu",
+        weights_only=True,
+    )
+    x_valid_truth = torch.load(
+        path_folder / "validation" / "sample_truth.pt",
+        map_location="cpu",
+        weights_only=True,
+    )
+    x_valid_noisy = torch.load(
+        path_folder / "validation" / "sample_noisy.pt",
+        map_location="cpu",
+        weights_only=True,
+    )
+    x_valid_recon = torch.load(
+        path_folder / "validation" / "sample_reconstruction.pt",
+        map_location="cpu",
+        weights_only=True,
+    )
+    noise_levels = torch.load(
+        path_folder / "training" / "noise_levels.pt",
+        map_location="cpu",
+        weights_only=True,
+    )
+
+    # Generating mask of the Black Sea
+    mask_bs = generate_trajectory_mask(trajectory_size=1)[0]
+
+    # Masking the data
+    x_train_truth[mask_bs == 0] = np.nan
+    x_train_noisy[:, mask_bs == 0] = np.nan
+    x_valid_truth[mask_bs == 0] = np.nan
+    x_valid_noisy[:, mask_bs == 0] = np.nan
+
+    # Visualizing
+    for n, noise in enumerate(noise_levels):
+        train_qmin, train_qmax = (
+            torch.nanquantile(x_train_truth[0, 0], 0.02),
+            torch.nanquantile(x_train_truth[0, 0], 0.98),
+        )
+        valid_qmin, valid_qmax = (
+            torch.nanquantile(x_valid_truth[0, 0], 0.02),
+            torch.nanquantile(x_valid_truth[0, 0], 0.98),
+        )
+
+        fig, axes = plt.subplots(1, 3, figsize=(20, 20))
+        axes[0].imshow(
+            np.flipud(x_train_truth[0, 0, :, :]), cmap="inferno", vmin=train_qmin, vmax=train_qmax
+        )
+        axes[1].imshow(
+            np.flipud(x_train_noisy[n, 0, 0, :, :]),
+            cmap="inferno",
+            vmin=train_qmin,
+            vmax=train_qmax,
+        )
+        axes[2].imshow(
+            np.flipud(x_train_recon[n, 0, 0, :, :]),
+            cmap="inferno",
+            vmin=train_qmin,
+            vmax=train_qmax,
+        )
+
+        for ax in axes:
+            ax.set_xticks([])
+            ax.set_yticks([])
+            for spine in ax.spines.values():
+                spine.set_visible(True)
+
+        labels = ["TRUTH", rf"NOISY | $\sigma$ = {noise:.6f}", "RECONSTRUCTION"]
+        paddings = [-11, -12, -11]
+        for ax, label, padding in zip(axes, labels, paddings):
+            ax.text(
+                3.1,
+                padding,
+                label,
+                color="white",
+                fontsize=10,
+                fontweight="bold",
+                verticalalignment="top",
+                horizontalalignment="left",
+                bbox=dict(facecolor="black", edgecolor="none", pad=5),
+            )
+
+        plt.tight_layout()
+
+        # Sending to Weights and Biases & Saving locally
+        wandb.log({"DENOISER | Reconstructions / Training": wandb.Image(fig)})
+
+        # Saving locally
+        fig.savefig(
+            save_path / "training" / f"reconstruction_{noise:.6f}.png",
+            bbox_inches="tight",
+            dpi=350,
+        )
+
+        plt.close(fig)
+
+        fig, axes = plt.subplots(1, 3, figsize=(20, 20))
+        axes[0].imshow(
+            np.flipud(x_valid_truth[0, 0, :, :]), cmap="inferno", vmin=valid_qmin, vmax=valid_qmax
+        )
+        axes[1].imshow(
+            np.flipud(x_valid_noisy[n, 0, 0, :, :]),
+            cmap="inferno",
+            vmin=valid_qmin,
+            vmax=valid_qmax,
+        )
+        axes[2].imshow(
+            np.flipud(x_valid_recon[n, 0, 0, :, :]),
+            cmap="inferno",
+            vmin=valid_qmin,
+            vmax=valid_qmax,
+        )
+
+        for ax in axes:
+            ax.set_xticks([])
+            ax.set_yticks([])
+            for spine in ax.spines.values():
+                spine.set_visible(True)
+
+        labels = ["TRUTH", rf"NOISY | $\sigma$ = {noise:.6f}", "RECONSTRUCTION"]
+        paddings = [-11, -12, -11]
+        for ax, label, padding in zip(axes, labels, paddings):
+            ax.text(
+                3.1,
+                padding,
+                label,
+                color="white",
+                fontsize=10,
+                fontweight="bold",
+                verticalalignment="top",
+                horizontalalignment="left",
+                bbox=dict(facecolor="black", edgecolor="none", pad=5),
+            )
+
+        plt.tight_layout()
+
+        # Sending to Weights and Biases & Saving locally
+        wandb.log({"DENOISER | Reconstructions / Validation": wandb.Image(fig)})
+
+        # Saving locally
+        fig.savefig(
+            save_path / "validation" / f"reconstruction_{noise:.6f}.png",
+            bbox_inches="tight",
+            dpi=350,
+        )
+
+        plt.close(fig)
