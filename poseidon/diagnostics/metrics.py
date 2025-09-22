@@ -7,7 +7,6 @@ import xarray as xr
 
 from einops import rearrange
 from poseidon.config import PATH_DATA, PATH_MODEL, PATH_STAT
-from poseidon.data.const import DATASET_REGION
 from scipy.stats import wasserstein_distance
 from sklearn.metrics import (
     balanced_accuracy_score,
@@ -21,7 +20,12 @@ from typing import Dict
 # fmt: off
 #
 # isort: split
-from poseidon.data.const import DATASET_DATES_TRAINING
+from poseidon.data.const import (
+    DATASET_DATES_TRAINING,
+    DATASET_REGION,
+    DATASET_VARIABLES,
+    DATASET_VARIABLES_OCEAN,
+)
 from poseidon.data.dataloaders import get_dataloaders
 from poseidon.data.datasets import PoseidonDataset
 from poseidon.data.mask import generate_trajectory_mask
@@ -54,6 +58,17 @@ def compute_spread_skill(date: str, config: Dict) -> None:
                             path=PATH_DATA,
                             date_start=date,
                             date_end=date)))
+
+    # Extracting statistics for unscaling data
+    ds_mean = xr.open_zarr(PATH_STAT).isel(level=DATASET_REGION["level"]).sel(statistic="mean")[DATASET_VARIABLES].load()
+    ds_std  = xr.open_zarr(PATH_STAT).isel(level=DATASET_REGION["level"]).sel(statistic="std" )[DATASET_VARIABLES].load()
+    mean    = torch.concat([torch.from_numpy(ds_mean[var].values) for var in DATASET_VARIABLES_OCEAN] + [torch.tensor([ds_mean["ssh"].values[0]])], dim=0)[None, :, None, None, None]
+    std     = torch.concat([torch.from_numpy(ds_std[var].values)  for var in DATASET_VARIABLES_OCEAN] + [torch.tensor([ds_std["ssh"].values[0]])],  dim=0)[None, :, None, None, None]
+
+    # Unscaling the data
+    x_truth         = x_truth         * std[0] + mean[0]
+    x_ens_prior     = x_ens_prior     * std    + mean
+    x_ens_posterior = x_ens_posterior * std    + mean
 
     # Masking the data
     x_truth[mask_bs == 0]            = np.nan
