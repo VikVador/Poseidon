@@ -2,6 +2,8 @@ r"""Script to launch a diagnostics pipeline."""
 
 import argparse
 import os
+import random
+import wandb
 
 from dawgz import after, job, schedule
 
@@ -22,6 +24,7 @@ from poseidon.diagnostics.metrics import (
     compute_hypoxia_classification,
     compute_spread_skill,
 )
+from poseidon.diagnostics.visualize import visualize_ensemble_prior
 from poseidon.training.tools import load_configuration
 
 # fmt: off
@@ -81,12 +84,18 @@ if __name__ == "__main__":
     DIAGNOSTICS_DATES_POSTERIOR = DIAGNOSTICS_DATES_POSTERIOR[::factor]
 
     # Extracting configurations
-    config_noise, config_sampling_prior, config_sampling_posterior, config_cluster = (
+    config_wandb, config_noise, config_sampling_prior, config_sampling_posterior, config_cluster = (
+        config_generation["wandb"],
         config_generation["Noise"],
         config_generation["Prior"],
         config_generation["Posterior"],
         config_generation["Cluster"],
     )
+
+    # Extending wandb configuration
+    config_wandb["resume"] = "allow"
+    config_wandb["name"] = args.model
+    config_wandb["id"] = wandb.util.generate_id()
 
     # Stores what needs to be scheduled
     jobs_queue = []
@@ -164,8 +173,17 @@ if __name__ == "__main__":
                 config = {"model": args.model}
             )
 
+        @after(GEN_PRI)
+        @job(array=1, account = config_cluster["account"], **config_cluster["visualizations"])
+        def VIS_PRI(i: int) -> None:
+            visualize_ensemble_prior(
+                date = random.choice(DIAGNOSTICS_DATES_PRIOR),
+                config = {"model": args.model},
+                config_wandb=config_wandb
+            )
+
         # Queueing jobs
-        jobs_queue += [COM_DIS]
+        jobs_queue += [COM_DIS, VIS_PRI]
 
     # ===================
     # ANALYSIS | COMPLETE

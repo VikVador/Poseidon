@@ -125,7 +125,7 @@ def compute_distance(date: str, config: Dict) -> None:
 
     # Loading samples
     x_prior_d       = torch.stack(x_prior_d, dim = 0)
-    x_prior         = next(iter(get_dataloaders(batch_size = 2)[0]))[0] # TO BE CHANGED
+    x_prior         = next(iter(get_dataloaders(batch_size = 512)[0]))[0]
     x_prior_d_theta = torch.load(path_ensemble_prior, weights_only=True, map_location="cpu")
 
     # Sub-sampling distributions

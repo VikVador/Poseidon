@@ -2,6 +2,12 @@
 #           P O S E I D O N
 # ====================================
 #
+# ===== WandB =====
+#
+wandb:
+  "project" : ["Poseidon-Diagnostics"]
+  "mode"    : ["online"]
+
 # ===== Sampling =====
 #
 Noise: 
@@ -31,7 +37,7 @@ Cluster:
     "gpus"     : [1]
     "partition": ["gpu"]
     "ram"      : ["60GB"]
-    "time"     : ["01:00:00"]
+    "time"     : ["02:00:00"]
 
   sampling_posterior:
     "cpus"     : [8]
@@ -43,7 +49,7 @@ Cluster:
   sampling_reconstruction:
     "cpus"     : [8]
     "gpus"     : [1]
-    "partition": ["gpu"]
+    "partition": ["debug-gpu"]
     "ram"      : ["60GB"]
     "time"     : ["00:15:00"]
 
@@ -52,4 +58,10 @@ Cluster:
     "partition": ["batch"]
     "ram"      : ["60GB"]
     "time"     : ["01:00:00"]
+
+  visualizations:
+    "cpus"     : [1]
+    "partition": ["batch"]
+    "ram"      : ["60GB"]
+    "time"     : ["00:30:00"]
 
