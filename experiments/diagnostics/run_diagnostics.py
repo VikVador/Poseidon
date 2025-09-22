@@ -24,7 +24,7 @@ from poseidon.diagnostics.metrics import (
     compute_hypoxia_classification,
     compute_spread_skill,
 )
-from poseidon.diagnostics.visualize import visualize_ensemble_prior
+from poseidon.diagnostics.visualize import visualize_distance, visualize_ensemble_prior
 from poseidon.training.tools import load_configuration
 
 # fmt: off
@@ -182,8 +182,17 @@ if __name__ == "__main__":
                 config_wandb=config_wandb
             )
 
+        @after(GEN_PRI)
+        @job(array=1, account = config_cluster["account"], **config_cluster["visualizations"])
+        def VIS_DIS(i: int) -> None:
+            visualize_distance(
+                dates=DIAGNOSTICS_DATES_PRIOR,
+                config={"model": args.model},
+                config_wandb=config_wandb
+            )
+
         # Queueing jobs
-        jobs_queue += [COM_DIS, VIS_PRI]
+        jobs_queue += [COM_DIS, VIS_PRI, VIS_DIS]
 
     # ===================
     # ANALYSIS | COMPLETE

@@ -135,3 +135,115 @@ def visualize_ensemble_prior(date: str, config: Dict, config_wandb: Dict) -> Non
 
             # Closing the figure
             plt.close(fig)
+
+
+def visualize_distance(dates: list, config: Dict, config_wandb: Dict) -> None:
+    r"""Visualizes distances metrics between ensembles.
+
+    Arguments:
+        dates: List of ensemble dates (YYYY-MM-DD).
+        config: Configuration for generation.
+        config_wandb: Configuration setup dictionary.
+    """
+
+    # Initialization of Weights and Biases
+    wandb.init(**config_wandb)
+
+    # Path to save the figure
+    save_path = (
+        PATH_POS_LOCAL
+        / "experiments"
+        / "diagnostics"
+        / "visualizations"
+        / config["model"]
+        / "distance"
+    )
+    if not os.path.exists(save_path):
+        os.makedirs(save_path, exist_ok=True)
+
+    # Access to distance
+    paths, path_distance = [], PATH_MODEL / config["model"] / "diagnostics" / "distance"
+    for d in dates:
+        if not os.path.exists(path_distance / d / "wasserstein.pt"):
+            continue
+        else:
+            paths.append(path_distance / d / "wasserstein.pt")
+    distances = torch.stack(
+        [torch.load(p, weights_only=True, map_location="cpu") for p in paths], dim=0
+    )
+
+    # Extracting variables
+    dis_oxy, dis_chl, dis_sal, dis_temp, dis_ssh = torch.split(
+        distances, DATASET_REGION["level"].stop, dim=1
+    )
+
+    # Extracting depth levels
+    levels = xr.open_zarr(PATH_STAT).isel(level=DATASET_REGION["level"]).load().level.values
+
+    # Creating visualization
+    fig, axs = plt.subplots(1, 4, figsize=(12, 6), sharey=True)
+    colors, labels = (
+        [
+            "#5e4c5f",
+            "#a00000",
+            "#ffbb6f",
+        ],
+        ["$P(X|d)$", "$P_{\\theta}(X|d, y)$", "$P(X)$"],
+    )
+
+    for i, (dis, v) in enumerate(
+        zip([dis_oxy, dis_chl, dis_sal, dis_temp], DATASET_VARIABLES_OCEAN)
+    ):
+        # Extracting distances
+        dis_prior_x_d, dis_prior_x_d_theta, dis_prior_x = torch.split(dis, 1, dim=2)
+
+        for arr, color, label in zip(
+            [dis_prior_x_d, dis_prior_x_d_theta, dis_prior_x], colors, labels
+        ):
+            arr = arr.squeeze()
+            quantiles = torch.tensor([0.25, 0.5, 0.75], dtype=arr.dtype, device=arr.device)
+            Q1, Q2, Q3 = torch.quantile(arr, quantiles, dim=0).cpu().numpy()
+            axs[i].plot(Q2, levels, color=color, lw=2, label=f"{label}")
+            axs[i].fill_betweenx(levels, Q1, Q3, color=color, alpha=0.2)
+
+        axs[i].set_xlim(0)
+        axs[i].set_yscale("log")
+        axs[i].set_title(TRANSLATION[v])
+        axs[i].grid(True, which="both", linestyle="--", linewidth=0.7, alpha=0.6)
+        if i > 0:
+            axs[i].set_ylabel("")
+        axs[i].set_xlabel("")
+
+    # Common ylabel
+    axs[0].set_ylabel("Depth [m]")
+
+    # Common xlabel centered between 2nd and 3rd subplot
+    fig.text(0.5, -0.03, "Wasserstein Distance", fontsize=18, ha="center", va="center")
+
+    handles, legend_labels = axs[-1].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        legend_labels,
+        loc="upper left",
+        bbox_to_anchor=(0.95, 0.93),
+        borderaxespad=0.0,
+        fontsize=18,
+        frameon=True,
+    )
+
+    # Depth decreasing from top to bottom
+    plt.gca().invert_yaxis()
+    plt.tight_layout()
+
+    # Sending to Weights and Biases & Saving locally
+    wandb.log({"PRIOR | Distances / Wasserstein": wandb.Image(fig)})
+
+    # Saving locally
+    fig.savefig(
+        save_path / "distance.png",
+        bbox_inches="tight",
+        dpi=350,
+    )
+
+    # Closing the figure
+    plt.close(fig)
