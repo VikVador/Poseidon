@@ -28,6 +28,8 @@ from poseidon.diagnostics.visualize import (
     visualize_denoiser,
     visualize_distance,
     visualize_ensemble_prior,
+    visualize_hypoxia,
+    visualize_spread_skill_ratio,
 )
 from poseidon.training.tools import load_configuration
 
@@ -186,7 +188,7 @@ if __name__ == "__main__":
                 config_wandb=config_wandb
             )
 
-        @after(GEN_PRI)
+        @after(COM_DIS)
         @job(array=1, account = config_cluster["account"], **config_cluster["visualizations"])
         def VIS_DIS(i: int) -> None:
             visualize_distance(
@@ -195,7 +197,7 @@ if __name__ == "__main__":
                 config_wandb=config_wandb
             )
 
-        @after(GEN_PRI)
+        @after(GEN_REC)
         @job(array=1, account = config_cluster["account"], **config_cluster["visualizations"])
         def VIS_DEN(i: int) -> None:
             visualize_denoiser(
@@ -226,7 +228,7 @@ if __name__ == "__main__":
 
         @after(GEN_POS)
         @job(array=len(DIAGNOSTICS_DATES_POSTERIOR), account = config_cluster["account"], **config_cluster["computing_metrics"])
-        def COM_SSK(i: int) -> None:
+        def COM_SSR(i: int) -> None:
             compute_spread_skill(
                 date = DIAGNOSTICS_DATES_POSTERIOR[i],
                 config = {"model": args.model}
@@ -241,8 +243,26 @@ if __name__ == "__main__":
                 config = {"model": args.model}
             )
 
+        @after(COM_SSR)
+        @job(array=1, account = config_cluster["account"], **config_cluster["visualizations"])
+        def VIS_SSR(i: int) -> None:
+            visualize_spread_skill_ratio(
+                dates=DIAGNOSTICS_DATES_POSTERIOR,
+                config={"model": args.model},
+                config_wandb=config_wandb
+            )
+
+        # @after(COM_CLA)
+        @job(array=1, account = config_cluster["account"], **config_cluster["visualizations"])
+        def VIS_HYP(i: int) -> None:
+            visualize_hypoxia(
+                dates=DIAGNOSTICS_DATES_POSTERIOR,
+                config={"model": args.model},
+                config_wandb=config_wandb
+            )
+
         # Queueing jobs
-        jobs_queue += [COM_SSK, COM_CLA]
+        jobs_queue += [COM_SSR, COM_CLA, VIS_SSR, VIS_HYP]
 
     # ===================
     # ANALYSIS |  ERROR
@@ -252,4 +272,4 @@ if __name__ == "__main__":
         exit()
 
     # Launching jobs
-    schedule(*jobs_queue, name="Poseidon-Diagnostics", backend="slurm", export="ALL")
+    schedule(VIS_HYP, name="Poseidon-Diagnostics", backend="slurm", export="ALL")

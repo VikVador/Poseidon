@@ -36,13 +36,6 @@ INTERVALS = {
     "ssh"      : (-0.5, 0.5),
 }
 
-CMAPS_SURF = {
-    "DOX"      : cmo.haline,
-    "CHL"      : cmo.curl_r,
-    "vosaline" : cmo.balance,
-    "votemper" : cmo.thermal,
-    "ssh"      : cmo.diff,
-}
 
 CMAPS_LINE = {
     "DOX":"#225ea8",
@@ -50,4 +43,12 @@ CMAPS_LINE = {
     "vosaline": "#8aa5bc",
     "votemper": "#e34a33",
     "ssh": "#b35806",
+}
+
+CMAPS_SURF = {
+    "DOX"      : cmo.haline,
+    "CHL"      : cmo.curl_r,
+    "vosaline" : cmo.balance,
+    "votemper" : cmo.thermal,
+    "ssh"      : cmo.diff,
 }
