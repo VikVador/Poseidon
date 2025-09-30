@@ -6,7 +6,6 @@ import torch
 import xarray as xr
 
 from einops import rearrange
-from poseidon.config import PATH_DATA, PATH_MODEL, PATH_STAT
 from scipy.stats import wasserstein_distance
 from sklearn.metrics import (
     balanced_accuracy_score,
@@ -16,6 +15,8 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from typing import Dict
+
+from poseidon.config import PATH_DATA, PATH_MODEL, PATH_STAT
 
 # fmt: off
 #

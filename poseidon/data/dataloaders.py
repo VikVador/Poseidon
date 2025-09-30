@@ -58,9 +58,7 @@ def get_dataloaders(
 
     for inf, stp in zip(infinite, steps):
         if inf:
-            assert (
-                stp is not None
-            ), "ERROR - Maximum number of iterations needed to create an 'infinite' dataloader."
+            assert stp is not None, "ERROR - Maximum number of iterations needed to create an 'infinite' dataloader."
 
     for lin, lin_s in zip(linspace, linspace_samples):
         if lin:
@@ -85,9 +83,6 @@ def get_dataloaders(
         for i, dataset in enumerate(datasets)
     ]
 
-    dataloaders = [
-        infinite_dataloader(dl, st) if inf else dl
-        for inf, st, dl in zip(infinite, steps, dataloaders)
-    ]
+    dataloaders = [infinite_dataloader(dl, st) if inf else dl for inf, st, dl in zip(infinite, steps, dataloaders)]
 
     return tuple(dataloaders)

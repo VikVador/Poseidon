@@ -89,9 +89,7 @@ def download_dataset(path_output: Path, variable: str, product: str, region: str
     for ys, ye in zip(year_start, year_end):
         ds = f"{ys}-01-01T00:00:00"
         de = f"{ye}-12-31T00:00:00"
-        output_file = (
-            path_output / f"CMEMS_{variable.upper()}_{product}_{region.upper()}_{ys}_{ye}.nc"
-        )
+        output_file = path_output / f"CMEMS_{variable.upper()}_{product}_{region.upper()}_{ys}_{ye}.nc"
 
         copernicusmarine.subset(
             dataset_id=DATASET_IDS[variable][product],

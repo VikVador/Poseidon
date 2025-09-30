@@ -161,9 +161,9 @@ def compute_preprocessing(
         xarray_mode = "w" if i == 0 else "a"
 
         # Write dataset to output .zarr file
-        dataset.to_zarr(
-            path_output, mode=xarray_mode, append_dim="time"
-        ) if xarray_mode == "a" else dataset.to_zarr(path_output, mode=xarray_mode)
+        dataset.to_zarr(path_output, mode=xarray_mode, append_dim="time") if xarray_mode == "a" else dataset.to_zarr(
+            path_output, mode=xarray_mode
+        )
         dataset.close()
 
         wandb.log({"Progress/Year": int(date[:4]), "Progress/Month": int(date[5:])})

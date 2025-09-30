@@ -89,16 +89,12 @@ class PoseidonTrajectoryWrapper(nn.Module):
             return x_t[0]
 
         elif B == 2:
-            return torch.concat(
-                [x_t[0, :, : self.blanket_size], x_t[1, :, -(self.trajectory_size - K) :]], dim=1
-            )
+            return torch.concat([x_t[0, :, : self.blanket_size], x_t[1, :, -(self.trajectory_size - K) :]], dim=1)
 
         else:
             idx_start = self.blanket_size - self.blanket_neighbors
             x_start = x_t[0, :, :idx_start]
             x_end = x_t[-1, :, -idx_start:]
-            x_middle = torch.cat(
-                [x_t[i, :, self.blanket_size // 2].unsqueeze(1) for i in range(1, B - 1)], dim=1
-            )
+            x_middle = torch.cat([x_t[i, :, self.blanket_size // 2].unsqueeze(1) for i in range(1, B - 1)], dim=1)
 
             return torch.cat([x_start, x_middle, x_end], dim=1)

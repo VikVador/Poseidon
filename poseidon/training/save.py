@@ -58,9 +58,7 @@ class PoseidonSave:
             )
 
             for config, name in zip(list_configs, list_names):
-                save_configuration(
-                    path=self.path, config=config, name_model=self.name_model, name_config=name
-                )
+                save_configuration(path=self.path, config=config, name_model=self.name_model, name_config=name)
 
     def save(
         self,

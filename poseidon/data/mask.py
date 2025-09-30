@@ -36,9 +36,7 @@ def generate_trajectory_mask(
     """
 
     mask = xr.open_zarr(path)[variables].isel(time=0).isel(**region)
-    mask = mask.to_stacked_array(
-        new_dim="z_total", sample_dims=("longitude", "latitude")
-    ).transpose("z_total", ...)
+    mask = mask.to_stacked_array(new_dim="z_total", sample_dims=("longitude", "latitude")).transpose("z_total", ...)
     mask = torch.as_tensor(mask.load().data.copy())
     mask = ~torch.isnan(mask) * 1.0
     return mask.unsqueeze(1).repeat(1, trajectory_size, 1, 1).unsqueeze(0)

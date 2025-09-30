@@ -8,6 +8,7 @@ from typing import Dict
 
 # isort: split
 from einops import rearrange
+
 from poseidon.config import PATH_DATA, PATH_MODEL
 from poseidon.data.datasets import PoseidonDataset
 from poseidon.data.mappings import from_tensor_to_progressive_time

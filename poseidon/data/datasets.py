@@ -85,11 +85,7 @@ class PoseidonDataset(Dataset):
 
     def __len__(self) -> int:
         r"""Return the total number of samples in the dataset."""
-        return (
-            self.linspace_samples
-            if self.linspace
-            else (self.dataset.time.size - self.trajectory_size + 1)
-        )
+        return self.linspace_samples if self.linspace else (self.dataset.time.size - self.trajectory_size + 1)
 
     def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
         r"""Gets and preprocesses a sample from the dataset."""
@@ -111,9 +107,7 @@ class PoseidonDataset(Dataset):
         with dask.config.set(**{"array.slicing.split_large_chunks": True}):
             sample = self.dataset.isel(time=slice(step_start, step_end))
             sample = sample.fillna(LAND_VALUE)
-            time = [
-                from_datetime_to_tensor(sample.time[i].values) for i in range(sample.time.size)
-            ]
+            time = [from_datetime_to_tensor(sample.time[i].values) for i in range(sample.time.size)]
             time = torch.stack(time, dim=0)
             time = from_tensor_to_progressive_time(time)
             sample = sample.to_stacked_array(

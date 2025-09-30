@@ -18,9 +18,7 @@ def get_loss_level_weights(mask: Tensor) -> Tensor:
     pixels_per_layer = mask.sum(dim=(3, 4))[0, :, 0] / pixels_total
 
     # Min-max normalization
-    norm = (pixels_per_layer - pixels_per_layer.min()) / (
-        pixels_per_layer.max() - pixels_per_layer.min()
-    )
+    norm = (pixels_per_layer - pixels_per_layer.min()) / (pixels_per_layer.max() - pixels_per_layer.min())
 
     # Inverting weights
     weights_per_layer = 1 + (1 - norm)
@@ -47,9 +45,9 @@ class PoseidonLoss(nn.Module):
     def __init__(self, blanket_size: int):
         super().__init__()
 
-        self.mask = rearrange(
-            generate_trajectory_mask(trajectory_size=blanket_size), "B C K X Y -> B (C K X Y)"
-        ).to(DEVICE)
+        self.mask = rearrange(generate_trajectory_mask(trajectory_size=blanket_size), "B C K X Y -> B (C K X Y)").to(
+            DEVICE
+        )
 
         self.weight_levels = rearrange(
             get_loss_level_weights(mask=generate_trajectory_mask(trajectory_size=blanket_size)),

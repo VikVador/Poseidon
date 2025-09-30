@@ -32,14 +32,7 @@ def visualize_ensemble_prior(date: str, config: Dict, config_wandb: Dict) -> Non
     wandb.init(**config_wandb)
 
     # Path to save the figure
-    save_path = (
-        PATH_POS_LOCAL
-        / "experiments"
-        / "diagnostics"
-        / "visualizations"
-        / config["model"]
-        / "prior"
-    )
+    save_path = PATH_POS_LOCAL / "experiments" / "diagnostics" / "visualizations" / config["model"] / "prior"
     if not os.path.exists(save_path):
         os.makedirs(save_path, exist_ok=True)
 
@@ -150,14 +143,7 @@ def visualize_distance(dates: list, config: Dict, config_wandb: Dict) -> None:
     wandb.init(**config_wandb)
 
     # Path to save the figure
-    save_path = (
-        PATH_POS_LOCAL
-        / "experiments"
-        / "diagnostics"
-        / "visualizations"
-        / config["model"]
-        / "distance"
-    )
+    save_path = PATH_POS_LOCAL / "experiments" / "diagnostics" / "visualizations" / config["model"] / "distance"
     if not os.path.exists(save_path):
         os.makedirs(save_path, exist_ok=True)
 
@@ -168,14 +154,10 @@ def visualize_distance(dates: list, config: Dict, config_wandb: Dict) -> None:
             continue
         else:
             paths.append(path_distance / d / "wasserstein.pt")
-    distances = torch.stack(
-        [torch.load(p, weights_only=True, map_location="cpu") for p in paths], dim=0
-    )
+    distances = torch.stack([torch.load(p, weights_only=True, map_location="cpu") for p in paths], dim=0)
 
     # Extracting variables
-    dis_oxy, dis_chl, dis_sal, dis_temp, dis_ssh = torch.split(
-        distances, DATASET_REGION["level"].stop, dim=1
-    )
+    dis_oxy, dis_chl, dis_sal, dis_temp, dis_ssh = torch.split(distances, DATASET_REGION["level"].stop, dim=1)
 
     # Extracting depth levels
     levels = xr.open_zarr(PATH_STAT).isel(level=DATASET_REGION["level"]).load().level.values
@@ -191,15 +173,11 @@ def visualize_distance(dates: list, config: Dict, config_wandb: Dict) -> None:
         ["$P(X|d)$", "$P_{\\theta}(X|d, y)$", "$P(X)$"],
     )
 
-    for i, (dis, v) in enumerate(
-        zip([dis_oxy, dis_chl, dis_sal, dis_temp], DATASET_VARIABLES_OCEAN)
-    ):
+    for i, (dis, v) in enumerate(zip([dis_oxy, dis_chl, dis_sal, dis_temp], DATASET_VARIABLES_OCEAN)):
         # Extracting distances
         dis_prior_x_d, dis_prior_x_d_theta, dis_prior_x = torch.split(dis, 1, dim=2)
 
-        for arr, color, label in zip(
-            [dis_prior_x_d, dis_prior_x_d_theta, dis_prior_x], colors, labels
-        ):
+        for arr, color, label in zip([dis_prior_x_d, dis_prior_x_d_theta, dis_prior_x], colors, labels):
             arr = arr.squeeze()
             quantiles = torch.tensor([0.25, 0.5, 0.75], dtype=arr.dtype, device=arr.device)
             Q1, Q2, Q3 = torch.quantile(arr, quantiles, dim=0).cpu().numpy()
@@ -260,14 +238,7 @@ def visualize_denoiser(config: Dict, config_wandb: Dict) -> None:
     wandb.init(**config_wandb)
 
     # Path to save the figure
-    save_path = (
-        PATH_POS_LOCAL
-        / "experiments"
-        / "diagnostics"
-        / "visualizations"
-        / config["model"]
-        / "denoiser"
-    )
+    save_path = PATH_POS_LOCAL / "experiments" / "diagnostics" / "visualizations" / config["model"] / "denoiser"
     if not os.path.exists(save_path):
         os.makedirs(save_path, exist_ok=True)
 
@@ -340,9 +311,7 @@ def visualize_denoiser(config: Dict, config_wandb: Dict) -> None:
         )
 
         fig, axes = plt.subplots(1, 3, figsize=(20, 20))
-        axes[0].imshow(
-            np.flipud(x_train_truth[0, 0, :, :]), cmap="inferno", vmin=train_qmin, vmax=train_qmax
-        )
+        axes[0].imshow(np.flipud(x_train_truth[0, 0, :, :]), cmap="inferno", vmin=train_qmin, vmax=train_qmax)
         axes[1].imshow(
             np.flipud(x_train_noisy[n, 0, 0, :, :]),
             cmap="inferno",
@@ -390,9 +359,7 @@ def visualize_denoiser(config: Dict, config_wandb: Dict) -> None:
         plt.close(fig)
 
         fig, axes = plt.subplots(1, 3, figsize=(20, 20))
-        axes[0].imshow(
-            np.flipud(x_valid_truth[0, 0, :, :]), cmap="inferno", vmin=valid_qmin, vmax=valid_qmax
-        )
+        axes[0].imshow(np.flipud(x_valid_truth[0, 0, :, :]), cmap="inferno", vmin=valid_qmin, vmax=valid_qmax)
         axes[1].imshow(
             np.flipud(x_valid_noisy[n, 0, 0, :, :]),
             cmap="inferno",
