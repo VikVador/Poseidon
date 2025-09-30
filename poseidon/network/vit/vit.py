@@ -17,6 +17,7 @@ import math
 import torch
 import torch.nn as nn
 
+from einops import repeat
 from einops.layers.torch import Rearrange
 from torch import Tensor
 from torch.utils.checkpoint import checkpoint
@@ -46,10 +47,10 @@ class ViTBlock(nn.Module):
         channels: int,
         mod_features: int = 0,
         ffn_factor: int = 4,
-        spatial: int = 2,
+        spatial: int = 3,
         rope: bool = True,
         dropout: Optional[float] = None,
-        checkpointing: bool = False,
+        checkpointing: bool = True,
         **kwargs,
     ):
         super().__init__()
@@ -171,7 +172,7 @@ class ViT(nn.Module):
         mod_features: int = 0,
         hid_channels: int = 1024,
         hid_blocks: int = 3,
-        spatial: int = 2,
+        spatial: int = 3,
         patch_size: Union[int, Sequence[int]] = 1,
         unpatch_size: Union[int, Sequence[int], None] = None,
         window_size: Union[int, Sequence[int], None] = None,
@@ -190,8 +191,10 @@ class ViT(nn.Module):
         self.patch = Patchify(patch_size, channel_last=True)
         self.unpatch = Unpatchify(unpatch_size, channel_last=True)
 
-        self.in_proj = nn.Linear(math.prod(patch_size) * (in_channels + cond_channels), hid_channels)
+        self.in_proj = nn.Linear(math.prod(patch_size) * (in_channels + cond_channels + 3), hid_channels)
         self.out_proj = nn.Linear(hid_channels, math.prod(patch_size) * out_channels)
+
+        self.modulation_encoding = SineEncoding(mod_features)
 
         self.positional_embedding = nn.Sequential(
             SineEncoding(hid_channels),
@@ -264,8 +267,33 @@ class ViT(nn.Module):
             The output tensor, with shape :math:`(B, C_o, L_1, ..., L_N)`.
         """
 
-        if cond is not None:
-            x = torch.cat((x, cond), dim=1)
+        B, _, *shape = x.shape
+
+        # Creating spatial positional encodings
+        p = (torch.linspace(-1, 1, steps=size, device=x.device) for size in shape)
+        p = torch.cartesian_prod(*p)
+        p = torch.reshape(p, shape=(*shape, -1))
+        p = repeat(p, "... C -> B C ...", B=B)
+
+        # Projecting conditioning to spatial dimensions
+        cond = (
+            torch.ones(
+                B,
+                1,
+                *shape,
+                device=x.device,
+            )
+            * cond[:, :, None, None, None]
+        )
+
+        # Encoding modulating vector
+        mod = self.modulation_encoding(mod)[:, 0].to(x.device)
+
+        # Adding information to the input
+        if cond is None:
+            x = torch.cat((x, p), dim=1)
+        else:
+            x = torch.cat((x, p, cond), dim=1)
 
         x = self.patch(x)
         x = self.in_proj(x)
