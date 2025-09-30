@@ -22,9 +22,9 @@ from torch import Tensor
 from torch.utils.checkpoint import checkpoint
 from typing import Hashable, Optional, Sequence, Tuple, Union
 
-from .attention import MultiheadSelfAttention, xfa
-from .embedding import SineEncoding
-from .layers import Patchify, Unpatchify
+from poseidon.network.vit.attention import MultiheadSelfAttention, xfa
+from poseidon.network.vit.embedding import SineEncoding
+from poseidon.network.vit.layers import Patchify, Unpatchify
 
 
 class ViTBlock(nn.Module):

@@ -14,8 +14,8 @@ from torch.utils.checkpoint import checkpoint
 from typing import Dict, Optional, Sequence, Union
 
 # isort: split
-from poseidon.network.encoding import SineEncoding
-from poseidon.network.layers import ConvNd, LayerNorm, SelfAttentionNd
+from poseidon.network.unet.encoding import SineEncoding
+from poseidon.network.unet.layers import ConvNd, LayerNorm, SelfAttentionNd
 
 
 class UNetBlock(nn.Module):

@@ -13,7 +13,7 @@ from typing import (
 # isort: split
 from poseidon.data.const import LAND_VALUE
 from poseidon.data.mask import generate_trajectory_mask
-from poseidon.network.unet import UNet
+from poseidon.network.unet.unet import UNet
 
 
 class PoseidonBackbone(nn.Module):
