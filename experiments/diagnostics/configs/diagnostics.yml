@@ -56,8 +56,8 @@ Cluster:
   computing_metrics:
     "cpus"     : [1]
     "partition": ["batch"]
-    "ram"      : ["60GB"]
-    "time"     : ["01:00:00"]
+    "ram"      : ["8GB"]
+    "time"     : ["00:30:00"]
 
   visualizations:
     "cpus"     : [1]
