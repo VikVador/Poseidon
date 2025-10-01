@@ -22,7 +22,7 @@ TRANSLATION_LONG = {
 
 UNITS = {
     "DOX"      : "[mmol/m^3]",
-    "CHL"      : "[mmol/m^3]",
+    "CHL"      : "[mg/m^3]",
     "vosaline" : "[1e-3]",
     "votemper" : "[degC]",
     "ssh"      : "[m]",
