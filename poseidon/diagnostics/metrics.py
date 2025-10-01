@@ -8,19 +8,18 @@ import xarray as xr
 from einops import rearrange
 from scipy.stats import wasserstein_distance
 from sklearn.metrics import (
+    accuracy_score,
     balanced_accuracy_score,
     f1_score,
     precision_score,
     recall_score,
-    roc_auc_score,
 )
 from typing import Dict
-
-from poseidon.config import PATH_DATA, PATH_MODEL, PATH_STAT
 
 # fmt: off
 #
 # isort: split
+from poseidon.config import PATH_DATA, PATH_MODEL, PATH_STAT
 from poseidon.data.const import (
     DATASET_DATES_TRAINING,
     DATASET_REGION,
@@ -211,8 +210,9 @@ def compute_hypoxia_classification(date: str, threshold: float, config: Dict) ->
         stats["DOX"].sel(statistic = "std").values,
     )
 
-    # Unscaling threshold
+    # Unscaling thresholds (GT from Grégoire, M., V. Garçon et al. (2021). )
     threshold_unscaled = torch.from_numpy((threshold - dox_mean) / dox_std)
+    threshold_truth    = torch.from_numpy((63.0      - dox_mean) / dox_std)
 
     # Generates a mask of the Black Sea
     mask_bs = generate_trajectory_mask(trajectory_size=1)[0]
@@ -240,7 +240,7 @@ def compute_hypoxia_classification(date: str, threshold: float, config: Dict) ->
     x_ens_posterior = rearrange(x_ens_posterior, "E Z ... -> E Z (...)")
 
     # Stores global metrics
-    accuracy, precision, recall, roc_auc, f1 = [], [], [], [], []
+    accuracy, accuracy_blc, precision, recall, f1, tpr, fpr = [], [], [], [], [], [], []
 
     for l in range(x_truth.shape[1]):
 
@@ -248,7 +248,7 @@ def compute_hypoxia_classification(date: str, threshold: float, config: Dict) ->
         x_truth_l, x_ens_posterior_l = x_truth[:, l], x_ens_posterior[:, l]
 
         # Stores metrics
-        accuracy_l, precision_l, recall_l, roc_auc_l, f1_l = [], [], [], [], []
+        accuracy_l, accuracy_blc_l, precision_l, recall_l, f1_l, tpr_l, fpr_l = [], [], [], [], [], [], []
 
         for e in range(x_truth.shape[0]):
 
@@ -261,32 +261,48 @@ def compute_hypoxia_classification(date: str, threshold: float, config: Dict) ->
             x_ens_posterior_le = x_ens_posterior_le[common_mask]
 
             # Applying threshold
-            x_truth_le         = (x_truth_le         < threshold_unscaled[l]).float().cpu()
+            x_truth_le         = (x_truth_le         < threshold_truth[l]).float().cpu()
             x_ens_posterior_le = (x_ens_posterior_le < threshold_unscaled[l]).float().cpu()
+
+            # True Positive, False Positive, True Negative, False Negative counts
+            TP = ((x_ens_posterior_le == 1) & (x_truth_le == 1)).sum().item()
+            FP = ((x_ens_posterior_le == 1) & (x_truth_le == 0)).sum().item()
+            TN = ((x_ens_posterior_le == 0) & (x_truth_le == 0)).sum().item()
+            FN = ((x_ens_posterior_le == 0) & (x_truth_le == 1)).sum().item()
+
+            # Compute rates, avoiding division by zero
+            TPR = TP / (TP + FN) if (TP + FN) > 0 else np.nan
+            FPR = FP / (FP + TN) if (FP + TN) > 0 else np.nan
 
             # Computing metrics
             precision_l.append(precision_score(x_truth_le, x_ens_posterior_le, zero_division=np.nan, labels=[0, 1]))
             recall_l.append(recall_score(      x_truth_le, x_ens_posterior_le, zero_division=np.nan, labels=[0, 1]))
             f1_l.append(f1_score(              x_truth_le, x_ens_posterior_le, zero_division=np.nan, labels=[0, 1]))
+            tpr_l.append(TPR)
+            fpr_l.append(FPR)
 
-            # Security for accuracy and ROC-AUC
+            # Security for accuracy
             if len(torch.unique(x_truth_le)) == 1:
                 accuracy_l.append(1.0 if torch.equal(x_truth_le, x_ens_posterior_le) else 0.0)
-                roc_auc_l.append(np.nan)
+                accuracy_blc_l.append(1.0 if torch.equal(x_truth_le, x_ens_posterior_le) else 0.0)
             else:
-                accuracy_l.append(balanced_accuracy_score(x_truth_le, x_ens_posterior_le, adjusted=True))
-                roc_auc_l.append(roc_auc_score(x_truth_le, x_ens_posterior_le))
+                accuracy_l.append(accuracy_score(x_truth_le, x_ens_posterior_le))
+                accuracy_blc_l.append(balanced_accuracy_score(x_truth_le, x_ens_posterior_le, adjusted=False))
 
         # Computing mean metrics
-        accuracy.append( torch.nanmean(torch.tensor(accuracy_l)))
-        precision.append(torch.nanmean(torch.tensor(precision_l)))
-        recall.append(   torch.nanmean(torch.tensor(recall_l)))
-        f1.append(       torch.nanmean(torch.tensor(f1_l)))
-        roc_auc.append(  torch.nanmean(torch.tensor(roc_auc_l)))
+        accuracy.append(    torch.nanmean(torch.tensor(accuracy_l)))
+        accuracy_blc.append(torch.nanmean(torch.tensor(accuracy_blc_l)))
+        precision.append(   torch.nanmean(torch.tensor(precision_l)))
+        recall.append(      torch.nanmean(torch.tensor(recall_l)))
+        f1.append(          torch.nanmean(torch.tensor(f1_l)))
+        tpr.append(         torch.nanmean(torch.tensor(tpr_l)))
+        fpr.append(         torch.nanmean(torch.tensor(fpr_l)))
 
     # Saving results
-    torch.save(torch.tensor(accuracy),  path_classification / f"accuracy_{int(threshold)}.pt")
-    torch.save(torch.tensor(precision), path_classification / f"precision_{int(threshold)}.pt")
-    torch.save(torch.tensor(recall),    path_classification / f"recall_{int(threshold)}.pt")
-    torch.save(torch.tensor(f1),        path_classification / f"f1_{int(threshold)}.pt")
-    torch.save(torch.tensor(roc_auc),   path_classification / f"roc_auc_{int(threshold)}.pt")
+    torch.save(torch.tensor(accuracy),     path_classification / f"accuracy_{int(threshold)}.pt")
+    torch.save(torch.tensor(accuracy_blc), path_classification / f"accuracy_balanced_{int(threshold)}.pt")
+    torch.save(torch.tensor(precision),    path_classification / f"precision_{int(threshold)}.pt")
+    torch.save(torch.tensor(recall),       path_classification / f"recall_{int(threshold)}.pt")
+    torch.save(torch.tensor(f1),           path_classification / f"f1_{int(threshold)}.pt")
+    torch.save(torch.tensor(tpr),          path_classification / f"tpr_{int(threshold)}.pt")
+    torch.save(torch.tensor(fpr),          path_classification / f"fpr_{int(threshold)}.pt")
