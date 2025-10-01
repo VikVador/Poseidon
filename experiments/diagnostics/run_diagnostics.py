@@ -221,9 +221,6 @@ if __name__ == "__main__":
     # ===================
     if args.component == "posterior" or args.component == "both":
 
-        array_size_spread_skill   = len(DIAGNOSTICS_DATES_POSTERIOR) if args.compute_metrics else 1
-        array_size_classification = len(DIAGNOSTICS_DATES_POSTERIOR) * len(HYPOXIA_THRESHOLDS) if args.compute_metrics else 1
-
         path_folder_spread_skill = path_model / "diagnostics" / "spread_skill"
         if not os.path.exists(path_folder_spread_skill):
             os.makedirs(path_folder_spread_skill)
@@ -232,10 +229,20 @@ if __name__ == "__main__":
         if not os.path.exists(path_folder_classification):
             os.makedirs(path_folder_classification)
 
-        # Creating pairs of dates and thresholds
-        pairs_date_threshold = [(str(d), float(v))
+        # Creating pairs of dates and thresholds (in 2 to handle array size limitations)
+        index_half = len(HYPOXIA_THRESHOLDS) // 2
+
+        pairs_date_threshold_1, nb_thresh_1 = [(str(d), float(v))
                 for d in DIAGNOSTICS_DATES_POSTERIOR
-                for v in HYPOXIA_THRESHOLDS]
+                for v in HYPOXIA_THRESHOLDS[:index_half]], len(HYPOXIA_THRESHOLDS[:index_half])
+
+        pairs_date_threshold_2, nb_thresh_2 = [(str(d), float(v))
+                for d in DIAGNOSTICS_DATES_POSTERIOR
+                for v in HYPOXIA_THRESHOLDS[index_half:]], len(HYPOXIA_THRESHOLDS[index_half:])
+
+        array_size_spread_skill     = len(DIAGNOSTICS_DATES_POSTERIOR) if args.compute_metrics else 1
+        array_size_classification_1 = int(len(DIAGNOSTICS_DATES_POSTERIOR) * nb_thresh_1) if args.compute_metrics else 1
+        array_size_classification_2 = int(len(DIAGNOSTICS_DATES_POSTERIOR) * nb_thresh_2) if args.compute_metrics else 1
 
         @after(GEN_POS)
         @job(array=array_size_spread_skill, account = config_cluster["account"], **config_cluster["computing_metrics"])
@@ -245,14 +252,6 @@ if __name__ == "__main__":
                 config = {"model": args.model}
             ) if args.compute_metrics else print("Done.")
 
-        @after(GEN_POS)
-        @job(array=array_size_classification, account = config_cluster["account"], **config_cluster["computing_metrics"])
-        def COM_CLA(i: int) -> None:
-            compute_hypoxia_classification(
-                date = pairs_date_threshold[i][0],
-                threshold = pairs_date_threshold[i][1],
-                config = {"model": args.model}
-            ) if args.compute_metrics else print("Done.")
 
         @after(COM_SSR)
         @job(array=1, account = config_cluster["account"], **config_cluster["visualizations"])
@@ -263,7 +262,25 @@ if __name__ == "__main__":
                 config_wandb=config_wandb
             )
 
-        @after(COM_CLA)
+        @after(GEN_POS)
+        @job(array=array_size_classification_1, account = config_cluster["account"], **config_cluster["computing_metrics"])
+        def COM_CLA1(i: int) -> None:
+            compute_hypoxia_classification(
+                date = pairs_date_threshold_1[i][0],
+                threshold = pairs_date_threshold_1[i][1],
+                config = {"model": args.model}
+            ) if args.compute_metrics else print("Done.")
+
+        @after(GEN_POS)
+        @job(array=array_size_classification_2, account = config_cluster["account"], **config_cluster["computing_metrics"])
+        def COM_CLA2(i: int) -> None:
+            compute_hypoxia_classification(
+                date = pairs_date_threshold_2[i][0],
+                threshold = pairs_date_threshold_2[i][1],
+                config = {"model": args.model}
+            ) if args.compute_metrics else print("Done.")
+
+        @after(COM_CLA1, COM_CLA2)
         @job(array=1, account = config_cluster["account"], **config_cluster["visualizations"])
         def VIS_HYP(i: int) -> None:
             visualize_hypoxia(
@@ -273,7 +290,7 @@ if __name__ == "__main__":
             )
 
         # Queueing jobs
-        jobs_queue += [COM_SSR, COM_CLA, VIS_SSR, VIS_HYP]
+        jobs_queue += [COM_SSR, COM_CLA1, COM_CLA2, VIS_SSR, VIS_HYP]
 
     # ===================
     # ANALYSIS |  ERROR
