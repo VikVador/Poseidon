@@ -13,7 +13,7 @@ from typing import (
 # isort: split
 from poseidon.data.const import LAND_VALUE
 from poseidon.data.mask import generate_trajectory_mask
-from poseidon.network.unet.unet import UNet
+from poseidon.network.vit.vit import ViT
 
 
 class PoseidonBackbone(nn.Module):
@@ -35,7 +35,7 @@ class PoseidonBackbone(nn.Module):
 
         self.register_buffer("mask", generate_trajectory_mask(trajectory_size=self.K).bool())
 
-        self.network = UNet(
+        self.network = ViT(
             in_channels=self.C,
             out_channels=self.C,
             cond_channels=self.K,
