@@ -16,6 +16,7 @@ from poseidon.data.mask import generate_trajectory_mask
 from poseidon.diffusion.denoiser import PoseidonDenoiser, PoseidonMMPSDenoiser
 from poseidon.diffusion.observators import A_surface
 from poseidon.diffusion.sampler import LMSSampler
+from poseidon.diffusion.satellite import generate_satellite_gaussian_parameters
 from poseidon.diffusion.schedulers import PoseidonNoiseScheduler
 from poseidon.diffusion.wrappers import PoseidonTrajectoryWrapper
 from poseidon.training.load import load_backbone
@@ -226,11 +227,14 @@ def generate_from_posterior(date: str, config: Dict) -> None:
     # Observation model used to generate the nowcast
     observator = A_surface()
 
+    # Generating satellite observation parameters
+    mu_y, cov_y = generate_satellite_gaussian_parameters()
+
     # Generating observation
     y = observator(x)
 
     # Pushing to GPU
-    y, conditioning = y.cuda(), time.unsqueeze(0).cuda()
+    y, mu_y, cov_y, conditioning = y.cuda(), mu_y.cuda(), cov_y.cuda(), time.unsqueeze(0).cuda()
 
     # Loading corresponding model
     model = (
@@ -261,7 +265,8 @@ def generate_from_posterior(date: str, config: Dict) -> None:
         denoiser=model,
         y=y,
         A=observator,
-        cov_y=config["covariance_y"],
+        mu_y=mu_y,
+        cov_y=cov_y,
         tweedie_covariance=["tweedie_covariance"],
         iterations=config["iterations"],
     )
