@@ -16,7 +16,7 @@ from poseidon.data.mask import generate_trajectory_mask
 from poseidon.diffusion.denoiser import PoseidonDenoiser, PoseidonMMPSDenoiser
 from poseidon.diffusion.observators import A_surface
 from poseidon.diffusion.sampler import LMSSampler
-from poseidon.diffusion.satellite import generate_satellite_gaussian_parameters
+from poseidon.diffusion.satellite import generate_satellite_surface_observation_model_parameters
 from poseidon.diffusion.schedulers import PoseidonNoiseScheduler
 from poseidon.diffusion.wrappers import PoseidonTrajectoryWrapper
 from poseidon.training.load import load_backbone
@@ -224,17 +224,31 @@ def generate_from_posterior(date: str, config: Dict) -> None:
         date_end=date,
     )[0]
 
-    # Observation model used to generate the nowcast
-    observator = A_surface()
+    # Generating mean and covariance matrices of satellite observation model
+    mu_y, cov_y = generate_satellite_surface_observation_model_parameters()
 
-    # Generating satellite observation parameters
-    mu_y, cov_y = generate_satellite_gaussian_parameters()
+    # Pushing everything to GPU (1)
+    x, time, mu_y, cov_y = x.to(DEVICE), time.to(DEVICE), mu_y.to(DEVICE), cov_y.to(DEVICE)
 
-    # Generating observation
-    y = observator(x)
+    # Creating observation operator
+    A = A_surface(
+        mu_y=mu_y,
+        unscale=True,
+    )
+
+    # Extracting mean and standard deviation of observation model at observed locations
+    _, sigma_x_obs = A.get_observation_statistics()
+
+    # Rescaling the satellite observation covariance to model space (see Thomas's math notes)
+    cov_y = cov_y / (sigma_x_obs.to(DEVICE) ** 2)
+
+    # Generating an observation from satellite observation model | y ~ N(A(x) + mu_y, cov_y)
+    y = A(x)
+    y = y + torch.randn_like(y) * torch.sqrt(cov_y)
+    y = y.to(DEVICE)
 
     # Pushing to GPU
-    y, mu_y, cov_y, conditioning = y.cuda(), mu_y.cuda(), cov_y.cuda(), time.unsqueeze(0).cuda()
+    y, conditioning = y.to(DEVICE), time.unsqueeze(0).to(DEVICE)
 
     # Loading corresponding model
     model = (
@@ -264,10 +278,9 @@ def generate_from_posterior(date: str, config: Dict) -> None:
     model = PoseidonMMPSDenoiser(
         denoiser=model,
         y=y,
-        A=observator,
-        mu_y=mu_y,
+        A=A,
         cov_y=cov_y,
-        tweedie_covariance=["tweedie_covariance"],
+        tweedie_covariance=True,
         iterations=config["iterations"],
     )
 

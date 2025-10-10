@@ -28,15 +28,6 @@ UNITS = {
     "ssh"      : "[m]",
 }
 
-INTERVALS = {
-    "DOX"      : (-50, 400),
-    "CHL"      : (-1,  3),
-    "vosaline" : (16, 23),
-    "votemper" : (1, 30),
-    "ssh"      : (-0.5, 0.5),
-}
-
-
 CMAPS_LINE = {
     "DOX":"#225ea8",
     "CHL": "#238b45",

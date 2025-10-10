@@ -65,13 +65,13 @@ class PoseidonMMPSDenoiser(nn.Module):
         | https://arxiv.org/abs/2405.13712
 
     Information:
-        Be careful to wrap the denoiser model with :class:`PoseidonTrajectoryWrapper`.
+        1. Be careful to wrap the denoiser model with :class:`PoseidonTrajectoryWrapper`.
+        2. Observations are standardized, don't forget to scale cov_y accordingly.
 
     Arguments:
         denoiser: A Gaussian denoiser.
         y: An observation y ~ 𝒩(Ax, Σᵧ) of shape (M).
         A: Observation operator x ↦ Ax. It should take in a vector x of shape (B, D) and return a vector of shape (B, M).
-        mu_y: Mean matrix of the observation noise, with shape (D).
         cov_y: Covariance matrix or the noise variance Σᵧ if the covariance is diagonal, with shape (), (D), or (D, D).
         tweedie_covariance: Whether to use the Tweedie covariance formula or not. If False, use Σₜ instead.
         iterations: Number of solver iterations.
@@ -82,7 +82,6 @@ class PoseidonMMPSDenoiser(nn.Module):
         denoiser: PoseidonTrajectoryWrapper,
         y: Tensor,
         A: Callable[[Tensor], Tensor],
-        mu_y: Tensor,
         cov_y: Tensor,
         tweedie_covariance: bool = True,
         iterations: int = 1,
@@ -93,18 +92,10 @@ class PoseidonMMPSDenoiser(nn.Module):
         self.denoiser = denoiser
         self.tweedie_covariance = tweedie_covariance
         self.register_buffer("y", torch.as_tensor(y))
-        self.register_buffer("mu_y", torch.as_tensor(mu_y))
         self.register_buffer("cov_y", torch.as_tensor(cov_y))
-
         self.solve = partial(gmres, iterations=iterations)
 
-    def forward(
-        self,
-        x_t: Tensor,
-        sigma_t: Tensor,
-        cond: Tensor,
-        **kwargs,
-    ):
+    def forward(self, x_t: Tensor, sigma_t: Tensor, cond: Tensor, **kwargs):
         r"""Denoising with MMPS-style observation conditioning."""
 
         cov_t = sigma_t**2
@@ -112,7 +103,7 @@ class PoseidonMMPSDenoiser(nn.Module):
         with torch.enable_grad():
             x_t = x_t.detach().requires_grad_()
             x_hat = self.denoiser(x_t, sigma_t, cond, **kwargs)
-            y_hat = self.A(x_hat) + self.mu_y
+            y_hat = self.A(x_hat)
 
         def A_lin(v):
             return torch.func.jvp(self.A, (x_hat,), (v,))[-1]
