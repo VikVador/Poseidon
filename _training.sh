@@ -2,7 +2,7 @@
 cd experiments/diffusion/
 
 # Launching a jupyter notebook
-python -u run_training.py --backend slurm --config configs/debug.yml 
+python -u run_training.py --backend slurm --config configs/unet.yml 
 
 # Moving back to the root directory
 cd ../../

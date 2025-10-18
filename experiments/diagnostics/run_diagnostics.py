@@ -295,7 +295,7 @@ if __name__ == "__main__":
     # ===================
     # ANALYSIS |  ERROR
     # ===================
-    else:
+    if args.component not in ["denoiser", "posterior", "both"]:
         print("ERROR - Unknown analysis option.")
         exit()
 
