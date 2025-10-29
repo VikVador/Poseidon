@@ -360,7 +360,7 @@ def compute_state_power_spectra_density(x: Tensor, dx: float = 2.78) -> Sequence
     return wavelengths[valid_k], psd_1d[valid_k]
 
 def compute_power_spectra_density(date: str, config: Dict) -> None:
-    r"""Computes the power spectral density (PSD) of distributions.
+    r"""Computes the power spectral density (PSD) of distributions samples.
 
     Distributions:
         P(X|d) and P_θ(X|d)
