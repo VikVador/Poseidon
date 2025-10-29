@@ -22,6 +22,7 @@ from poseidon.diagnostics.generate import (
 from poseidon.diagnostics.metrics import (
     compute_distance,
     compute_hypoxia_classification,
+    compute_power_spectra_density,
     compute_spread_skill,
 )
 from poseidon.diagnostics.visualize import (
@@ -188,6 +189,14 @@ if __name__ == "__main__":
             ) if args.compute_metrics else print("Done.")
 
         @after(GEN_PRI)
+        @job(array=array_size_distances, account = config_cluster["account"], **config_cluster["computing_metrics"])
+        def COM_PSD(i: int) -> None:
+            compute_power_spectra_density(
+                date = DIAGNOSTICS_DATES_PRIOR[i],
+                config = {"model": args.model}
+            ) if args.compute_metrics else print("Done.")
+
+        @after(GEN_PRI)
         @job(array=1, account = config_cluster["account"], **config_cluster["visualizations"])
         def VIS_PRI(i: int) -> None:
             visualize_ensemble_prior(
@@ -214,7 +223,7 @@ if __name__ == "__main__":
             )
 
         # Queueing jobs
-        jobs_queue += [COM_DIS, VIS_PRI, VIS_DIS, VIS_DEN]
+        jobs_queue += [COM_DIS, COM_PSD, VIS_PRI, VIS_DIS, VIS_DEN]
 
     # ===================
     # ANALYSIS | COMPLETE
