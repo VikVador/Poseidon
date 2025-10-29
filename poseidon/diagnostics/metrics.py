@@ -14,7 +14,8 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
-from typing import Dict
+from torch import Tensor
+from typing import Dict, Sequence
 
 # fmt: off
 #
@@ -306,3 +307,149 @@ def compute_hypoxia_classification(date: str, threshold: float, config: Dict) ->
     torch.save(torch.tensor(f1),           path_classification / f"f1_{int(threshold)}.pt")
     torch.save(torch.tensor(tpr),          path_classification / f"tpr_{int(threshold)}.pt")
     torch.save(torch.tensor(fpr),          path_classification / f"fpr_{int(threshold)}.pt")
+
+def compute_state_power_spectra_density(x: Tensor, dx: float = 2.78) -> Sequence[Tensor]:
+    """Computes the azimutal mean power spectral density of a physical state.
+
+    Arguments:
+        x: State (X, Y)
+        dx: Grid spatial resolution [km] (approx. 2.78 km for Black Sea with 0.025° grid)
+
+    Returns:
+        wavelengths and power spectral density
+    """
+
+    # Conversion to numpy for easier computation
+    field = x.cpu().numpy()
+    nlat, nlon = field.shape
+
+    # Computing the 2D Fast Fourier Transform and shifting low frequencies to center
+    fft_2d_shifted = np.fft.fftshift(np.fft.fft2(field))
+
+    # Computing normalized power spectrum
+    power_2d = ( np.abs(fft_2d_shifted) ** 2 ) / (nlat * nlon)
+
+    # Creating spatial frequency grids
+    kx = np.fft.fftshift(np.fft.fftfreq(nlon, d=dx))
+    ky = np.fft.fftshift(np.fft.fftfreq(nlat, d=dx))
+
+    # Creating a grid of radial distances in Fourier space
+    kx_grid, ky_grid = np.meshgrid(kx, ky)
+    k_radial         = np.sqrt(kx_grid ** 2 + ky_grid ** 2)
+
+    # Defining bins for radial averaging
+    k_max  = np.max(k_radial)
+    n_bins = min(nlat, nlon) // 2
+    k_bins = np.linspace(0, k_max, n_bins)
+
+    # Radial averaging (azimuthal) of the power spectrum
+    k_centers = np.zeros(n_bins - 1)
+    psd_1d    = np.zeros(n_bins - 1)
+
+    for i in range(n_bins - 1):
+        mask = (k_radial >= k_bins[i]) & (k_radial < k_bins[i+1])
+        if np.sum(mask) > 0:
+            psd_1d[i] = np.mean(power_2d[mask])
+            k_centers[i] = (k_bins[i] + k_bins[i+1]) / 2
+
+    # Converting wavenumbers to wavelengths (λ = 1/k)
+    wavelengths          = np.zeros_like(k_centers)
+    valid_k              = k_centers > 0
+    wavelengths[valid_k] = 1.0 / k_centers[valid_k]
+
+    return wavelengths[valid_k], psd_1d[valid_k]
+
+def compute_power_spectra_density(date: str, config: Dict) -> None:
+    r"""Computes the power spectral density (PSD) of distributions.
+
+    Distributions:
+        P(X|d) and P_θ(X|d)
+
+    Arguments:
+        date: Prior distribution date (MM-DD).
+        config: Configuration for computing distance metric.
+    """
+
+    # Access path to save results
+    path_psd = PATH_MODEL / config["model"] / "diagnostics" / "power_spectral_density" / date
+    if not os.path.exists(path_psd):
+            os.makedirs(path_psd)
+
+    # Access path to ensembles
+    path_ensemble_prior = PATH_MODEL / config["model"] / "generation" / "prior" / date / "ensemble_prior.pt"
+
+    # Mask of the Black Sea
+    mask_bs = generate_trajectory_mask(trajectory_size=1)[0]
+
+    # Extracting training years bounds
+    year_start, year_end = int(DATASET_DATES_TRAINING[0][:4]), int(DATASET_DATES_TRAINING[1][:4])
+
+    # Stores P(X|d)
+    x_prior_d = []
+
+    for y in range(year_start, year_end):
+
+        # Current date of sample
+        current_date = f"{y}-{date}"
+
+        # Adding sample
+        x_prior_d.append(next(iter(PoseidonDataset(path=PATH_DATA, date_start=current_date, date_end=current_date)))[0])
+
+    # Loading samples
+    x_prior_d       = torch.stack(x_prior_d, dim = 0)
+    x_prior_d_theta = torch.load(path_ensemble_prior, weights_only=True, map_location="cpu")
+
+    # Placing dummy values to have a continous domain
+    x_prior_d[:, mask_bs == 0]       = 0.0
+    x_prior_d_theta[:, mask_bs == 0] = 0.0
+
+    # Removing temporal dimension
+    x_prior_d = x_prior_d[:,:,0]
+    x_prior_d_theta = x_prior_d_theta[:,:,0]
+
+    # Stores wavelengths and PSDs
+    wave_prior, wave_prior_theta, psd_prior, psd_prior_theta = [], [], [], []
+
+    for s in range(x_prior_d.shape[0]):
+        #
+        # Stores results for each variable
+        s_wave_prior, s_psd_prior = [], []
+
+        for v in range(x_prior_d.shape[1]):
+            #
+            # Computing PSD for P(X|d)
+            wavelengths, psd = compute_state_power_spectra_density(x_prior_d[s, v, :, :], dx=2.78)
+
+            # Converting to torch and storing
+            s_wave_prior.append(torch.tensor(wavelengths)), s_psd_prior.append(torch.tensor(psd))
+
+        # Stacking results of current sample
+        wave_prior.append(torch.stack(s_wave_prior)), psd_prior.append(torch.stack(s_psd_prior))
+
+    for s in range(x_prior_d_theta.shape[0]):
+        #
+        # Stores results for each variable
+        s_wave_prior_theta, s_psd_prior_theta = [], []
+
+        for v in range(x_prior_d_theta.shape[1]):
+            #
+            # Computing PSD for P_θ(X|d)
+            wavelengths, psd = compute_state_power_spectra_density(x_prior_d_theta[s, v, :, :], dx=2.78)
+
+            # Converting to torch and storing
+            s_wave_prior_theta.append(torch.tensor(wavelengths)), s_psd_prior_theta.append(torch.tensor(psd))
+
+        # Stacking results of current sample
+        wave_prior_theta.append(torch.stack(s_wave_prior_theta)), psd_prior_theta.append(torch.stack(s_psd_prior_theta))
+
+    # Stacking all samples
+    wave_prior       = torch.stack(wave_prior, dim=0)
+    wave_prior_theta = torch.stack(wave_prior_theta, dim=0)
+    psd_prior        = torch.stack(psd_prior, dim=0)
+    psd_prior_theta  = torch.stack(psd_prior_theta, dim=0)
+
+    # Saving results
+    torch.save(wave_prior,       path_psd / "wavelengths_prior.pt")
+    torch.save(wave_prior_theta, path_psd / "wavelengths_prior_theta.pt")
+    torch.save(psd_prior,        path_psd / "psd_prior.pt")
+    torch.save(psd_prior_theta,  path_psd / "psd_prior_theta.pt")
