@@ -18,6 +18,7 @@ from poseidon.diffusion.backbone import PoseidonBackbone
 from poseidon.diffusion.denoiser import PoseidonDenoiser
 from poseidon.diffusion.loss import PoseidonLoss
 from poseidon.diffusion.schedulers import PoseidonNoiseScheduler, PoseidonTimeScheduler
+from poseidon.tools import wandb_get_hyperparameter_score
 from poseidon.training.load import load_backbone
 from poseidon.training.optimizer import get_optimizer, safe_gd_step
 from poseidon.training.save import PoseidonSave
@@ -66,6 +67,12 @@ def training(
             "Scheduler": config_scheduler,
             "Neural Network": config_nn,
             "Cluster": config_cluster,
+            "Scores": wandb_get_hyperparameter_score([
+                config_dataloader,
+                config_training,
+                config_optimizer,
+                config_nn,
+            ]),
         },
     )
 
