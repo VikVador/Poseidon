@@ -44,7 +44,7 @@ DATASET_VARIABLES = \
 #
 OBSERVATIONS_RESOLUTION = {
     "chl":      (128, 256), # 0.025°  × 0.025°  ~ 2.5 km × 2.5 km
-    "vosaline": ( 16,  32), # 0.25°   × 0.25°   ~ 25  km × 25  km
+    "vosaline": ( 13,  26), # 0.25°   × 0.25°   ~ 25  km × 25  km
     "votemper": ( 63, 129), # 0.05°   × 0.05°   ~ 5   km × 5   km
     "ssh":      ( 46,  65), # 0.0625° × 0.0625° ~ 7   km × 7   km
 }
