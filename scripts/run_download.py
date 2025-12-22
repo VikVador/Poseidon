@@ -12,35 +12,46 @@ from pathlib import Path
 from poseidon.config import PATH_MASK_B
 
 YEARS = {
-    "sst": (1982, 2023),
-    "chl": (1998, 2023),
-    "ssh": (1993, 2023),
+    "chl": (1998, 2024),
+    "sss": (2011, 2024),
+    "sst": (2008, 2024),
+    "ssh": (2002, 2004),
 }
 
 VARIABLES = {
-    "sst": {
-        "L3": ["adjusted_sea_surface_temperature"],
-        "L4": ["analysed_sst", "analysis_error", "mask"],
-    },
     "chl": {
         "L3": ["CHL"],
         "L4": ["CHL"],
     },
+    "sss": {
+        "L3": ["Sea_Surface_Salinity", "Sea_Surface_Salinity_Error"],
+        "L4": ["sos", "sos_error"],
+    },
+    "sst": {
+        "L3": ["adjusted_sea_surface_temperature", "adjusted_standard_deviation_error"],
+        "L4": ["analysed_sst"],
+    },
     "ssh": {
+        "L3": ["mdt"],
         "L4": ["adt"],
     },
 }
 
 DATASET_IDS = {
-    "sst": {
-        "L3": "cmems_obs-sst_bs_phy_my_l3s_P1D-m",
-        "L4": "cmems_SST_BS_SST_L4_REP_OBSERVATIONS_010_022",
-    },
     "chl": {
         "L3": "cmems_obs-oc_blk_bgc-plankton_my_l3-multi-1km_P1D",
         "L4": "cmems_obs-oc_blk_bgc-plankton_my_l4-gapfree-multi-1km_P1D",
     },
+    "sss": {
+        "L3": "cmems_obs-mob_glo_phy-sss_mynrt_smos-asc_P1D",
+        "L4": "cmems_obs-mob_glo_phy-sss_my_multi_P1D",
+    },
+    "sst": {
+        "L3": "SST_BS_SST_L3S_NRT_OBSERVATIONS_010_013_a",
+        "L4": "cmems_SST_BS_SST_L4_REP_OBSERVATIONS_010_022",
+    },
     "ssh": {
+        "L3": "cmems_obs-sl_glo_phy-ssh_my_s3a-l3-duacs_PT1S",
         "L4": "cmems_obs-sl_eur_phy-ssh_my_allsat-l4-duacs-0.0625deg_P1D",
     },
 }
@@ -101,7 +112,6 @@ def download_dataset(path_output: Path, variable: str, product: str, region: str
             start_datetime=ds,
             end_datetime=de,
             output_filename=str(output_file),
-            force_download=True,
         )
 
 
@@ -122,8 +132,8 @@ if __name__ == "__main__":
         "-v",
         type=str,
         required=True,
-        choices=["sst", "ssh", "chl"],
-        help="Variable to download ('sst', 'ssh', 'chl').",
+        choices=["sst", "sss", "ssh", "chl"],
+        help="Variable to download ('sst', 'sss', 'ssh', 'chl').",
     )
     parser.add_argument(
         "--product",
