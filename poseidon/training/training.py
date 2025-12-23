@@ -1,7 +1,6 @@
 r"""Training."""
 
 import dask
-import gc
 import torch
 import wandb
 
@@ -201,9 +200,7 @@ def training(
         x_0 = rearrange(sample, "B ... -> B (...)")
 
         # Generating noise levels
-        sigma_t = scheduler_noise(
-            t = scheduler_time(batch_size = x_0.shape[0])
-        )
+        sigma_t = scheduler_noise(t = scheduler_time(batch_size = x_0.shape[0]))
 
         # Generating noisy states
         x_t = x_0 + sigma_t * torch.randn_like(x_0)
@@ -211,19 +208,22 @@ def training(
         # Pushing to device
         x_0, x_t, sigma_t, time = x_0.to(DEVICE), x_t.to(DEVICE), sigma_t.to(DEVICE), time.to(DEVICE)
 
-        # Estimating clean trajectories and measuring error
-        x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t, cond = time)
+        # Mixed precision forward pass
+        with torch.amp.autocast(device_type='cuda', dtype=torch.bfloat16):
 
-        loss = loss_function(
-            x_0 = x_0,
-            x_0_denoised = x_0_denoised,
-            sigma_t = sigma_t,
-        )
+            # Estimating clean trajectories and measuring error
+            x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t, cond = time)
+
+            # Computing loss
+            loss = loss_function(x_0 = x_0, x_0_denoised = x_0_denoised, sigma_t = sigma_t,)
 
         # Gradients accumulation
         loss       = loss / steps_gradient_accumulation
         loss_aoas += loss.item()
         scaler.scale(loss).backward()
+
+        # Cleaning memory
+        del x_0, x_0_denoised, x_t, sample, sigma_t, time
 
         # ===========================================================================
         #                      LOGGING & OPTIMIZATION & VALIDATION
@@ -256,10 +256,7 @@ def training(
                 safe_gd_step(optimizer=optimizer, grad_clip=1, scaler=scaler)
                 scheduler_lr.step()
                 loss_aoas = 0.0
-
-                del x_0, x_0_denoised, x_t, sigma_t, time, loss
-                torch.cuda.empty_cache()
-                gc.collect()
+                del loss
 
             if (step % steps_validation == 0):
                 with torch.no_grad():
@@ -281,17 +278,23 @@ def training(
                         # Pushing to device
                         x_0, x_t, sigma_t, time = x_0.to(DEVICE), x_t.to(DEVICE), sigma_t.to(DEVICE), time.to(DEVICE)
 
-                        # Estimating clean trajectories and measuring error
-                        v_loss += loss_function(
-                            x_0 = x_0,
-                            x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t, cond = time),
-                            sigma_t = sigma_t,
-                        ).item()
+                        # Mixed precision validation
+                        with torch.amp.autocast(device_type='cuda', dtype=torch.bfloat16):
+
+                            # Estimating clean trajectories and measuring error
+                            v_loss += loss_function(
+                                x_0 = x_0,
+                                x_0_denoised = poseidon_denoiser(x_t = x_t, sigma_t = sigma_t, cond = time),
+                                sigma_t = sigma_t,
+                            ).item()
 
                         # Counting the number of samples
                         v_count += 1
 
+                    # Logging
                     wandb.log({"Validation/Loss": v_loss / v_count})
+
+                    # Cleaning memory
                     del x_0, x_t, sigma_t, time
 
             # Emergency break
