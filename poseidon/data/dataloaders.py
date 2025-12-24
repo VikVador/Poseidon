@@ -78,6 +78,7 @@ def get_dataloaders(
             dataset,
             shuffle=shuffle[i],
             pin_memory=True,
+            persistent_workers=kwargs.get("num_workers", 0) > 0,
             **kwargs,
         )
         for i, dataset in enumerate(datasets)

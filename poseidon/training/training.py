@@ -230,6 +230,9 @@ def training(
         # ===========================================================================
         if (step % steps_logging == 0):
 
+            progress_bar.set_postfix({"Loss (AoAS) ": f"{(loss_aoas):.4f}"})
+            progress_bar.update(1)
+
             wandb.log({
                 "Training/Loss": loss_aoas * steps_gradient_accumulation if step == 0 else loss_aoas,
                 "Training/Learning Rate [-]": optimizer.param_groups[0]["lr"],
@@ -237,9 +240,6 @@ def training(
                 "Training/Samples Seen [-]": B * (step + 1),
                 "Training/Completed [%]": (step / (steps_training - 2)) * 100,
             })
-
-            progress_bar.set_postfix({"Loss (AoAS) ": f"{(loss_aoas):.4f}"})
-            progress_bar.update(1)
 
             poseidon_save.save(
                 loss = loss_aoas,
@@ -268,9 +268,7 @@ def training(
                         x_0 = rearrange(sample, "B ... -> B (...)")
 
                         # Generating noise levels
-                        sigma_t = scheduler_noise(
-                            t = scheduler_time(batch_size = x_0.shape[0])
-                        )
+                        sigma_t = scheduler_noise(t = scheduler_time(batch_size = x_0.shape[0]))
 
                         # Generating noisy states
                         x_t = x_0 + sigma_t * torch.randn_like(x_0)
