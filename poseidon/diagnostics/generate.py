@@ -4,7 +4,8 @@ import numpy as np
 import os
 import torch
 
-from typing import Dict
+from torch import Tensor
+from typing import Dict, Optional
 
 # isort: split
 from einops import rearrange
@@ -201,21 +202,35 @@ def generate_from_prior(date: str, config: Dict) -> None:
     torch.save(ensemble, fname)
 
 
-def generate_from_posterior(date: str, config: Dict) -> None:
+def generate_from_posterior(date: str, config: Dict, y: Optional[Tensor] = None):
     r"""Generates a conditional ensemble.
 
     Arguments:
         date: Ensemble date (YYYY-MM-DD).
         config: Configuration for generation.
+        y: Observations vector. If None, generates synthetic observation from ground truth.
     """
 
     # Access to model folder
-    path_folder = PATH_MODEL / config["model"] / "generation" / "posterior" / date
+    path_folder = PATH_MODEL / config["model"] / "generation" / "posterior" / (date if y is None else "real" / date)
     if not os.path.exists(path_folder):
         os.makedirs(path_folder)
 
     # Name of the file
     fname = path_folder / "ensemble_posterior.pt"
+
+    # Generating mean and covariance matrices of satellite observation model
+    mu_y, cov_y = generate_satellite_surface_observation_model_parameters(
+        observation_date=None if y is None else date,
+        device=DEVICE,
+    )
+
+    # Creating observation operator
+    A = A_surface(
+        mu_y=mu_y,
+        unscale=True,
+        observation_date=None if y is None else date,
+    )
 
     # Loading ground truth sample
     x, time = PoseidonDataset(
@@ -224,31 +239,20 @@ def generate_from_posterior(date: str, config: Dict) -> None:
         date_end=date,
     )[0]
 
-    # Generating mean and covariance matrices of satellite observation model
-    mu_y, cov_y = generate_satellite_surface_observation_model_parameters()
-
-    # Pushing everything to GPU (1)
-    x, time, mu_y, cov_y = x.to(DEVICE), time.to(DEVICE), mu_y.to(DEVICE), cov_y.to(DEVICE)
-
-    # Creating observation operator
-    A = A_surface(
-        mu_y=mu_y,
-        unscale=True,
-    )
+    # Pushing everything to GPU
+    x, time = x.to(DEVICE), time.unsqueeze(0).to(DEVICE)
 
     # Extracting mean and standard deviation of observation model at observed locations
     _, sigma_x_obs = A.get_observation_statistics()
 
-    # Rescaling the satellite observation covariance to model space (see Thomas's math notes)
+    # Rescaling the satellite observation covariance to model space
     cov_y = cov_y / (sigma_x_obs.to(DEVICE) ** 2)
 
-    # Generating an observation from satellite observation model | y ~ N(A(x) + mu_y, cov_y)
-    y = A(x)
-    y = y + torch.randn_like(y) * torch.sqrt(cov_y)
-    y = y.to(DEVICE)
-
-    # Pushing to GPU
-    y, conditioning = y.to(DEVICE), time.unsqueeze(0).to(DEVICE)
+    # If no observations provided, generate synthetic observations
+    if y is None:
+        y = A(x)
+        y = y + torch.randn_like(y) * torch.sqrt(cov_y)
+        y = y.to(DEVICE)
 
     # Loading corresponding model
     model = (
@@ -300,7 +304,7 @@ def generate_from_posterior(date: str, config: Dict) -> None:
         trajectory_size=config["trajectory_size"],
         ensemble_size=config["members"],
         steps=config["steps"],
-        conditioning=conditioning,
+        conditioning=time,
     ).cpu()
 
     # Loading Black Sea mask

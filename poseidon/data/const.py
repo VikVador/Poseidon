@@ -21,9 +21,9 @@ DATASET_DATES_VALIDATION     = ("2018-01-01", "2020-12-31")
 DATASET_DATES_TEST           = ("2021-01-01", "2022-12-31")
 
 DATASET_REGION = {
-    "latitude":  slice(104, 232),
-    "longitude": slice(25, 281),
-    "level": slice(0, 32),
+    "latitude":  slice(104, 232), # 43.500 to 46.675  [°N]
+    "longitude": slice(25,  281), # 28.025 to 34.400  [°E]
+    "level":     slice(0,    32), # 0.255  to 125.233 [m]
 }
 
 DATASET_VARIABLES_OCEAN = [
@@ -43,8 +43,8 @@ DATASET_VARIABLES = \
 # ----- Observations
 #
 OBSERVATIONS_RESOLUTION = {
-    "chl":      (128, 256), # 0.025°  × 0.025°  ~ 2.5 km × 2.5 km
-    "vosaline": ( 13,  26), # 0.25°   × 0.25°   ~ 25  km × 25  km
-    "votemper": ( 63, 129), # 0.05°   × 0.05°   ~ 5   km × 5   km
-    "ssh":      ( 46,  65), # 0.0625° × 0.0625° ~ 7   km × 7   km
+    "chl":      (128, 256), # 0.025  [°] × 0.025  [°] ~ 2.5 [km] × 2.5 [km]
+    "vosaline": ( 13,  26), # 0.25   [°] × 0.25   [°] ~ 25  [km] × 25  [km]
+    "votemper": ( 63, 129), # 0.05   [°] × 0.05   [°] ~ 5   [km] × 5   [km]
+    "ssh":      ( 51, 102), # 0.0625 [°] × 0.0625 [°] ~ 7   [km] × 7   [km]
 }
