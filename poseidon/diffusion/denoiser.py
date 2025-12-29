@@ -106,7 +106,12 @@ class PoseidonMMPSDenoiser(nn.Module):
             y_hat = self.A(x_hat)
 
         def A_lin(v):
-            return torch.func.jvp(self.A, (x_hat,), (v,))[-1]
+            # Use finite differences to approximate JVP since grid_sample doesn't support forward AD
+            with torch.no_grad():
+                eps = 1e-5
+                return (self.A(x_hat.detach() + eps * v.detach()) - self.A(x_hat.detach() - eps * v.detach())) / (
+                    2 * eps
+                )
 
         def At(v):
             return torch.autograd.grad(y_hat, x_hat, v, retain_graph=True)[0]
@@ -127,5 +132,4 @@ class PoseidonMMPSDenoiser(nn.Module):
         grad = self.y - y_hat
         grad = self.solve(A=cov_y, b=grad)
         score = torch.autograd.grad(y_hat, x_t, grad)[0]
-
         return x_hat + cov_t * score

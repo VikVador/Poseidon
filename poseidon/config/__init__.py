@@ -31,6 +31,12 @@ PATH_POS_LOCAL   = PATH_MAIN_LOCAL   / "poseidon"
 PATH_POS_PROJECT = PATH_MAIN_PROJECT / "poseidon"
 PATH_POS_SCRATCH = PATH_MAIN_SCRATCH / "poseidon"
 
+# ----- Experiments
+#
+PATH_EXP       = PATH_POS_PROJECT / "experiments"
+PATH_EXP_OBS   = PATH_EXP / "observations"
+PATH_EXP_MASKS = PATH_EXP / "masks"
+
 # ----- Others
 #
 PATH_MODEL  = PATH_POS_SCRATCH / "models"

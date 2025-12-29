@@ -4,16 +4,16 @@ import numpy as np
 import os
 import torch
 
+from einops import rearrange
 from torch import Tensor
 from typing import Dict, Optional
 
 # isort: split
-from einops import rearrange
-
-from poseidon.config import PATH_DATA, PATH_MODEL
+from poseidon.config import PATH_DATA, PATH_EXP_MASKS, PATH_EXP_OBS, PATH_MODEL
 from poseidon.data.datasets import PoseidonDataset
 from poseidon.data.mappings import from_tensor_to_progressive_time
 from poseidon.data.mask import generate_trajectory_mask
+from poseidon.diffusion.coarsening import create_coarsen_variable
 from poseidon.diffusion.denoiser import PoseidonDenoiser, PoseidonMMPSDenoiser
 from poseidon.diffusion.observators import A_surface
 from poseidon.diffusion.sampler import LMSSampler
@@ -212,7 +212,12 @@ def generate_from_posterior(date: str, config: Dict, y: Optional[Tensor] = None)
     """
 
     # Access to model folder
-    path_folder = PATH_MODEL / config["model"] / "generation" / "posterior" / (date if y is None else "real" / date)
+    path_folder = (
+        PATH_MODEL / config["model"] / "generation" / "posterior" / "experiments" / date
+        if y is not None
+        else PATH_MODEL / config["model"] / "generation" / "posterior" / date
+    )
+
     if not os.path.exists(path_folder):
         os.makedirs(path_folder)
 
@@ -315,3 +320,43 @@ def generate_from_posterior(date: str, config: Dict, y: Optional[Tensor] = None)
 
     # Saving the nowcast
     torch.save(ensemble, fname)
+
+
+def generate_from_observations(date: str, config: Dict):
+    r"""Generates a conditional ensemble using real observations.
+
+    Arguments:
+        date: Real observation date (YYYY-MM-DD).
+        config: Configuration for generation.
+    """
+
+    # Defining paths to real observations coordinates
+    path_coordinates = PATH_EXP_MASKS / "coordinates"
+
+    # Loading real observations (nothing for SSH and chlorophyll needs to be coarsened)
+    obs_sal = torch.load(PATH_EXP_OBS / f"{date}/sea_surface_salinity.pt", weights_only=False)
+    obs_temp = torch.load(PATH_EXP_OBS / f"{date}/sea_surface_temperature.pt", weights_only=False)
+    obs_chl = create_coarsen_variable(
+        input_tensor=torch.from_numpy(torch.load(PATH_EXP_OBS / f"{date}/chlorophyll.pt", weights_only=False)).float(),
+        lon_src=torch.load(path_coordinates / "longitude_316_455.pt", weights_only=False),
+        lat_src=torch.load(path_coordinates / "latitude_316_455.pt", weights_only=False),
+        lon_tgt=torch.load(path_coordinates / "longitude_128_256.pt", weights_only=False),
+        lat_tgt=torch.load(path_coordinates / "latitude_128_256.pt", weights_only=False),
+        target_resolution=(128, 256),
+    )
+
+    # Loading observation masks
+    mask_chl = torch.load(PATH_EXP_MASKS / f"{date}/mask_chlorophyll.pt", weights_only=False)
+    mask_sal = torch.load(PATH_EXP_MASKS / f"{date}/mask_salinity.pt", weights_only=False)
+    mask_temp = torch.load(PATH_EXP_MASKS / f"{date}/mask_temperature.pt", weights_only=False)
+
+    # Extract observation values at observed locations (where mask == 1)
+    y_chl = obs_chl[mask_chl == 1].float()
+    y_sal = torch.from_numpy(obs_sal[mask_sal == 1]).float()
+    y_temp = torch.from_numpy(obs_temp[mask_temp == 1]).float()
+
+    # Concatenate in the correct order (CHL, salinity, temperature)
+    y_real = torch.concat([y_chl, y_sal, y_temp], dim=0).to(DEVICE)
+
+    # Generating from posterior using true observations
+    generate_from_posterior(date=date, config=config, y=y_real)
