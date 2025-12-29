@@ -80,6 +80,15 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--set",
+        "-s",
+        type=str,
+        default="validation",
+        choices=["validation", "test"],
+        help="Dataset split to use (validation or test).",
+    )
+
+    parser.add_argument(
         "--generate",
         "-g",
         action='store_true',
@@ -103,7 +112,7 @@ if __name__ == "__main__":
     # Used to subsample dates for generation
     factor = 4 if args.timespan == "reduced" else 1
     DIAGNOSTICS_DATES_PRIOR       = DIAGNOSTICS_DATES_PRIOR[::factor]
-    DIAGNOSTICS_DATES_POSTERIOR   = DIAGNOSTICS_DATES_POSTERIOR[::factor]
+    DIAGNOSTICS_DATES_POSTERIOR   = DIAGNOSTICS_DATES_POSTERIOR[args.set][::factor]
     DIAGNOSTICS_DATES_EXPERIMENTS = DIAGNOSTICS_DATES_EXPERIMENTS[::factor]
 
     # Extracting configurations

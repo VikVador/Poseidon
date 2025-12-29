@@ -67,7 +67,7 @@ Cluster:
     "cpus"     : [1]
     "partition": ["batch"]
     "ram"      : ["32GB"]
-    "time"     : ["01:00:00"]
+    "time"     : ["02:30:00"]
 
   visualizations:
     "cpus"     : [1]
