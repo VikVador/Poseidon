@@ -15,7 +15,6 @@ from poseidon.config import PATH_MODEL, PATH_POS_LOCAL, PATH_STAT
 from poseidon.data.const import DATASET_REGION, DATASET_VARIABLES_OCEAN
 from poseidon.data.dataloaders import get_dataloaders
 from poseidon.data.mask import generate_trajectory_mask
-from poseidon.diagnostics import HYPOXIA_THRESHOLDS
 from poseidon.diagnostics.const import CMAPS_LINE, CMAPS_SURF, TRANSLATION, UNITS
 
 
@@ -535,76 +534,6 @@ def visualize_spread_skill_ratio(dates: list, config: Dict, config_wandb: Dict) 
     wandb.log({"POSTERIOR | Spread-Skill-Ratio / Results": wandb.Image(fig)})
     fig.savefig(
         save_path / "spread_skill_ratio.png",
-        bbox_inches="tight",
-        dpi=350,
-    )
-
-    plt.close(fig)
-
-
-def visualize_hypoxia(dates: list, config: Dict, config_wandb: Dict) -> None:
-    r"""Visualizes results of classification metrics for hypoxia detection.
-
-    Arguments:
-        dates: List of ensemble dates (YYYY-MM-DD).
-        config: Configuration for generation.
-        config_wandb: Configuration setup dictionary.
-    """
-
-    # fmt: off
-    # Initialization of Weights and Biases
-    wandb.init(**config_wandb)
-
-    # Path to save the figure
-    save_path = PATH_POS_LOCAL / "experiments" / "diagnostics" / "visualizations" / config["model"] / "hypoxia"
-    if not os.path.exists(save_path):
-        os.makedirs(save_path, exist_ok=True)
-
-    # Access to main folder
-    path_folder = PATH_MODEL / config["model"] / "diagnostics" / "classification"
-
-    # Loading data
-    accuracy  = torch.stack([torch.stack([torch.load(path_folder / date / f"accuracy_{int(tresh)}.pt",  weights_only=True, map_location="cpu") for tresh in HYPOXIA_THRESHOLDS], dim = 0) for date in dates], dim = 0)
-    precision = torch.stack([torch.stack([torch.load(path_folder / date / f"precision_{int(tresh)}.pt", weights_only=True, map_location="cpu") for tresh in HYPOXIA_THRESHOLDS], dim = 0) for date in dates], dim = 0)
-    recall    = torch.stack([torch.stack([torch.load(path_folder / date / f"recall_{int(tresh)}.pt",    weights_only=True, map_location="cpu") for tresh in HYPOXIA_THRESHOLDS], dim = 0) for date in dates], dim = 0)
-    f1        = torch.stack([torch.stack([torch.load(path_folder / date / f"f1_{int(tresh)}.pt",        weights_only=True, map_location="cpu") for tresh in HYPOXIA_THRESHOLDS], dim = 0) for date in dates], dim = 0)
-    roc_auc   = torch.stack([torch.stack([torch.load(path_folder / date / f"roc_auc_{int(tresh)}.pt",   weights_only=True, map_location="cpu") for tresh in HYPOXIA_THRESHOLDS], dim = 0) for date in dates], dim = 0)
-
-    # Extracting depth levels
-    levels = xr.open_zarr(PATH_STAT).isel(level=DATASET_REGION["level"]).load().level.values
-
-    # Computing statistics
-    variables = {
-        "Accuracy [%]": accuracy.nanmean(dim=0),
-        "Precision [%]": precision.nanmean(dim=0),
-        "Recall [%]": recall.nanmean(dim=0),
-        "F1 Score [%]": f1.nanmean(dim=0),
-        "ROC-AUC Score [%]": roc_auc.nanmean(dim=0)
-    }
-
-    # Visualization
-    fig, axes = plt.subplots(1, 5, figsize=(20, 8), sharey=True)
-    for ax, (var_name, var_mean) in zip(axes, variables.items()):
-        for thresh_idx in range(len(HYPOXIA_THRESHOLDS)):
-            ax.plot(var_mean[thresh_idx].numpy() * 100, levels, label=f"{HYPOXIA_THRESHOLDS[thresh_idx]:.0f}")
-        ax.set_title(var_name, fontweight="semibold", pad=8)
-        ax.set_xlim(0, 100)
-        ax.grid(True)
-        ax.invert_yaxis()
-        ax.set_yscale("log")
-
-    axes[0].set_ylabel("Depth [m]")
-
-    # Common legend
-    handles, labels = axes[-1].get_legend_handles_labels()
-    fig.legend(handles, labels, ncol=2, loc='center left', bbox_to_anchor=(0.98, 0.88), fontsize='small', title=f"Thresholds ${UNITS['DOX']}$", title_fontsize='medium')
-
-    # fmt: on
-    # Sending to Weights and Biases & Saving locally
-    wandb.log({"POSTERIOR | Hypoxia Detection / Results": wandb.Image(fig)})
-    plt.tight_layout()
-    fig.savefig(
-        save_path / "results.png",
         bbox_inches="tight",
         dpi=350,
     )
