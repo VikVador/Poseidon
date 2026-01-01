@@ -23,17 +23,23 @@ TRANSLATION_LONG = {
 UNITS = {
     "DOX"      : "[mmol/m^3]",
     "CHL"      : "[mg/m^3]",
-    "vosaline" : "[1e^{-3}]",
-    "votemper" : "[degC]",
+    "vosaline" : "[PSU]",
+    "votemper" : "[°C]",
     "ssh"      : "[m]",
 }
 
 CMAPS_LINE = {
+
+    # Variables
     "DOX":"#225ea8",
     "CHL": "#238b45",
     "vosaline": "#8aa5bc",
     "votemper": "#e34a33",
     "ssh": "#b35806",
+
+    # Distributions
+    "p_x_d": "#4A5863",
+    "p_x":"#828181",
 }
 
 CMAPS_SURF = {
