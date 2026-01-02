@@ -11,8 +11,8 @@ wandb:
 # ===== Sampling =====
 #
 Noise: 
-  "sigma_min"   : [0.00001]
-  "sigma_max"   : [1000]
+  "sigma_min"   : [null]
+  "sigma_max"   : [null]
 
 Prior: 
   "steps"   : [128]

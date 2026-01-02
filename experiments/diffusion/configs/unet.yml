@@ -5,16 +5,18 @@
 # ===== Cluster =====
 #
 Cluster:
-  "account"  : ["bsmfc"]
-  "cpus"     : [64]
-  "gpus"     : [8]
-  "partition": ["ia"]
-  "ram"      : ["480GB"]
-  "time"     : ["48:00:00"]
+  "account"        : ["bsmfc"]
+  "nodes"          : [8]           
+  "cpus-per-node"  : [32]           
+  "gpus-per-node"  : [4]            
+  "ram-per-node"   : ["240GB"]      
+  "partition"      : ["gpu"]
+  "time"           : ["48:00:00"]
 
 
-# ===== Training =====
+# ===== Training Configuration =====
 #
+
 Training:
 
   config_wandb:
@@ -31,21 +33,21 @@ Training:
 
   config_optimizer:
     "betas":         [[0.9, 0.999, 0.999]]
-    "learning_rate": [0.0004]
+    "learning_rate": [0.0002]
     "optimizer":     ["soap"]
     "weight_decay":  [0.0]
 
   config_dataloader:
-    "batch_size":      [64]
-    "num_workers":     [48]
-    "prefetch_factor": [1]
-    "shuffle":         [[True, False, False]]
+    "batch_size_per_gpu": [4]                     
+    "num_workers":        [4]                     
+    "prefetch_factor":    [1]                     
+    "shuffle":            [[True, False, False]]  
 
   config_training:
-    "steps_training":              [12800]
-    "steps_gradient_accumulation": [4]
-    "steps_logging":               [16]
-    "steps_validation":            [1024]
+    "steps_training":              [12800]    
+    "steps_gradient_accumulation": [2]        
+    "steps_logging":               [8]        
+    "steps_validation":            [256]     
     "sigma_min":                   [0.0001]
     "sigma_max":                   [10000]
     "blanket_size":                [1]

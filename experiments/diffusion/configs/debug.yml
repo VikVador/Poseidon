@@ -5,20 +5,21 @@
 # ===== Cluster =====
 #
 Cluster:
-  "account"  : ["bsmfc"]
-  "cpus"     : [8]
-  "gpus"     : [1]
-  "partition": ["gpu"]
-  "ram"      : ["60GB"]
-  "time"     : ["01:00:00"]
+  "account"        : ["bsmfc"]
+  "nodes"          : [1]           
+  "cpus-per-node"  : [8]           
+  "gpus-per-node"  : [1]            
+  "ram-per-node"   : ["60GB"]      
+  "partition"      : ["debug-gpu"]
+  "time"           : ["02:00:00"]
 
 
-# ===== Training =====
+# ===== Training Configuration =====
 #
 Training:
 
   config_wandb:
-    "project": ["Poseidon-Training-Black-Sea-Shelf-Debugging"]
+    "project": ["Poseidon-Training-Debug"]
     "mode":    ["disabled"]
 
   config_problem:
@@ -36,24 +37,24 @@ Training:
     "weight_decay":  [0.0]
 
   config_dataloader:
-    "batch_size":      [1]
-    "num_workers":     [0]
-    "prefetch_factor": [null]
-    "shuffle":         [[True, False, False]]
+    "batch_size_per_gpu": [1]                     
+    "num_workers":        [0]                     
+    "prefetch_factor":    [null]                     
+    "shuffle":            [[True, False, False]]  
 
   config_training:
-    "steps_training":              [32]
-    "steps_gradient_accumulation": [1]
-    "steps_logging":               [1]
-    "steps_validation":            [4]
-    "sigma_min":                   [0.00001]
-    "sigma_max":                   [1000]
+    "steps_training":              [32]    
+    "steps_gradient_accumulation": [1]        
+    "steps_logging":               [2]        
+    "steps_validation":            [4]     
+    "sigma_min":                   [0.0001]
+    "sigma_max":                   [10000]
     "blanket_size":                [1]
 
   config_nn:
     "kernel_size":      [[1, 3, 3]]
     "mod_features":     [32]
-    "ffn_factor":       [2]
+    "ffn_factor":       [1]
     "hid_blocks":       [[1, 1]]
     "hid_channels":     [[4, 8]]
     "attention_heads" : [{"-1": 1}]
