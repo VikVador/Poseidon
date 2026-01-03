@@ -174,7 +174,7 @@ if __name__ == "__main__":
                 **config_noise,
                 **config_sampling_prior,
             }
-        ) if gen_prior else print("Nothing to generate for prior (reconstructions).")
+        ) if args.generate else print("Nothing to generate for prior (reconstructions).")
 
     @job(array=array_size_prior, account = config_cluster["account"], **config_cluster["sampling_prior"],)
     def GEN_PRI(i: int) -> None:
@@ -186,7 +186,7 @@ if __name__ == "__main__":
                 **config_noise,
                 **config_sampling_posterior,
             }
-        ) if gen_prior else print("Nothing to generate for prior (visualizations).")
+        ) if args.generate else print("Nothing to generate for prior (visualizations).")
 
     @job(array=array_size_posterior, account = config_cluster["account"], **config_cluster["sampling_posterior"])
     def GEN_POS(i: int) -> None:
@@ -198,7 +198,7 @@ if __name__ == "__main__":
                 **config_noise,
                 **config_sampling_posterior,
             }
-        ) if gen_posterior else print("Nothing to generate for posterior.")
+        ) if args.generate else print("Nothing to generate for posterior.")
 
     @job(array=array_size_experiments, account = config_cluster["account"], **config_cluster["sampling_posterior"])
     def GEN_EXP(i: int) -> None:
@@ -210,7 +210,7 @@ if __name__ == "__main__":
                 **config_noise,
                 **config_sampling_posterior,
             }
-        ) if gen_experiments else print("Nothing to generate for experiments.")
+        ) if args.generate else print("Nothing to generate for experiments.")
 
     # Adding jobs
     jobs_queue += [GEN_REC, GEN_EXP, GEN_PRI, GEN_POS]
