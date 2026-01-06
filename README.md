@@ -3,7 +3,7 @@
 
 <hr>
 <p  align="center">
-<b  style="font-size:30vw;">Understanding Ocean Deoxygenation</b>
+<b  style="font-size:30vw;">Neural Detection of Hypoxia in the Black Sea Continental Shelf from Satellite Observations</b>
 </p>
 <hr>
 
