@@ -18,6 +18,9 @@ paper/
 *.png
 *.ipynb
 
+# Statistics datasets
+experiments/statistics/*.pt
+
 # Metrics
 metrics/*
 
