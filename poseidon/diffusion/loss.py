@@ -18,9 +18,7 @@ def get_loss_level_weights(mask: Tensor) -> Tensor:
     pixels_per_layer = mask.sum(dim=(3, 4))[0, :, 0] / pixels_total
 
     # Min-max normalization
-    norm = (pixels_per_layer - pixels_per_layer.min()) / (
-        pixels_per_layer.max() - pixels_per_layer.min()
-    )
+    norm = (pixels_per_layer - pixels_per_layer.min()) / (pixels_per_layer.max() - pixels_per_layer.min())
 
     # Inverting weights
     weights_per_layer = 1 + (1 - norm)
@@ -47,16 +45,15 @@ class PoseidonLoss(nn.Module):
     def __init__(self, blanket_size: int):
         super().__init__()
 
-        self.mask = rearrange(
-            generate_trajectory_mask(trajectory_size=blanket_size), "B C K X Y -> B (C K X Y)"
-        ).to(DEVICE)
+        # Store mask and weights on CPU initially, move to device in forward()
+        self.mask = rearrange(generate_trajectory_mask(trajectory_size=blanket_size), "B C K X Y -> B (C K X Y)")
 
-        self.weight_levels = rearrange(
+        weight_levels_full = rearrange(
             get_loss_level_weights(mask=generate_trajectory_mask(trajectory_size=blanket_size)),
             "B C K X Y -> B (C K X Y)",
-        ).to(DEVICE)
+        )
 
-        self.weight_levels = self.weight_levels[:, self.mask[0] == 1]
+        self.weight_levels = weight_levels_full[:, self.mask[0] == 1]
 
     def forward(self, x_0: Tensor, x_0_denoised: Tensor, sigma_t: Tensor) -> Tensor:
         r"""
@@ -66,10 +63,16 @@ class PoseidonLoss(nn.Module):
             sigma_t: Associated noise levels (B, 1).
         """
 
-        x_0, x_0_denoised = (x_0[:, self.mask[0] == 1], x_0_denoised[:, self.mask[0] == 1])
+        # Move mask and weights to same device as input tensors (for DDP compatibility)
+        device = x_0.device
+        mask = self.mask.to(device)
+        weight_levels = self.weight_levels.to(device)
+
+        # Extracting only sea values
+        x_0, x_0_denoised = (x_0[:, mask[0] == 1], x_0_denoised[:, mask[0] == 1])
 
         # Level-wise weighted SE
-        se = self.weight_levels * (x_0_denoised - x_0) ** 2
+        se = weight_levels * (x_0_denoised - x_0) ** 2
 
         # Noise level weigth error
         weight_noise = 1 + 1 / (sigma_t**2)

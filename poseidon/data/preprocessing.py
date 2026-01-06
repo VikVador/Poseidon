@@ -134,7 +134,10 @@ def compute_preprocessing(
         stat.sel(statistic="std").load(),
     )
 
-    for date, path in paths.items():
+    for i, (date, path) in enumerate(paths.items()):
+        # Displaying information
+        print(f"Processing date: {date}")
+
         # Temporal Filtering
         if date < date_start or date_end < date:
             continue
@@ -149,15 +152,18 @@ def compute_preprocessing(
                     dataset[var] = dataset[var].isel(level=0)
 
         # Chunk dataset for performance
-        dataset = dataset.chunk({"time": 1})
+        dataset = dataset.chunk({"time": 14, "longitude": -1, "latitude": -1, "level": -1})
+        for var in dataset.data_vars:
+            if "chunks" in dataset[var].encoding:
+                del dataset[var].encoding["chunks"]
 
         # Determine the mode for writing to Zarr (solve Xarray bug)
-        xarray_mode = "w" if date == date_start else "a"
+        xarray_mode = "w" if i == 0 else "a"
 
         # Write dataset to output .zarr file
-        dataset.to_zarr(
-            path_output, mode=xarray_mode, append_dim="time"
-        ) if xarray_mode == "a" else dataset.to_zarr(path_output, mode=xarray_mode)
+        dataset.to_zarr(path_output, mode=xarray_mode, append_dim="time") if xarray_mode == "a" else dataset.to_zarr(
+            path_output, mode=xarray_mode
+        )
         dataset.close()
 
         wandb.log({"Progress/Year": int(date[:4]), "Progress/Month": int(date[5:])})

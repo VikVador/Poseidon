@@ -1,8 +1,8 @@
 # Moving to the jobs directory
-cd experiments/diagnostics/
+cd experiments/diffusion/
 
 # Launching a jupyter notebook
-python -u run_diagnostics.py -c configs/diagnostics.yml -m sweet-forest-13 -v last -cpt all -ts all -s test -g -cm
+python -u run_training.py --backend slurm --config configs/unet.yml 
 
 # Moving back to the root directory
 cd ../../

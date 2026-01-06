@@ -1,0 +1,77 @@
+# ====================================
+#           P O S E I D O N
+# ====================================
+#
+# ===== WandB =====
+#
+wandb:
+  "project" : ["Poseidon-Diagnostics"]
+  "mode"    : ["online"]
+
+# ===== Sampling =====
+#
+Noise: 
+  "sigma_min"   : [0.0001]
+  "sigma_max"   : [10000]
+
+Prior: 
+  "steps"   : [64]
+  "members" : [32]
+
+Posterior: 
+  "steps"             : [64]
+  "members"           : [32]
+  "trajectory_size"   : [1]
+  "iterations"        : [1]
+
+# ===== Partitions =====
+#
+Cluster:
+
+  "account"  : ["bsmfc"]
+
+  sampling_prior:
+    "cpus"     : [1]
+    "gpus"     : [1]
+    "partition": ["gpu"]
+    "ram"      : ["60GB"]
+    "time"     : ["00:30:00"]
+
+  sampling_posterior:
+    "cpus"     : [1]
+    "gpus"     : [1]
+    "partition": ["gpu"]
+    "ram"      : ["60GB"]
+    "time"     : ["01:00:00"]
+
+  sampling_reconstruction:
+    "cpus"     : [1]
+    "gpus"     : [1]
+    "partition": ["debug-gpu"]
+    "ram"      : ["60GB"]
+    "time"     : ["00:30:00"]
+
+  computing_metrics_light:
+    "cpus"     : [1]
+    "partition": ["batch"]
+    "ram"      : ["4GB"]
+    "time"     : ["00:10:00"]
+
+  computing_metrics_medium:
+    "cpus"     : [1]
+    "partition": ["batch"]
+    "ram"      : ["8GB"]
+    "time"     : ["00:30:00"]
+
+  computing_metrics_heavy:
+    "cpus"     : [1]
+    "partition": ["batch"]
+    "ram"      : ["32GB"]
+    "time"     : ["02:30:00"]
+
+  visualizations:
+    "cpus"     : [1]
+    "partition": ["debug"]
+    "ram"      : ["16GB"]
+    "time"     : ["00:15:00"]
+

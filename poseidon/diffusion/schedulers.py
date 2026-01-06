@@ -54,6 +54,4 @@ class PoseidonNoiseScheduler(nn.Module):
         self.log_sigma_med = math.log(sigma_min * sigma_max) / 2
 
     def forward(self, t: Tensor) -> Tensor:
-        return torch.exp(
-            self.spread * torch.logit(t * (1 - 2 * self.eps) + self.eps) + self.log_sigma_med
-        )
+        return torch.exp(self.spread * torch.logit(t * (1 - 2 * self.eps) + self.eps) + self.log_sigma_med)

@@ -1,8 +1,0 @@
-# ======================================
-#  Poseidon | Diffusion Model Validation
-# ======================================
-#
-# ===== Sampling Prior Configuration =====
-#
-"steps"       : [128]
-"nb_nowcasts" : [64]

@@ -65,7 +65,8 @@ class PoseidonMMPSDenoiser(nn.Module):
         | https://arxiv.org/abs/2405.13712
 
     Information:
-        Be careful to wrap the denoiser model with :class:`PoseidonTrajectoryWrapper`.
+        1. Be careful to wrap the denoiser model with :class:`PoseidonTrajectoryWrapper`.
+        2. Observations are standardized, don't forget to scale cov_y accordingly.
 
     Arguments:
         denoiser: A Gaussian denoiser.
@@ -92,16 +93,9 @@ class PoseidonMMPSDenoiser(nn.Module):
         self.tweedie_covariance = tweedie_covariance
         self.register_buffer("y", torch.as_tensor(y))
         self.register_buffer("cov_y", torch.as_tensor(cov_y))
-
         self.solve = partial(gmres, iterations=iterations)
 
-    def forward(
-        self,
-        x_t: Tensor,
-        sigma_t: Tensor,
-        cond: Tensor,
-        **kwargs,
-    ):
+    def forward(self, x_t: Tensor, sigma_t: Tensor, cond: Tensor, **kwargs):
         r"""Denoising with MMPS-style observation conditioning."""
 
         cov_t = sigma_t**2
@@ -112,7 +106,12 @@ class PoseidonMMPSDenoiser(nn.Module):
             y_hat = self.A(x_hat)
 
         def A_lin(v):
-            return torch.func.jvp(self.A, (x_hat,), (v,))[-1]
+            # Use finite differences to approximate JVP since grid_sample doesn't support forward AD
+            with torch.no_grad():
+                eps = 1e-5
+                return (self.A(x_hat.detach() + eps * v.detach()) - self.A(x_hat.detach() - eps * v.detach())) / (
+                    2 * eps
+                )
 
         def At(v):
             return torch.autograd.grad(y_hat, x_hat, v, retain_graph=True)[0]
@@ -133,5 +132,4 @@ class PoseidonMMPSDenoiser(nn.Module):
         grad = self.y - y_hat
         grad = self.solve(A=cov_y, b=grad)
         score = torch.autograd.grad(y_hat, x_t, grad)[0]
-
         return x_hat + cov_t * score

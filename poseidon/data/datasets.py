@@ -24,11 +24,8 @@ from poseidon.data.const import (
     DATASET_VARIABLES,
     LAND_VALUE,
 )
-from poseidon.data.tools import (
-    assert_date_format,
-    convert_to_progressive_time,
-    get_date_features,
-)
+from poseidon.data.mappings import from_datetime_to_tensor, from_tensor_to_progressive_time
+from poseidon.data.tools import assert_date_format
 
 
 class PoseidonDataset(Dataset):
@@ -38,10 +35,10 @@ class PoseidonDataset(Dataset):
         path: Path to the Zarr dataset.
         date_start: Start date of the data split (format: 'YYYY-MM-DD').
         date_end: End date of the data split (format: 'YYYY-MM-DD').
-        variables: Variable names to retain from the dataset.
         trajectory_size: Number of time steps in trajectory.
         linspace: Whether to extract samples at linearly spaced intervals.
         linspace_samples: Number of linearly spaced samples to extract, if `linspace` is True.
+        variables: Variable names to retain from the dataset.
         region: Region of interest to extract from the dataset.
     """
 
@@ -50,11 +47,11 @@ class PoseidonDataset(Dataset):
         path: Path,
         date_start: str,
         date_end: str,
-        variables: Sequence[str],
         trajectory_size: int = 1,
         linspace: Optional[bool] = False,
         linspace_samples: Optional[int] = None,
-        region: Optional[Dict[str, Tuple[int, int]]] = None,
+        variables: Sequence[str] = DATASET_VARIABLES,
+        region: Optional[Dict[str, Tuple[int, int]]] = DATASET_REGION,
     ):
         super().__init__()
 
@@ -62,9 +59,15 @@ class PoseidonDataset(Dataset):
         assert_date_format(date_start)
         assert_date_format(date_end)
 
-        self.dataset = xr.open_zarr(path).sel(time=slice(date_start, date_end))
-        self.dataset = self.dataset[variables] if variables else self.dataset
-        self.dataset = self.dataset.isel(**region) if region else self.dataset
+        # Loading dataset (handles duplicates in time)
+        with dask.config.set(**{"array.slicing.split_large_chunks": True}):
+            self.dataset = (
+                xr.open_zarr(path)
+                .sortby("time")
+                .drop_duplicates(dim="time", keep="first")
+                .sel(time=slice(date_start, date_end))[variables]
+                .isel(**region)
+            )
 
         self.trajectory_size = trajectory_size
         self.linspace = linspace
@@ -82,11 +85,7 @@ class PoseidonDataset(Dataset):
 
     def __len__(self) -> int:
         r"""Return the total number of samples in the dataset."""
-        return (
-            self.linspace_samples
-            if self.linspace
-            else (self.dataset.time.size - self.trajectory_size + 1)
-        )
+        return self.linspace_samples if self.linspace else (self.dataset.time.size - self.trajectory_size + 1)
 
     def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
         r"""Gets and preprocesses a sample from the dataset."""
@@ -108,9 +107,9 @@ class PoseidonDataset(Dataset):
         with dask.config.set(**{"array.slicing.split_large_chunks": True}):
             sample = self.dataset.isel(time=slice(step_start, step_end))
             sample = sample.fillna(LAND_VALUE)
-            time = [get_date_features(sample.time[i].values) for i in range(sample.time.size)]
+            time = [from_datetime_to_tensor(sample.time[i].values) for i in range(sample.time.size)]
             time = torch.stack(time, dim=0)
-            time = convert_to_progressive_time(time)
+            time = from_tensor_to_progressive_time(time)
             sample = sample.to_stacked_array(
                 new_dim="z_total", sample_dims=("time", "longitude", "latitude")
             ).transpose("z_total", "time", ...)

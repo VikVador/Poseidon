@@ -155,9 +155,7 @@ class GaussLegendre(torch.autograd.Function):
             with torch.enable_grad():
                 area = GaussLegendre.quadrature(f, a, b, n)
 
-            grad_phi = torch.autograd.grad(
-                area, phi, grad_area, create_graph=True, allow_unused=True
-            )
+            grad_phi = torch.autograd.grad(area, phi, grad_area, create_graph=True, allow_unused=True)
         else:
             grad_phi = ()
 

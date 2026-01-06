@@ -1,4 +1,4 @@
-r"""Helper tools for saving models"""
+r"""Helper tools for saving neural network models"""
 
 import torch
 import yaml
@@ -25,6 +25,7 @@ class PoseidonSave:
         config_nn: Configuration of the neural network.
         config_problem: Configuration of problem.
         saving: Whether to save or not.
+        rank: Rank of current process (default 0) if distributed training.
     """
 
     def __init__(
@@ -36,15 +37,17 @@ class PoseidonSave:
         config_nn: dict,
         config_problem: dict,
         saving: bool = True,
+        rank: int = 0,
     ):
         super().__init__()
 
         self.path = path
+        self.rank = rank
+        self.saving = saving
         self.name_model = name_model
         self.loss_best = float("inf")
-        self.saving = saving
 
-        if self.saving:
+        if self.saving and self.rank == 0:
             #
             # Saving configurations
             list_configs, list_names = (
@@ -58,9 +61,7 @@ class PoseidonSave:
             )
 
             for config, name in zip(list_configs, list_names):
-                save_configuration(
-                    path=self.path, config=config, name_model=self.name_model, name_config=name
-                )
+                save_configuration(path=self.path, config=config, name_model=self.name_model, name_config=name)
 
     def save(
         self,
@@ -70,7 +71,8 @@ class PoseidonSave:
         scheduler: Optional[lr_scheduler] = None,
     ) -> None:
         r"""Saves model, optimizer & scheduler."""
-        if self.saving:
+
+        if self.saving and self.rank == 0:
             #
             # Saving tools and last model with backup protection
             for n in [self.name_model + "/__backup__", self.name_model]:

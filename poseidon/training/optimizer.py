@@ -68,9 +68,7 @@ def safe_gd_step(
 
     if grad_clip is None:
         norm = torch.linalg.vector_norm(
-            torch.stack([
-                torch.linalg.vector_norm(p.grad) for p in params if torch.is_tensor(p.grad)
-            ])
+            torch.stack([torch.linalg.vector_norm(p.grad) for p in params if torch.is_tensor(p.grad)])
         )
     else:
         norm = nn.utils.clip_grad_norm_(params, grad_clip)

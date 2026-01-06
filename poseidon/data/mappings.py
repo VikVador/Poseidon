@@ -1,5 +1,8 @@
 r"""Tools for mapping data representations."""
 
+import numpy as np
+import pandas as pd
+import torch
 import xarray as xr
 
 from pathlib import Path
@@ -13,6 +16,22 @@ from typing import (
 # isort: split
 from poseidon.config import PATH_DATA
 from poseidon.data.const import DATASET_REGION, DATASET_VARIABLES
+
+
+def from_datetime_to_tensor(date: np.datetime64) -> torch.Tensor:
+    r"""Extracts temporal information from datetime object."""
+    timestamp = pd.to_datetime(date)
+    return torch.as_tensor([timestamp.year, timestamp.month, timestamp.day, timestamp.hour])
+
+
+def from_tensor_to_progressive_time(time: Tensor) -> Tensor:
+    r"""Converts a time tensor to progressive time."""
+    days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    time_days = time[:, 1:3].clone()
+    for traj in range(time_days.shape[0]):
+        time_days[traj, 0] = sum(days_in_month[: int(time_days[traj, 0].item() - 1)])
+    time_days = time_days.sum(dim=-1)
+    return time_days / 365.0
 
 
 def from_tensor_to_indices(
