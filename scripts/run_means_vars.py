@@ -125,7 +125,7 @@ if __name__ == "__main__":
         "--subsampling",
         "-s",
         type=int,
-        default=4,
+        default=2,
         help="Subsampling factor: 1=all dates, 2=every other date, etc. (default: 1).",
     )
     parser.add_argument(
@@ -155,13 +155,13 @@ if __name__ == "__main__":
     SLURM_CONFIG = {
         "cpus":      1,
         "mem":       "16GB",
-        "time":      "04:00:00",
+        "time":      "03:00:00",
         "account":   "bsmfc",
         "partition": "shared",
     }
 
     # Launching jobs with dawgz
-    @job(array=len(all_periods), name="POSEIDON-MEANS-VARS", cpus=1, mem="16GB", time="04:00:00", account="bsmfc", partition="batch")
+    @job(array=len(all_periods), name="POSEIDON-MEANS-VARS", cpus=1, mem="16GB", time="04:00:00", account="bsmfc", partition="shared")
     def COMPUTE_STATS(i: int) -> None:
         compute_period_statistics(
             mm_dd_list  = all_mm_dd_lists[i],

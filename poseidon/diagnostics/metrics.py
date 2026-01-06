@@ -30,6 +30,7 @@ from poseidon.data.const import (
 from poseidon.data.dataloaders import get_dataloaders
 from poseidon.data.datasets import PoseidonDataset
 from poseidon.data.mask import generate_trajectory_mask
+from poseidon.diagnostics import PERIOD_TO_DATES
 
 
 def compute_spread_skill(date: str, config: Dict) -> None:
@@ -453,3 +454,64 @@ def compute_power_spectra_density(date: str, config: Dict) -> None:
     torch.save(wave_prior_theta, path_psd / "wavelengths_prior_theta.pt")
     torch.save(psd_prior,        path_psd / "psd_prior.pt")
     torch.save(psd_prior_theta,  path_psd / "psd_prior_theta.pt")
+
+def compute_mean_var(month_or_season: str, config: Dict) -> None:
+    r"""Computes mean and variance of state over given period using prior ensemble generations.
+
+    Arguments:
+        month_or_season: Name of month (e.g., "january") or season (e.g., "winter").
+        config: Configuration dictionary with "model" key.
+    """
+
+    # Validate input
+    if month_or_season not in PERIOD_TO_DATES:
+        raise ValueError(
+            f"Invalid month_or_season '{month_or_season}'. "
+            f"Must be one of: {list(PERIOD_TO_DATES.keys())}"
+        )
+
+    # Access path to save results
+    path_mean_var = PATH_MODEL / config["model"] / "diagnostics" / "mean_var" / month_or_season
+    if not os.path.exists(path_mean_var):
+        os.makedirs(path_mean_var)
+
+    # Get list of dates for this period
+    dates = PERIOD_TO_DATES[month_or_season]
+
+    # Safe loading all ensemble files for the given period
+    ensembles = []
+    for date in dates:
+        path_ensemble_prior = PATH_MODEL / config["model"] / "generation" / "prior" / date / "ensemble_prior.pt"
+        if not path_ensemble_prior.exists():
+            print(f"Warning: ensemble_prior.pt not found for date {date}, skipping...")
+            continue
+        print("Found ensemble for date:", date)
+        ensembles.append(torch.load(path_ensemble_prior, weights_only=True, map_location="cpu"))
+
+    if len(ensembles) == 0:
+        raise FileNotFoundError(
+            f"No ensemble_prior.pt files found for {month_or_season}. "
+            f"Expected dates: {dates}"
+        )
+
+    # Stacking all ensembles: (num_dates, M, 129, 1, 128, 256)
+    ensembles_stacked = torch.stack(ensembles, dim=0)
+
+    # Reshape to combine date and ensemble dimensions: (num_dates * M, 129, 1, 128, 256)
+    num_dates, M, C, K, X, Y = ensembles_stacked.shape
+    ensembles_flat = ensembles_stacked.reshape(num_dates * M, C, K, X, Y)
+
+    # Computing mean
+    mean = torch.nanmean(ensembles_flat, dim=0)
+
+    # Computing variance (manually because torch.nanvar does not exist)
+    n_valid      = torch.sum(~torch.isnan(ensembles_flat), dim=0)
+    squared_diff = (ensembles_flat - mean.unsqueeze(0)) ** 2
+    var          = torch.nansum(squared_diff, dim=0) / (n_valid - 1)
+
+    # Saving results
+    mean_path = path_mean_var / "mean.pt"
+    var_path  = path_mean_var / "var.pt"
+
+    torch.save(mean, mean_path)
+    torch.save(var, var_path)

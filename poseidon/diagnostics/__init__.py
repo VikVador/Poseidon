@@ -16,6 +16,7 @@ DIAGNOSTICS_DATES_EXPERIMENTS = [
 ]
 
 DIAGNOSTICS_DATES_PRIOR = [
+    # January to March
     '01-01', '01-03', '01-05', '01-07',
     '01-09', '01-11', '01-13', '01-15',
     '01-17', '01-19', '01-21', '01-23',
@@ -28,6 +29,8 @@ DIAGNOSTICS_DATES_PRIOR = [
     '03-09', '03-11', '03-13', '03-15',
     '03-17', '03-19', '03-21', '03-23',
     '03-25', '03-27', '03-29', '03-31',
+
+    # June to September
     '06-01', '06-03', '06-05', '06-07',
     '06-09', '06-11', '06-13', '06-15',
     '06-17', '06-19', '06-21', '06-23',
@@ -46,6 +49,52 @@ DIAGNOSTICS_DATES_PRIOR = [
     '09-25', '09-27', '09-29', '09-30',
 ]
 
+DIAGNOSTICS_DATES_PRIOR_MEAN_VAR = [
+    # April to May
+    '04-01', '04-03', '04-05', '04-07',
+    '04-09', '04-11', '04-13', '04-15',
+    '04-17', '04-19', '04-21', '04-23',
+    '04-25', '04-27', '04-29', '04-30',
+    '05-01', '05-03', '05-05', '05-07',
+    '05-09', '05-11', '05-13', '05-15',
+    '05-17', '05-19', '05-21', '05-23',
+    '05-25', '05-27', '05-29', '05-31',
+
+    # October to December
+    '10-01', '10-03', '10-05', '10-07',
+    '10-09', '10-11', '10-13', '10-15',
+    '10-17', '10-19', '10-21', '10-23',
+    '10-25', '10-27', '10-29', '10-31',
+    '11-01', '11-03', '11-05', '11-07',
+    '11-09', '11-11', '11-13', '11-15',
+    '11-17', '11-19', '11-21', '11-23',
+    '11-25', '11-27', '11-29', '11-30',
+    '12-01', '12-03', '12-05', '12-07',
+    '12-09', '12-11', '12-13', '12-15',
+    '12-17', '12-19', '12-21', '12-23',
+    '12-25', '12-27', '12-29', '12-31',
+
+    # NOTE: Additionnal dates to compute monthly means and variances for prior (I separated them to make diagnostics.py more efficient at producing results)
+]
+
+PERIOD_TO_DATES = {
+    "january":   [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith("01-")],
+    "february":  [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith("02-")],
+    "march":     [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith("03-")],
+    "april":     [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith("04-")],
+    "may":       [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith("05-")],
+    "june":      [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith("06-")],
+    "july":      [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith("07-")],
+    "august":    [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith("08-")],
+    "september": [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith("09-")],
+    "october":   [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith("10-")],
+    "november":  [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith("11-")],
+    "december":  [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith("12-")],
+    "winter":    [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith(("12-", "01-", "02-"))],
+    "spring":    [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith(("03-", "04-", "05-"))],
+    "summer":    [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith(("06-", "07-", "08-"))],
+    "fall":      [d for d in DIAGNOSTICS_DATES_PRIOR + DIAGNOSTICS_DATES_PRIOR_MEAN_VAR if d.startswith(("09-", "10-", "11-"))],
+}
 
 DIAGNOSTICS_DATES_POSTERIOR = {
 
