@@ -29,17 +29,13 @@ UNITS = {
 }
 
 CMAPS_LINE = {
-
-    # Variables
-    "DOX":"#225ea8",
-    "CHL": "#238b45",
-    "vosaline": "#8aa5bc",
-    "votemper": "#e34a33",
-    "ssh": "#b35806",
-
-    # Distributions
-    "p_x_d": "#4A5863",
-    "p_x":"#828181",
+    "DOX":      "#0077B6",
+    "CHL":      "#40C88C",
+    "vosaline": "#BF3F64",
+    "votemper": "#E67E22",
+    "ssh":      "#9C7AFF",
+    "p_x_d":    "#4A5863",
+    "p_x":      "#828181",
 }
 
 CMAPS_SURF = {
