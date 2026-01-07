@@ -13,7 +13,9 @@ from poseidon.diagnostics import (
     DIAGNOSTICS_DATES_EXPERIMENTS,
     DIAGNOSTICS_DATES_POSTERIOR,
     DIAGNOSTICS_DATES_PRIOR,
+    DIAGNOSTICS_DATES_PRIOR_MEAN_VAR,
     HYPOXIA_THRESHOLDS,
+    PERIOD_TO_DATES,
 )
 from poseidon.diagnostics.generate import (
     generate_from_observations,
@@ -24,6 +26,7 @@ from poseidon.diagnostics.generate import (
 from poseidon.diagnostics.metrics import (
     compute_distance,
     compute_hypoxia_classification,
+    compute_mean_var,
     compute_power_spectra_density,
     compute_spread_skill,
 )
@@ -111,9 +114,10 @@ if __name__ == "__main__":
 
     # Used to subsample dates for generation
     factor = 4 if args.timespan == "reduced" else 1
-    DIAGNOSTICS_DATES_PRIOR       = DIAGNOSTICS_DATES_PRIOR[::factor]
-    DIAGNOSTICS_DATES_POSTERIOR   = DIAGNOSTICS_DATES_POSTERIOR[args.set][::factor]
-    DIAGNOSTICS_DATES_EXPERIMENTS = DIAGNOSTICS_DATES_EXPERIMENTS[::factor]
+    DIAGNOSTICS_DATES_PRIOR          = DIAGNOSTICS_DATES_PRIOR[::factor]
+    DIAGNOSTICS_DATES_POSTERIOR      = DIAGNOSTICS_DATES_POSTERIOR[args.set][::factor]
+    DIAGNOSTICS_DATES_EXPERIMENTS    = DIAGNOSTICS_DATES_EXPERIMENTS[::factor]
+    DIAGNOSTICS_DATES_PRIOR_MEAN_VAR = DIAGNOSTICS_DATES_PRIOR_MEAN_VAR[::factor]
 
     # Extracting configurations
     config_wandb, config_noise, config_sampling_prior, config_sampling_posterior, config_cluster = (
@@ -139,6 +143,9 @@ if __name__ == "__main__":
     # Stores what needs to be scheduled
     jobs_queue = []
 
+    # Updating model selection
+    args.version = True if args.version == "best" else False
+
     # ==========
     # GENERATION
     # ==========
@@ -147,9 +154,10 @@ if __name__ == "__main__":
     gen_posterior   = True if args.component in ["posterior",   "all"] else False
     gen_experiments = True if args.component in ["experiments", "all"] else False
 
-    array_size_prior       = len(DIAGNOSTICS_DATES_PRIOR)       if args.generate and gen_prior       else 1
-    array_size_posterior   = len(DIAGNOSTICS_DATES_POSTERIOR)   if args.generate and gen_posterior   else 1
-    array_size_experiments = len(DIAGNOSTICS_DATES_EXPERIMENTS) if args.generate and gen_experiments else 1
+    array_size_prior          = len(DIAGNOSTICS_DATES_PRIOR)          if args.generate and gen_prior       else 1
+    array_size_posterior      = len(DIAGNOSTICS_DATES_POSTERIOR)      if args.generate and gen_posterior   else 1
+    array_size_experiments    = len(DIAGNOSTICS_DATES_EXPERIMENTS)    if args.generate and gen_experiments else 1
+    array_size_prior_mean_var = len(DIAGNOSTICS_DATES_PRIOR_MEAN_VAR) if args.generate and gen_prior       else 1
 
     # Creating folders to store results
     path_folder_prior = path_model / "generation" / "prior"
@@ -188,6 +196,18 @@ if __name__ == "__main__":
             }
         ) if args.generate else print("Nothing to generate for prior (visualizations).")
 
+    @job(array=array_size_prior_mean_var, account = config_cluster["account"], **config_cluster["sampling_prior"],)
+    def GEN_PRIS(i: int) -> None:
+        generate_from_prior(
+            date = DIAGNOSTICS_DATES_PRIOR_MEAN_VAR[i],
+            config = {
+                "model": args.model,
+                "best": args.version,
+                **config_noise,
+                **config_sampling_posterior,
+            }
+        ) if args.generate else print("Nothing to generate for prior (visualizations).")
+
     @job(array=array_size_posterior, account = config_cluster["account"], **config_cluster["sampling_posterior"])
     def GEN_POS(i: int) -> None:
         generate_from_posterior(
@@ -213,7 +233,7 @@ if __name__ == "__main__":
         ) if args.generate else print("Nothing to generate for experiments.")
 
     # Adding jobs
-    jobs_queue += [GEN_REC, GEN_EXP, GEN_PRI, GEN_POS]
+    jobs_queue += [GEN_REC, GEN_EXP, GEN_PRI, GEN_PRIS, GEN_POS]
 
     # ===================
     # ANALYSIS | DENOISER
@@ -221,6 +241,7 @@ if __name__ == "__main__":
     if args.component == "denoiser" or args.component == "all":
 
         array_size_distances = len(DIAGNOSTICS_DATES_PRIOR) if args.compute_metrics else 1
+        array_size_mean_var  = len(list(PERIOD_TO_DATES.keys()))
 
         path_folder_distance = path_model / "diagnostics" / "distance"
         if not os.path.exists(path_folder_distance):
@@ -242,8 +263,16 @@ if __name__ == "__main__":
                 config = {"model": args.model}
             ) if args.compute_metrics and gen_prior else print("Nothing to compute for distance.")
 
+        @after(GEN_PRIS)
+        @job(array=array_size_mean_var, account = config_cluster["account"], **config_cluster["computing_metrics_mv"])
+        def COM_MV(i: int) -> None:
+            compute_mean_var(
+                month_or_season = list(PERIOD_TO_DATES.keys())[i],
+                config = {"model": args.model}
+            ) if args.compute_metrics and gen_prior else print("Nothing to compute for mean and variance.")
+
         # Queueing jobs
-        jobs_queue += [COM_DIS, COM_PSD]
+        jobs_queue += [COM_MV, COM_DIS, COM_PSD]
 
         # Only add visualization jobs if we need them
         if needs_visualization and gen_prior:

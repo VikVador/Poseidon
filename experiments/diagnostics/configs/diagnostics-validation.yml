@@ -69,6 +69,12 @@ Cluster:
     "ram"      : ["32GB"]
     "time"     : ["02:30:00"]
 
+  computing_metrics_mv:
+    "cpus"     : [1]
+    "partition": ["batch"]
+    "ram"      : ["240GB"]
+    "time"     : ["00:15:00"]
+    
   visualizations:
     "cpus"     : [1]
     "partition": ["debug"]

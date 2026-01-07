@@ -39,14 +39,15 @@ PATH_EXP_MASKS = PATH_EXP / "masks"
 
 # ----- Others
 #
-PATH_MODEL  = PATH_POS_SCRATCH / "models"
-PATH_PTRC   = PATH_POS_PROJECT / "paths"    / "ptrc_T.txt"
-PATH_GRID   = PATH_POS_PROJECT / "paths"    / "grid_T.txt"
-PATH_OBS    = PATH_POS_PROJECT / "datasets" / "observations"
-PATH_MESH   = PATH_POS_PROJECT / "datasets" / "structure" / "mesh_black_sea.zarr"
-PATH_MASK_B = PATH_POS_PROJECT / "datasets" / "structure" / "mask_black_sea.zarr"
-PATH_MASK_V = PATH_POS_PROJECT / "datasets" / "structure" / "mask_variables.zarr"
-PATH_STAT   = PATH_POS_PROJECT / "datasets" / "statistics" / "statistics_black_sea_HR001_1980_2017.zarr"
+PATH_MODEL   = PATH_POS_SCRATCH / "models"
+PATH_PTRC    = PATH_POS_PROJECT / "paths"    / "ptrc_T.txt"
+PATH_GRID    = PATH_POS_PROJECT / "paths"    / "grid_T.txt"
+PATH_OBS     = PATH_POS_PROJECT / "datasets" / "observations"
+PATH_MESH    = PATH_POS_PROJECT / "datasets" / "structure"  / "mesh_black_sea.zarr"
+PATH_MASK_B  = PATH_POS_PROJECT / "datasets" / "structure"  / "mask_black_sea.zarr"
+PATH_MASK_V  = PATH_POS_PROJECT / "datasets" / "structure"  / "mask_variables.zarr"
+PATH_STAT    = PATH_POS_PROJECT / "datasets" / "statistics" / "statistics_black_sea_HR001_1980_2017.zarr"
+PATH_STAT_MV = PATH_POS_PROJECT / "datasets" / "statistics" / "mean_var"
 
 # ----- Dataset | Deep Learning
 #
