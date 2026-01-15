@@ -15,12 +15,12 @@ Noise:
   "sigma_max"   : [10000]
 
 Prior: 
-  "steps"   : [128]
-  "members" : [64]
+  "steps"   : [256]
+  "members" : [128]
 
 Posterior: 
-  "steps"             : [128]
-  "members"           : [64]
+  "steps"             : [256]
+  "members"           : [128]
   "trajectory_size"   : [1]
   "iterations"        : [1]
 
@@ -33,16 +33,16 @@ Cluster:
   sampling_prior:
     "cpus"     : [1]
     "gpus"     : [1]
-    "partition": ["gpu"]
+    "partition": ["debug-gpu"]
     "ram"      : ["60GB"]
     "time"     : ["01:00:00"]
 
   sampling_posterior:
     "cpus"     : [1]
     "gpus"     : [1]
-    "partition": ["gpu"]
+    "partition": ["debug-gpu"]
     "ram"      : ["60GB"]
-    "time"     : ["02:00:00"]
+    "time"     : ["00:10:00"]
 
   sampling_reconstruction:
     "cpus"     : [1]
@@ -54,22 +54,22 @@ Cluster:
   computing_metrics_light:
     "cpus"     : [1]
     "partition": ["batch"]
-    "ram"      : ["4GB"]
+    "ram"      : ["8GB"]
     "time"     : ["00:10:00"]
 
   computing_metrics_medium:
     "cpus"     : [1]
     "partition": ["batch"]
-    "ram"      : ["8GB"]
+    "ram"      : ["16GB"]
     "time"     : ["00:30:00"]
 
   computing_metrics_heavy:
     "cpus"     : [1]
     "partition": ["batch"]
-    "ram"      : ["32GB"]
+    "ram"      : ["64GB"]
     "time"     : ["02:30:00"]
 
-  computing_metrics_mv:
+  computing_metrics_mv: 
     "cpus"     : [1]
     "partition": ["batch"]
     "ram"      : ["240GB"]
