@@ -9,6 +9,7 @@
 
 Coastal hypoxia (O2 < 63 [mmol/m^3]) threatens ocean health worldwide. Bottom oxygen consumed by respiration cannot be renewed, making monitoring essential to protect vulnerable marine ecosystems and reduce biodiversity loss. Despite the growing availability of Black Sea satellite observations, no operational system currently exploits them to directly infer the oxygen state in real time. This can be framed as a Bayesian inverse problem relating surface observations to the complete Black Sea states. Here, we solve it using a deep generative neural network trained on numerical model outputs, providing a tractable approximation of the true posterior distribution of sea states. We find that accurate state estimation is limited to the mixing layer, because its homogeneity makes surface conditions representative of subsurface states. During summer, we detect 38\% of all hypoxic events shelf-wide with a precision of 47\%. Improving results will likely require longer assimilation windows or additional observations. 
 
+<a href="https://doi.org/10.5281/zenodo.19628324"><img src="https://zenodo.org/badge/724998410.svg" alt="DOI"></a>
 <hr>
 <p  align="center">
 <b  style="font-size:1vw;">Installation</b>
