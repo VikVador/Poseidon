@@ -3,19 +3,19 @@
 
 <hr>
 <p  align="center">
-<b  style="font-size:30vw;">Understanding Ocean Deoxygenation</b>
+<b  style="font-size:1vw;">The Physical Limit of Neural Hypoxia Detection in the Black Sea from Satellite Observations</b>
 </p>
 <hr>
 
-This repository contains the first project of my PhD thesis: a **3D generative neural network-based simulator for modeling the Black Sea's state**. The model leverages deep learning to predict physical and environmental conditions such as temperature, salinity, and currents. Ultimately, it will be able to support tasks of forecasting and data assimilation of various observations, including satellite (EO) data and float measurements.  
+Coastal hypoxia (O2 < 63 [mmol/m^3]) threatens ocean health worldwide. Bottom oxygen consumed by respiration cannot be renewed, making monitoring essential to protect vulnerable marine ecosystems and reduce biodiversity loss. Despite the growing availability of Black Sea satellite observations, no operational system currently exploits them to directly infer the oxygen state in real time. This can be framed as a Bayesian inverse problem relating surface observations to the complete Black Sea states. Here, we solve it using a deep generative neural network trained on numerical model outputs, providing a tractable approximation of the true posterior distribution of sea states. We find that accurate state estimation is limited to the mixing layer, because its homogeneity makes surface conditions representative of subsurface states. During summer, we detect 38\% of all hypoxic events shelf-wide with a precision of 47\%. Improving results will likely require longer assimilation windows or additional observations. 
 
 <hr>
 <p  align="center">
-<b  style="font-size:30vw;">🔱 | P O S E I D O N | 🔱</b>
+<b  style="font-size:1vw;">Installation</b>
 </p>
 <hr>
 
-This is the name of the tool we are developping ! To set-up everything, it is necessary to have access to a [Slurm](https://slurm.schedmd.com) cluster, to login to a [Weights & Biases](https://wandb.ai) account and to install the [poseidon](poseidon) module as a package. First, create a new Python environment, for example with [conda](https://docs.conda.io).
+To set-up everything, it is necessary to have access to a [Slurm](https://slurm.schedmd.com) cluster, to login to a [Weights & Biases](https://wandb.ai) account and to install the [poseidon](poseidon) module as a package. First, create a new Python environment, for example with [conda](https://docs.conda.io).
 
 ```
 conda create -n poseidon python=3.11
