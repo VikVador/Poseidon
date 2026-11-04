@@ -1,5 +1,4 @@
-<img  src="assets/header.gif"  />
-@ Copernicus Marine Service 
+<img src="assets/banner.svg" width="100%">
 
 <hr>
 <p  align="center">
